@@ -18,7 +18,7 @@ import type { IconComponent } from "@ui/icons/types";
 import { cn } from "@ui/cn";
 import styles from "./Section.module.css";
 
-export interface SectionProps {
+interface SectionProps {
   title: string;
   children: React.ReactNode;
   defaultOpen?: boolean;

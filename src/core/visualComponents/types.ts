@@ -42,24 +42,9 @@ export interface VCParam {
  * Stored in PageNode.propBindings[propKey] = { paramId }.
  * Keyed by paramId (not name) so renames don't break existing bindings.
  */
-export interface PropBinding {
+interface PropBinding {
   /** VCParam.id — stable reference that survives param renames */
   paramId: string
-}
-
-// ---------------------------------------------------------------------------
-// VisualComponentRefProps — props for the base.visualComponentRef module
-// ---------------------------------------------------------------------------
-
-/**
- * Props for a Visual Component instance placed on a page or another VC.
- * `propOverrides` is the diff from the VC's param defaults.
- */
-export interface VisualComponentRefProps extends Record<string, unknown> {
-  /** VisualComponent.id being referenced */
-  componentId: string
-  /** Per-instance overrides diffed against VC param defaults */
-  propOverrides: Record<string, unknown>
 }
 
 // ---------------------------------------------------------------------------

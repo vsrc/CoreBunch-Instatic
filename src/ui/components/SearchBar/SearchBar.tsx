@@ -6,7 +6,7 @@ import { SearchIcon } from "@ui/icons/icons/search";
 import { cn } from "@ui/cn";
 import styles from "./SearchBar.module.css";
 
-export interface SearchBarProps extends Omit<
+interface SearchBarProps extends Omit<
   InputHTMLAttributes<HTMLInputElement>,
   "type" | "size" | "value" | "onChange"
 > {

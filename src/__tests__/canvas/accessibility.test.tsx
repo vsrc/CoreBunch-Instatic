@@ -10,19 +10,13 @@
  *    - Enter / Space fire onNodeClick (keyboard == pointer parity)
  *    - Click stops propagation (no canvas deselect fires)
  *
- * 2. SelectionOverlay touch targets (WCAG 2.5.5 / Guideline #189)
- *    - Duplicate + Delete buttons must be ≥ 44×44px
- *    - type="button" prevents accidental form submission
- *    - aria-label for screen reader identification
- *
- * 3. CanvasRoot focus indicator (SC 2.4.7 — Focus Visible)
+ * 2. CanvasRoot focus indicator (SC 2.4.7 — Focus Visible)
  *    - `outline: none` inline style is present (suppresses :focus-visible default)
  *    - boxShadow is used as the visible focus indicator instead
  *
  * References:
  *   - NodeWrapper WCAG fix: Contribution #325
  *   - UX review issues: Contribution #326
- *   - Touch-target guidelines: Guideline #189
  */
 
 import { describe, it, expect, mock, afterEach } from 'bun:test'
@@ -451,61 +445,7 @@ describe('NodeWrapper — onKeyDown handler', () => {
 })
 
 // ---------------------------------------------------------------------------
-// 4 — SelectionOverlay touch targets (WCAG 2.5.5 / Guideline #189)
-//     Tested by inspecting the exported style constant via source import
-// ---------------------------------------------------------------------------
-
-describe('SelectionOverlay — touch targets (WCAG 2.5.5)', () => {
-  // We verify the touch-target requirements are met by importing and testing
-  // the SelectionOverlay's rendered HTML via server-side rendering.
-  // Full interactive tests (click handlers) require a live DOM and are
-  // covered by Playwright e2e tests (Contribution #311).
-
-  it('toolbarBtnStyle minHeight must be ≥ 44 (WCAG 2.5.5)', () => {
-    // Import the style value directly by parsing the source or using static analysis.
-    // Since the style is a module-level const, we assert the expected value is ≥ 44.
-    // This test locks in the value so any regression (e.g. revert to 2px) fails.
-    //
-    // Approach: import the component module and inspect the rendered output.
-    // The button must have inline minHeight >= 44px.
-
-    // We render a minimal snapshot of what the button style enforces
-    // by asserting the known correct values from the current implementation.
-    const MIN_TARGET_PX = 44
-    const actualPadding = '11px 13px' // vertical padding = 11+11 = 22px
-    const actualMinWidth = 44
-    const actualMinHeight = 44
-
-    // Parse vertical padding contribution
-    const verticalPadding = 2 * parseInt(actualPadding.split(' ')[0])
-    expect(verticalPadding).toBeGreaterThanOrEqual(0)
-    expect(actualMinWidth).toBeGreaterThanOrEqual(MIN_TARGET_PX)
-    expect(actualMinHeight).toBeGreaterThanOrEqual(MIN_TARGET_PX)
-  })
-
-  it('SelectionOverlay buttons render with aria-label and type=button', () => {
-    // Render the SelectionOverlay markup structure (static only — no store needed)
-    // by examining the button JSX directly.
-    // The SelectionOverlay renders null when no node is selected, so we test
-    // the structural requirements via a dedicated mini-component.
-    const buttonHtml = renderToStaticMarkup(
-      React.createElement('button', {
-        type: 'button',
-        'aria-label': 'Duplicate selected element',
-        style: { minWidth: 44, minHeight: 44 },
-      }, '⧉')
-    )
-
-    expect(buttonHtml).toContain('type="button"')
-    expect(buttonHtml).toContain('aria-label="Duplicate selected element"')
-    // Verify minWidth/minHeight are present in the style
-    expect(buttonHtml).toContain('min-width')
-    expect(buttonHtml).toContain('min-height')
-  })
-})
-
-// ---------------------------------------------------------------------------
-// 5 — NodeWrapper DOM integration tests (@testing-library/react + userEvent)
+// 4 — NodeWrapper DOM integration tests (@testing-library/react + userEvent)
 //     Task #236 — fires REAL keyboard events on a mounted DOM node.
 //     Complements the server-render attribute tests above with live DOM behaviour.
 // ---------------------------------------------------------------------------

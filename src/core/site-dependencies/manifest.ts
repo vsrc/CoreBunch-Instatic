@@ -58,18 +58,3 @@ export function normalizeSitePackageJson(raw: unknown): SitePackageJson {
     },
   }
 }
-
-export function mergeWithDefaultPackageJson(
-  packageJson?: SitePackageJson,
-): SitePackageJson {
-  return {
-    dependencies: {
-      ...DEFAULT_SITE_PACKAGE_JSON.dependencies,
-      ...(packageJson?.dependencies ?? {}),
-    },
-    devDependencies: {
-      ...DEFAULT_SITE_PACKAGE_JSON.devDependencies,
-      ...(packageJson?.devDependencies ?? {}),
-    },
-  }
-}

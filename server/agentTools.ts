@@ -6,7 +6,7 @@ import type {
   PageContext,
 } from '../src/core/agent/types'
 
-export interface PageBuilderToolContext {
+interface PageBuilderToolContext {
   modules: PageContext['availableModules']
   classes: PageContext['classes']
   breakpoints: PageContext['breakpoints']

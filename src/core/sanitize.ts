@@ -90,7 +90,7 @@ function stripHtmlFallback(value: string): string {
  * Default richtext config — allows safe HTML formatting, blocks all scripts.
  * Suitable for user-authored HTML content (headings, paragraphs, lists, links).
  */
-export const RICHTEXT_CONFIG: Config = {
+const RICHTEXT_CONFIG: Config = {
   // Allow safe semantic/formatting tags
   ALLOWED_TAGS: [
     'p', 'br',

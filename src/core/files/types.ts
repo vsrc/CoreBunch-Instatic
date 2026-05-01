@@ -4,8 +4,7 @@
  * Architecture source: Contribution #595 §1.2
  *
  * SiteFile is stored as a flat array in site.files (parallel to
- * site.pages).  The display-layer tree is derived via buildFileTree()
- * in selectors.ts — the same flat-map reasoning that drives Page.nodes
+ * site.pages). The same flat-map reasoning drives Page.nodes
  * (Decision #309 / Constraint #215).
  *
  * Path invariants are enforced at every write boundary by isSafePath()
@@ -71,29 +70,4 @@ export interface SiteFile {
 
   createdAt: number
   updatedAt: number
-}
-
-// ---------------------------------------------------------------------------
-// FileTreeNode — display-layer only, never persisted
-// ---------------------------------------------------------------------------
-
-export interface FileTreeNode {
-  /** Last path segment — e.g. "components" for a dir, "Button.tsx" for a file */
-  name: string
-
-  /**
-   * Full path relative to site root.
-   * For synthesized directory nodes this is the directory path without trailing slash
-   * (e.g. "src/components").
-   */
-  path: string
-
-  /** true for synthesized directory nodes, false for file leaf nodes */
-  isDirectory: boolean
-
-  /** Direct children (sorted alphabetically, directories before files) */
-  children: FileTreeNode[]
-
-  /** Present only on file leaf nodes (isDirectory === false) */
-  file?: SiteFile
 }

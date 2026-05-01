@@ -19,7 +19,7 @@
 // NameError codes — one per failure reason (test gate NV-1 to NV-9)
 // ---------------------------------------------------------------------------
 
-export type NameError =
+type NameError =
   | 'EMPTY'
   | 'NOT_PASCAL_CASE'
   | 'RESERVED_WORD'
@@ -30,7 +30,7 @@ export type NameError =
 // ParamError codes — for validateParamName() (test gate PV-1 to PV-4)
 // ---------------------------------------------------------------------------
 
-export type ParamError =
+type ParamError =
   | 'EMPTY'
   | 'NOT_CAMEL_CASE'
   | 'RESERVED_JS_KEYWORD'
@@ -44,7 +44,7 @@ export type ParamError =
  * React built-ins and JS global constructors that would conflict if used
  * as user-authored component names.
  */
-export const RESERVED_REACT_NAMES: ReadonlySet<string> = new Set([
+const RESERVED_REACT_NAMES: ReadonlySet<string> = new Set([
   // React built-ins
   'Fragment',
   'Suspense',
@@ -119,7 +119,7 @@ export const RESERVED_REACT_NAMES: ReadonlySet<string> = new Set([
  *
  * Source: Context #338 canonical base module list (from base/index.ts registry).
  */
-export const BASE_MODULE_DISPLAY_NAMES_LOWER: ReadonlySet<string> = new Set([
+const BASE_MODULE_DISPLAY_NAMES_LOWER: ReadonlySet<string> = new Set([
   'root',
   'container',
   'spacer',
@@ -144,7 +144,7 @@ export const BASE_MODULE_DISPLAY_NAMES_LOWER: ReadonlySet<string> = new Set([
  *
  * Source: ECMAScript 2023 §12.7 (reserved words) + strict-mode future-reserved.
  */
-export const RESERVED_JS_KEYWORDS: ReadonlySet<string> = new Set([
+const RESERVED_JS_KEYWORDS: ReadonlySet<string> = new Set([
   // ES reserved words
   'break', 'case', 'catch', 'class', 'const', 'continue', 'debugger',
   'default', 'delete', 'do', 'else', 'export', 'extends', 'false',

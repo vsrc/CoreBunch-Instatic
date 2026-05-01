@@ -1,5 +1,5 @@
 export const EDITOR_PREFS_KEY = 'pb-editor-prefs'
-export const EDITOR_PREFS_CHANGED_EVENT = 'pb-editor-prefs-changed'
+const EDITOR_PREFS_CHANGED_EVENT = 'pb-editor-prefs-changed'
 
 export function readAutoSavePreference(): boolean {
   try {

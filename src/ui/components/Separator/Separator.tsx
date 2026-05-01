@@ -2,7 +2,7 @@ import { forwardRef, type HTMLAttributes } from 'react'
 import { cn } from '@ui/cn'
 import styles from './Separator.module.css'
 
-export interface SeparatorProps extends HTMLAttributes<HTMLDivElement> {
+interface SeparatorProps extends HTMLAttributes<HTMLDivElement> {
   orientation?: 'horizontal' | 'vertical'
   decorative?: boolean
   spacing?: 'none' | 'compact' | 'normal'

@@ -8,10 +8,7 @@
  *
  * Gate 1 — `--panel-shadow` CSS var must be split into three separate vars
  *   (`--panel-shadow-inset-top`, `--panel-shadow-inset-bottom`, `--panel-shadow-drop`)
- *   in `globals.css`. The combined `--panel-shadow` shorthand prevents the
- *   `panel` object in `tokens.ts` from exposing all 7 keys independently
- *   (Task #358 Gate 1 relies on all three shadow key names existing as
- *   distinct values in the panel object).
+ *   in `globals.css`.
  *   Guideline #366 item 2 / Task #358 Gate 1 (activates Panel token gate).
  *
  * Gate 2 — Inter Variable font must be loaded via `@fontsource-variable/inter`
@@ -22,9 +19,8 @@
  *   Bunny Fonts CDN (avoids cross-origin DNS + CORS preflight on first paint).
  *
  * Gate 3 — Input token system: all `--input-*` CSS custom properties must exist
- *   in `globals.css`, the shared `src/ui/components/Input` and `Select`
- *   primitives must consume those tokens, and `tokens.ts` must export
- *   `inputBase` with the required keys.
+ *   in `globals.css`, and the shared `src/ui/components/Input` and `Select`
+ *   primitives must consume those tokens.
  *   Guideline #366 item 5 / User directive #1564.
  *   Phase 4 property controls (TextInput, NumberInput, Select) are built on
  *   shared UI primitives under `src/ui/components`.
@@ -34,7 +30,6 @@
  *   Gate 1 — self-activates when `--panel-shadow-inset-top` exists in globals.css
  *   Gate 2 — self-activates when `@fontsource-variable/inter` exists in globals.css
  *   Gate 3 — self-activates when `--input-bg` exists in globals.css
- *             OR `inputBase` is exported from tokens.ts
  *
  * @see Guideline #366 — Panel Visual Refinement (Darker Glass + 3D Inputs + Inter Font)
  * @see Guideline #367 — Panel & Input Visual Design (amends #356, #252)
@@ -50,7 +45,6 @@ import { join } from 'path'
 const SRC_ROOT = join(import.meta.dir, '../../')
 
 const GLOBALS_CSS_PATH = join(SRC_ROOT, 'styles/globals.css')
-const TOKENS_PATH = join(SRC_ROOT, 'ui/tokens.ts')
 const INPUT_MODULE_CSS_PATH = join(SRC_ROOT, 'ui/components/Input/Input.module.css')
 const SELECT_MODULE_CSS_PATH = join(SRC_ROOT, 'ui/components/Select/Select.module.css')
 
@@ -69,24 +63,11 @@ function readGlobals(): string {
   return readFileSync(GLOBALS_CSS_PATH, 'utf8')
 }
 
-function readTokens(): string {
-  if (!existsSync(TOKENS_PATH)) {
-    throw new Error(
-      '[Guideline #366] tokens.ts not found at ' +
-        TOKENS_PATH.replace(SRC_ROOT, 'src/') +
-        '\nExpected at src/ui/tokens.ts per Phase B design token conventions.'
-    )
-  }
-  return readFileSync(TOKENS_PATH, 'utf8')
-}
-
 // ---------------------------------------------------------------------------
 // Gate 1 — Panel shadow CSS vars split (Guideline #366 item 2)
 //
 // The existing combined `--panel-shadow` var must be replaced by three
-// discrete vars so that the `panel` object in tokens.ts can expose
-// `shadowInsetTop`, `shadowInsetBottom`, and `shadowDrop` as distinct keys
-// (required by Task #358 Gate 1).
+// discrete vars.
 //
 // Required in globals.css `:root` / overlay panel section:
 //   --panel-shadow-inset-top:    inset 0 1px 0 rgba(255,255,255,0.08);
@@ -134,8 +115,7 @@ describe(
         if (missing.length > 0) {
           throw new Error(
             '[Guideline #366 / Task #358 Gate 1] globals.css is missing required panel shadow CSS vars.\n' +
-              'All three shadow vars are required so the `panel` token object in tokens.ts\n' +
-              'can expose shadowInsetTop, shadowInsetBottom, and shadowDrop as distinct keys.\n\n' +
+              'All three shadow vars are required so overlay panel styles can use distinct inset/drop shadows.\n\n' +
               'Required:\n' +
               REQUIRED_PANEL_SHADOW_VARS.map((v) => `  ${v}`).join('\n') +
               '\n\nMissing:\n' +
@@ -263,7 +243,7 @@ describe(
 )
 
 // ---------------------------------------------------------------------------
-// Gate 3 — Input token system: CSS vars + shared Input/Select primitives + inputBase
+// Gate 3 — Input token system: CSS vars + shared Input/Select primitives
 //           (Guideline #366 item 5)
 //
 // User directive #1564: editor form inputs must have a transparent-glass look
@@ -273,7 +253,7 @@ describe(
 //
 // Architect (message #1573): "Input token system — `--input-bg/bg-focus/border/
 //   border-focus/shadow/shadow-focus/radius` CSS vars + shared UI primitive CSS
-//   + `inputBase` export in tokens.ts."
+//   + shared UI primitive CSS."
 //
 // Required CSS vars in globals.css:
 //   --input-bg             (e.g. rgba(255,255,255,0.055) — transparent glass)
@@ -285,11 +265,7 @@ describe(
 //   src/ui/components/Input/Input.module.css
 //   src/ui/components/Select/Select.module.css
 //
-// Required token export in tokens.ts:
-//   export const inputBase = { ... }  (at minimum: bg, border, shadow, radius keys)
-//
-// Self-activates when `--input-bg` appears in globals.css
-// OR `inputBase` is exported from tokens.ts.
+// Self-activates when `--input-bg` appears in globals.css.
 // ---------------------------------------------------------------------------
 
 const REQUIRED_INPUT_CSS_VARS = [
@@ -299,16 +275,13 @@ const REQUIRED_INPUT_CSS_VARS = [
   '--input-radius',
 ] as const
 
-const REQUIRED_INPUT_BASE_KEYS = ['bg', 'border', 'shadow', 'radius'] as const
-
 describe(
-  'Guideline #366 Gate 3 — Input token system: CSS vars + shared primitives + inputBase export (Guideline #366 item 5)',
+  'Guideline #366 Gate 3 — Input token system: CSS vars + shared primitives (Guideline #366 item 5)',
   () => {
     it(
-      'globals.css must declare --input-* CSS vars; shared Input/Select CSS and tokens.ts must use them',
+      'globals.css must declare --input-* CSS vars; shared Input/Select CSS must use them',
       () => {
         const css = readGlobals()
-        const tokens = readTokens()
         const inputCss = existsSync(INPUT_MODULE_CSS_PATH)
           ? readFileSync(INPUT_MODULE_CSS_PATH, 'utf8')
           : ''
@@ -316,14 +289,13 @@ describe(
           ? readFileSync(SELECT_MODULE_CSS_PATH, 'utf8')
           : ''
 
-        // Gate is pre-registered until either activation signal lands
+        // Gate is pre-registered until the CSS token activation signal lands
         const cssHasInputBg = css.includes('--input-bg')
-        const tokensHasInputBase = /export\s+const\s+inputBase\b/.test(tokens)
 
-        if (!cssHasInputBg && !tokensHasInputBase) {
+        if (!cssHasInputBg) {
           console.log(
             '[Guideline366 gate] Input token system not yet landed — ' +
-              'input CSS vars + shared input primitives + inputBase gate pre-registered ' +
+              'input CSS vars + shared input primitives gate pre-registered ' +
               '(Guideline #366 item 5 / User directive #1564)'
           )
           expect(true).toBe(true)
@@ -391,39 +363,6 @@ describe(
             violations.push(
               'Select.module.css is not consuming required input tokens:\n' +
                 missingSelectRefs.map((v) => `    ${v}`).join('\n')
-            )
-          }
-        }
-
-        // ── 3. inputBase export in tokens.ts ─────────────────────────────
-        if (!tokensHasInputBase) {
-          violations.push(
-            'tokens.ts does not export `inputBase`.\n' +
-              '  The inputBase object bridges the input CSS vars to typed TypeScript tokens\n' +
-              '  (same pattern as the `panel` object for overlay panels).\n' +
-              '  Required shape:\n' +
-              '    export const inputBase = {\n' +
-              "      bg:     'var(--input-bg)',\n" +
-              "      border: 'var(--input-border)',\n" +
-              "      shadow: 'var(--input-shadow)',\n" +
-              "      radius: 'var(--input-radius)',\n" +
-              '    } as const'
-          )
-        } else {
-          // inputBase exists — check required keys
-          const missingKeys = REQUIRED_INPUT_BASE_KEYS.filter(
-            (k) => !new RegExp(`\\b${k}\\s*:`).test(tokens)
-          )
-          // Note: we check within the broader file since key names like `bg`,
-          // `border`, `shadow`, `radius` may appear elsewhere too — this is
-          // a best-effort check. A false-negative here is acceptable; the
-          // intent is to catch a completely empty or partial stub.
-          if (missingKeys.length > 0) {
-            violations.push(
-              'tokens.ts `inputBase` export is missing required keys:\n' +
-                missingKeys.map((k) => `    ${k}`).join('\n') +
-                '\n  Required keys: ' +
-                REQUIRED_INPUT_BASE_KEYS.join(', ')
             )
           }
         }

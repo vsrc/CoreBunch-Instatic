@@ -3,17 +3,13 @@
  *
  * Covers:
  *  1. pathValidation — isSafePath / normalizePath (positive + negative per rule)
- *  2. selectors — buildFileTree (nested structure, orphan-folder synthesis)
- *  3. selectors — getFileByPath / getFilesByType
- *  4. filesSlice CRUD — createFile / deleteFile / renameFile / updateFileContent / updateFileBlob
- *  5. filesSlice guards — invalid path throws, collision throws, rename collision throws
- *  6. validateSite — files field (default [] on missing, backward-compat, dedup)
+ *  2. filesSlice CRUD — createFile / deleteFile / renameFile / updateFileContent / updateFileBlob
+ *  3. filesSlice guards — invalid path throws, collision throws, rename collision throws
+ *  4. validateSite — files field (default [] on missing, backward-compat, dedup)
  */
 
 import { describe, it, expect, beforeEach } from 'bun:test'
 import { isSafePath, normalizePath } from '../../core/files/pathValidation'
-import { buildFileTree, getFileByPath, getFilesByType } from '../../core/files/selectors'
-import type { SiteFile } from '../../core/files/types'
 import { useEditorStore } from '../../core/editor-store/store'
 import { validateSite, SiteValidationError } from '../../core/persistence/validate'
 import type { SiteDocument } from '../../core/page-tree/types'
@@ -133,161 +129,7 @@ describe('isSafePath', () => {
 })
 
 // ============================================================================
-// 2. buildFileTree
-// ============================================================================
-
-function makeFile(
-  id: string,
-  path: string,
-  type: SiteFile['type'] = 'script',
-): SiteFile {
-  return { id, path, type, content: '', createdAt: 1000, updatedAt: 2000 }
-}
-
-describe('buildFileTree', () => {
-  it('returns empty array for empty input', () => {
-    expect(buildFileTree([])).toEqual([])
-  })
-
-  it('places a root-level file directly in the root', () => {
-    const files = [makeFile('f1', 'package.json', 'config')]
-    const tree = buildFileTree(files)
-    expect(tree).toHaveLength(1)
-    expect(tree[0].isDirectory).toBe(false)
-    expect(tree[0].name).toBe('package.json')
-    expect(tree[0].file?.id).toBe('f1')
-  })
-
-  it('creates a directory node for a nested file', () => {
-    const files = [makeFile('f1', 'src/foo.ts')]
-    const tree = buildFileTree(files)
-    // Root should have one directory "src"
-    expect(tree).toHaveLength(1)
-    expect(tree[0].isDirectory).toBe(true)
-    expect(tree[0].name).toBe('src')
-    // "src" should have one child "foo.ts"
-    expect(tree[0].children).toHaveLength(1)
-    expect(tree[0].children[0].name).toBe('foo.ts')
-    expect(tree[0].children[0].isDirectory).toBe(false)
-  })
-
-  it('synthesizes intermediate directory nodes (orphan-folder synthesis)', () => {
-    const files = [makeFile('f1', 'src/components/Button.tsx', 'component')]
-    const tree = buildFileTree(files)
-    // Expect: src/ → components/ → Button.tsx
-    expect(tree).toHaveLength(1)
-    expect(tree[0].name).toBe('src')
-    expect(tree[0].children).toHaveLength(1)
-    expect(tree[0].children[0].name).toBe('components')
-    expect(tree[0].children[0].isDirectory).toBe(true)
-    expect(tree[0].children[0].children).toHaveLength(1)
-    expect(tree[0].children[0].children[0].name).toBe('Button.tsx')
-    expect(tree[0].children[0].children[0].file?.id).toBe('f1')
-  })
-
-  it('shares a parent directory node across sibling files', () => {
-    const files = [
-      makeFile('f1', 'src/foo.ts'),
-      makeFile('f2', 'src/bar.ts'),
-    ]
-    const tree = buildFileTree(files)
-    expect(tree).toHaveLength(1)
-    expect(tree[0].name).toBe('src')
-    expect(tree[0].children).toHaveLength(2)
-    const names = tree[0].children.map((n) => n.name)
-    expect(names).toContain('bar.ts')
-    expect(names).toContain('foo.ts')
-  })
-
-  it('handles mixed root-level and nested files', () => {
-    const files = [
-      makeFile('f1', 'package.json', 'config'),
-      makeFile('f2', 'src/index.ts'),
-    ]
-    const tree = buildFileTree(files)
-    // Should have 2 root entries: package.json and src/
-    expect(tree).toHaveLength(2)
-    const names = tree.map((n) => n.name)
-    expect(names).toContain('package.json')
-    expect(names).toContain('src')
-  })
-
-  it('handles deeply nested paths', () => {
-    const files = [makeFile('f1', 'a/b/c/d/file.ts')]
-    const tree = buildFileTree(files)
-    let node = tree[0]
-    expect(node.name).toBe('a')
-    node = node.children[0]
-    expect(node.name).toBe('b')
-    node = node.children[0]
-    expect(node.name).toBe('c')
-    node = node.children[0]
-    expect(node.name).toBe('d')
-    node = node.children[0]
-    expect(node.name).toBe('file.ts')
-    expect(node.isDirectory).toBe(false)
-  })
-
-  it('output is deterministic for the same input', () => {
-    const files = [
-      makeFile('f1', 'src/b.ts'),
-      makeFile('f2', 'src/a.ts'),
-    ]
-    const t1 = buildFileTree(files)
-    const t2 = buildFileTree(files)
-    expect(t1[0].children.map((n) => n.name)).toEqual(t2[0].children.map((n) => n.name))
-  })
-
-  it('file nodes carry the original SiteFile reference', () => {
-    const file = makeFile('f-id', 'src/foo.ts')
-    const tree = buildFileTree([file])
-    const leaf = tree[0].children[0]
-    expect(leaf.file).toBe(file)
-  })
-})
-
-// ============================================================================
-// 3. getFileByPath / getFilesByType
-// ============================================================================
-
-describe('getFileByPath', () => {
-  it('returns the matching file', () => {
-    const files = [makeFile('f1', 'src/a.ts'), makeFile('f2', 'src/b.ts')]
-    expect(getFileByPath(files, 'src/a.ts')?.id).toBe('f1')
-  })
-
-  it('returns undefined when path is not found', () => {
-    const files = [makeFile('f1', 'src/a.ts')]
-    expect(getFileByPath(files, 'src/missing.ts')).toBeUndefined()
-  })
-
-  it('is case-sensitive', () => {
-    const files = [makeFile('f1', 'src/A.ts')]
-    expect(getFileByPath(files, 'src/a.ts')).toBeUndefined()
-  })
-})
-
-describe('getFilesByType', () => {
-  it('returns all files of the given type', () => {
-    const files = [
-      makeFile('f1', 'a.ts', 'script'),
-      makeFile('f2', 'b.tsx', 'component'),
-      makeFile('f3', 'c.ts', 'script'),
-    ]
-    const scripts = getFilesByType(files, 'script')
-    expect(scripts).toHaveLength(2)
-    expect(scripts.map((f) => f.id)).toContain('f1')
-    expect(scripts.map((f) => f.id)).toContain('f3')
-  })
-
-  it('returns empty array when no files match', () => {
-    const files = [makeFile('f1', 'a.ts', 'script')]
-    expect(getFilesByType(files, 'asset')).toHaveLength(0)
-  })
-})
-
-// ============================================================================
-// 4+5. filesSlice CRUD
+// 2+3. filesSlice CRUD
 // ============================================================================
 
 function getStore() {

@@ -6,7 +6,7 @@ const OPEN_ACTION_TAG_RE = /<pb:actions\b[^>]*>/i
 const CLOSE_ACTION_TAG = '</pb:actions>'
 const OPEN_ACTION_TAG_PREFIX = '<pb:actions'
 
-export interface ParsedAgentActionBlocks {
+interface ParsedAgentActionBlocks {
   cleanText: string
   actionBatches: AgentAction[][]
 }
@@ -126,7 +126,7 @@ export function createAgentResponseStreamParser(): AgentResponseStreamParser {
   return { push, flush }
 }
 
-export function parseAgentActionJson(json: string): AgentAction[] {
+function parseAgentActionJson(json: string): AgentAction[] {
   try {
     const parsed = JSON.parse(json.trim()) as unknown
     if (!Array.isArray(parsed)) return []

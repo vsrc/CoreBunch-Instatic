@@ -8,7 +8,7 @@ import { registry } from '../../../core/module-engine/registry'
 import styles from './list.module.css'
 import { cn } from '../../../ui/cn'
 
-export interface ListProps extends Record<string, unknown> {
+interface ListProps extends Record<string, unknown> {
   items: string
   listType: 'unordered' | 'ordered'
 }

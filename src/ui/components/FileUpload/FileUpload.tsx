@@ -15,7 +15,7 @@ type UploadButtonProps = Omit<ButtonProps, 'children' | 'type' | 'onClick'> & {
   'data-testid'?: string
 }
 
-export interface FileUploadProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type' | 'children'> {
+interface FileUploadProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type' | 'children'> {
   buttonProps: UploadButtonProps
   children: ReactNode
 }

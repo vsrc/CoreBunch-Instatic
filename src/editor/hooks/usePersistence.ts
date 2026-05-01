@@ -49,7 +49,7 @@ export interface PersistenceSaveStatus {
   lastSavedAt?: number
 }
 
-export interface PersistenceController {
+interface PersistenceController {
   saveSite: () => Promise<void>
   saveStatus: PersistenceSaveStatus
 }

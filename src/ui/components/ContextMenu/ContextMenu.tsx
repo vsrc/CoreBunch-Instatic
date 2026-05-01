@@ -10,7 +10,7 @@ import { Separator } from '@ui/components/Separator'
 import { cn } from '@ui/cn'
 import styles from './ContextMenu.module.css'
 
-export interface ContextMenuProps extends Omit<HTMLAttributes<HTMLDivElement>, 'children'> {
+interface ContextMenuProps extends Omit<HTMLAttributes<HTMLDivElement>, 'children'> {
   x: number
   y: number
   ariaLabel: string
@@ -80,7 +80,7 @@ export const ContextMenu = forwardRef<HTMLDivElement, ContextMenuProps>(function
   )
 })
 
-export interface ContextMenuItemProps extends Omit<ButtonProps, 'variant' | 'size' | 'menuItem' | 'tone'> {
+interface ContextMenuItemProps extends Omit<ButtonProps, 'variant' | 'size' | 'menuItem' | 'tone'> {
   danger?: boolean
 }
 

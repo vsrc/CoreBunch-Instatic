@@ -5,14 +5,14 @@ import styles from './Input.module.css'
 type FieldSize = 'xs' | 'sm' | 'md'
 type TextEmphasis = 'default' | 'strong'
 
-export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
+interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   invalid?: boolean
   fieldSize?: FieldSize
   monospace?: boolean
   emphasis?: TextEmphasis
 }
 
-export interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
+interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
   invalid?: boolean
   fieldSize?: FieldSize
   monospace?: boolean

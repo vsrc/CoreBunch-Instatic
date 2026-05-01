@@ -9,7 +9,7 @@ import { safeUrl } from '../utils/escape'
 import styles from './image.module.css'
 import { cn } from '../../../ui/cn'
 
-export interface ImageProps extends Record<string, unknown> {
+interface ImageProps extends Record<string, unknown> {
   src: string
   alt: string
   loading: 'lazy' | 'eager'

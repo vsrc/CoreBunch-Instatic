@@ -15,10 +15,7 @@ describe('Self-hosted CMS pivot — static ZIP export removal', () => {
   })
 
   it('does not expose static ZIP export from the publisher barrel', () => {
-    const src = read(join(SRC_ROOT, 'core/publisher/index.ts'))
-    expect(src).not.toContain('exportProjectAsZip')
-    expect(src).not.toContain('downloadZip')
-    expect(src).not.toContain('./export')
+    expect(existsSync(join(SRC_ROOT, 'core/publisher/index.ts'))).toBe(false)
   })
 
   it('does not keep JSZip as an application dependency', () => {

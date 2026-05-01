@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto'
 
 export const SESSION_COOKIE_NAME = 'pb_admin_session'
-export const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 7
+const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 7
 
 export async function hashPassword(password: string): Promise<string> {
   return Bun.password.hash(password, { algorithm: 'argon2id' })

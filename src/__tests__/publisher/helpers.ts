@@ -100,7 +100,7 @@ export function makePage(
 // SiteDocument fixture factory
 // ---------------------------------------------------------------------------
 
-export const DEFAULT_BREAKPOINTS: Breakpoint[] = [
+const DEFAULT_BREAKPOINTS: Breakpoint[] = [
   { id: 'mobile', label: 'Mobile', width: 375, icon: 'smartphone' },
   { id: 'desktop', label: 'Desktop', width: 1440, icon: 'monitor' },
 ]

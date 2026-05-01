@@ -8,13 +8,13 @@ import type { SitePackageJson } from '../site-dependencies/manifest'
 
 const DEFAULT_ESM_CDN_ORIGIN = 'https://esm.sh'
 
-export interface RuntimeResolverOptions {
+interface RuntimeResolverOptions {
   origin?: string
   packageJson?: SitePackageJson
   strictSiteManifest?: boolean
 }
 
-export interface ModuleImportMap {
+interface ModuleImportMap {
   imports: Record<string, string>
 }
 

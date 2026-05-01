@@ -12,7 +12,7 @@ import styles from './TreeRow.module.css'
 const TREE_ROW_BASE_INDENT = 8
 const TREE_ROW_INDENT_STEP = 12
 
-export interface TreeRowProps extends HTMLAttributes<HTMLDivElement> {
+interface TreeRowProps extends HTMLAttributes<HTMLDivElement> {
   depth: number
   selected?: boolean
   hovered?: boolean
@@ -70,7 +70,7 @@ export const TreeRow = forwardRef<HTMLDivElement, TreeRowProps>(function TreeRow
   )
 })
 
-export interface TreeChevronProps extends HTMLAttributes<HTMLSpanElement> {
+interface TreeChevronProps extends HTMLAttributes<HTMLSpanElement> {
   expanded?: boolean
   visible?: boolean
 }
@@ -97,7 +97,7 @@ export function TreeChevron({
   )
 }
 
-export interface TreeIconSlotProps extends HTMLAttributes<HTMLSpanElement> {
+interface TreeIconSlotProps extends HTMLAttributes<HTMLSpanElement> {
   icon?: IconComponent
   iconSize?: number
   iconColor?: string

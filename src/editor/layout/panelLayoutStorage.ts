@@ -54,7 +54,7 @@ export function writeEditorLayout(layout: StoredEditorLayout) {
   }
 }
 
-export function updateEditorLayout(
+function updateEditorLayout(
   updater: (layout: StoredEditorLayout) => StoredEditorLayout,
 ) {
   const current = readEditorLayout() ?? { version: 1, panels: {} }

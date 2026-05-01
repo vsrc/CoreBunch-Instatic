@@ -22,21 +22,12 @@
 // sanitiseCssValue is the canonical CSS injection sanitiser (Constraint #228).
 // Using import+re-export (not just `export { } from`) so the symbols are also
 // available as local bindings within this file (e.g. used by buildStyle below).
-import { escapeHtml, isSafeUrl, safeUrl, sanitiseCssValue } from '../../../core/publisher/utils'
-export { escapeHtml, isSafeUrl, safeUrl, sanitiseCssValue }
+import { safeUrl, sanitiseCssValue } from '../../../core/publisher/utils'
+export { safeUrl, sanitiseCssValue }
 
 // ---------------------------------------------------------------------------
 // CSS helpers (module-specific, not shared with publisher)
 // ---------------------------------------------------------------------------
-
-/**
- * Convert a number-like value to a CSS pixel string.
- * e.g. toPx(16) → "16px", toPx('auto') → "0px" (graceful fallback)
- */
-export function toPx(value: unknown, fallback = 0): string {
-  const n = Number(value)
-  return isNaN(n) ? `${fallback}px` : `${n}px`
-}
 
 /**
  * Build a CSS `style=""` attribute string from a partial style record.

@@ -1,16 +1,16 @@
-export interface CmsSetupStatus {
+interface CmsSetupStatus {
   hasSite: boolean
   hasAdmin: boolean
   needsSetup: boolean
 }
 
-export interface CmsSetupInput {
+interface CmsSetupInput {
   siteName: string
   email: string
   password: string
 }
 
-export interface CmsLoginInput {
+interface CmsLoginInput {
   email: string
   password: string
 }

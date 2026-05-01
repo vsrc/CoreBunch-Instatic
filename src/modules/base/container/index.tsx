@@ -8,14 +8,14 @@ import { registry } from '../../../core/module-engine/registry'
 import styles from './container.module.css'
 import { cn } from '../../../ui/cn'
 
-export interface ContainerProps extends Record<string, unknown> {
+interface ContainerProps extends Record<string, unknown> {
   tag: 'div' | 'section' | 'article' | 'main' | 'header' | 'footer'
 }
 
 const MODULE_CLASS = 'pb-container'
 const VALID_TAGS = new Set<ContainerProps['tag']>(['div', 'section', 'article', 'main', 'header', 'footer'])
 
-export function resolveContainerTag(value: unknown): ContainerProps['tag'] {
+function resolveContainerTag(value: unknown): ContainerProps['tag'] {
   return typeof value === 'string' && VALID_TAGS.has(value as ContainerProps['tag'])
     ? value as ContainerProps['tag']
     : 'div'

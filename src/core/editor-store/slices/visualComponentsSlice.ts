@@ -28,7 +28,7 @@ import { wouldCreateCycle } from '../../visualComponents/recursionGuard'
 // Custom error types
 // ---------------------------------------------------------------------------
 
-export class VisualComponentNameError extends Error {
+class VisualComponentNameError extends Error {
   readonly code: string
   constructor(message: string, code: string) {
     super(`[visualComponentsSlice] ${message}`)
@@ -37,7 +37,7 @@ export class VisualComponentNameError extends Error {
   }
 }
 
-export class VisualComponentParamNameError extends Error {
+class VisualComponentParamNameError extends Error {
   readonly code: string
   constructor(message: string, code: string) {
     super(`[visualComponentsSlice] ${message}`)
@@ -46,7 +46,7 @@ export class VisualComponentParamNameError extends Error {
   }
 }
 
-export class VisualComponentRecursionError extends Error {
+class VisualComponentRecursionError extends Error {
   constructor(message: string) {
     super(`[visualComponentsSlice] ${message}`)
     this.name = 'VisualComponentRecursionError'

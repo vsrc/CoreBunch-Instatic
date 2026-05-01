@@ -5,8 +5,7 @@
  * property-editing surface (ClassPropertyRow + Module section rows).
  *
  * Phase 3 / Task #464 / Spec #671.
- * Co-locates with PropertiesPanel per §6 of Spec #671 — keeps parseCSSDeclarations
- * a pure serialisation utility (no UI knowledge there).
+ * Co-locates with PropertiesPanel per §6 of Spec #671.
  */
 
 import type { CSSPropertyBag } from '../../../core/page-tree/types'
@@ -24,7 +23,7 @@ import { PointerIcon } from '@ui/icons/icons/pointer'
 // Public types
 // ---------------------------------------------------------------------------
 
-export type CSSControlType = 'color' | 'select' | 'text'
+type CSSControlType = 'color' | 'select' | 'text'
 
 // ---------------------------------------------------------------------------
 // CSSPropertyBag keys whose store type is `number`, not `string`.
@@ -46,7 +45,7 @@ const COLOR_PROPERTIES = new Set<keyof CSSPropertyBag>([
 // Enum (select) properties → option lists (first option is the default)
 // ---------------------------------------------------------------------------
 
-export const ENUM_OPTIONS = new Map<keyof CSSPropertyBag, string[]>([
+const ENUM_OPTIONS = new Map<keyof CSSPropertyBag, string[]>([
   ['display',          ['block', 'inline', 'inline-block', 'flex', 'grid', 'none']],
   ['flexDirection',    ['row', 'column', 'row-reverse', 'column-reverse']],
   ['flexWrap',         ['nowrap', 'wrap', 'wrap-reverse']],
@@ -103,7 +102,7 @@ export function getEnumOptions(prop: keyof CSSPropertyBag): string[] | undefined
  *   - maxWidth: should be 'none' (unconstrained), not '0px'
  *   - borderWidth: see border shorthands below — shorthand left empty for manual entry
  *
- * Section order mirrors parseCSSDeclarations.ts KNOWN_PROPERTIES for visual diff-ability.
+ * Section order mirrors ALL_CSS_PROPERTIES for visual diff-ability.
  *
  * Note on NUMBER_TYPED_PROPS (zIndex, opacity): CSSPropertyBag types these as `number`,
  * so their defaults must be numbers, not strings ('auto' / '1' would fail TS types).
@@ -234,135 +233,6 @@ export function cssPropertyLabel(prop: string): string {
   const spaced = prop.replace(/([A-Z])/g, ' $1').trim()
   return spaced.charAt(0).toUpperCase() + spaced.slice(1).toLowerCase()
 }
-
-/**
- * All CSS properties available in add-property search, ordered by category.
- * Derived from CSSPropertyBag — add new properties to both CSSPropertyBag and here.
- */
-export const ALL_CSS_PROPERTIES: ReadonlyArray<keyof CSSPropertyBag> = [
-  // Layout
-  'display', 'flexDirection', 'flexWrap', 'alignItems', 'justifyContent',
-  'justifyItems', 'alignSelf', 'justifySelf', 'flex', 'gap', 'rowGap', 'columnGap',
-  'gridTemplateColumns', 'gridTemplateRows', 'gridColumn', 'gridRow',
-  // Size
-  'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight',
-  'aspectRatio', 'boxSizing',
-  // Spacing
-  'padding', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
-  'margin', 'marginTop', 'marginRight', 'marginBottom', 'marginLeft',
-  // Position
-  'position', 'top', 'right', 'bottom', 'left', 'zIndex',
-  // Typography
-  'fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'lineHeight',
-  'letterSpacing', 'textAlign', 'textDecoration', 'textTransform',
-  'color', 'textShadow',
-  // Background / Visual
-  'backgroundColor', 'background', 'backgroundImage', 'backgroundSize',
-  'backgroundPosition', 'backgroundRepeat', 'objectFit', 'objectPosition',
-  'opacity',
-  'overflow', 'overflowX', 'overflowY',
-  // Border
-  'border', 'borderTop', 'borderRight', 'borderBottom', 'borderLeft',
-  'borderRadius', 'borderTopLeftRadius', 'borderTopRightRadius',
-  'borderBottomLeftRadius', 'borderBottomRightRadius', 'outline', 'outlineOffset',
-  // Effects
-  'boxShadow', 'filter', 'backdropFilter', 'transform', 'transformOrigin',
-  // Interaction
-  'cursor', 'pointerEvents', 'userSelect',
-  // Motion
-  'transition', 'animation',
-  // Scroll
-  'scrollBehavior',
-]
-
-// ---------------------------------------------------------------------------
-// Property category mapping — 6 user-facing picker buckets (Task #466 / Spec #673 §3)
-//
-// Collapses parseCSSDeclarations.ts's 11 KNOWN_PROPERTIES sections into 6 UX buckets:
-//   Layout    = Layout
-//   Spacing   = Size + Spacing
-//   Typography = Typography
-//   Position  = Position
-//   Effects   = Visual/Background + Border + Effects
-//   Transform = Motion + Interaction + Scrollbar
-//
-// EXHAUSTIVE by design (Record<keyof CSSPropertyBag, CSSPropertyCategory>):
-// Adding a new key to CSSPropertyBag without updating this Record errors at compile time
-// (same exhaustiveness pattern as ALL_KEYS_RECORD in propertiesPanel-redesign.test.tsx).
-// ---------------------------------------------------------------------------
-
-export type CSSPropertyCategory =
-  | 'Layout'
-  | 'Spacing'
-  | 'Typography'
-  | 'Position'
-  | 'Effects'
-  | 'Transform'
-
-/**
- * Maps every CSSPropertyBag key to its user-facing picker category.
- * Exhaustive Record — TypeScript errors here if CSSPropertyBag gains a new key without
- * a corresponding entry in this table.
- */
-const PROPERTY_CATEGORIES: Record<keyof CSSPropertyBag, CSSPropertyCategory> = {
-  // ── Layout ────────────────────────────────────────────────────────────────
-  display: 'Layout', flexDirection: 'Layout', flexWrap: 'Layout', alignItems: 'Layout',
-  justifyContent: 'Layout', justifyItems: 'Layout', alignSelf: 'Layout', justifySelf: 'Layout', flex: 'Layout',
-  gap: 'Layout', rowGap: 'Layout', columnGap: 'Layout',
-  gridTemplateColumns: 'Layout', gridTemplateRows: 'Layout', gridColumn: 'Layout', gridRow: 'Layout',
-  // ── Spacing (Size + Spacing from KNOWN_PROPERTIES) ────────────────────────
-  width: 'Spacing', height: 'Spacing', minWidth: 'Spacing', maxWidth: 'Spacing',
-  minHeight: 'Spacing', maxHeight: 'Spacing', aspectRatio: 'Spacing', boxSizing: 'Spacing',
-  padding: 'Spacing', paddingTop: 'Spacing', paddingRight: 'Spacing',
-  paddingBottom: 'Spacing', paddingLeft: 'Spacing',
-  margin: 'Spacing', marginTop: 'Spacing', marginRight: 'Spacing',
-  marginBottom: 'Spacing', marginLeft: 'Spacing',
-  // ── Typography ────────────────────────────────────────────────────────────
-  fontFamily: 'Typography', fontSize: 'Typography', fontWeight: 'Typography',
-  fontStyle: 'Typography', letterSpacing: 'Typography', lineHeight: 'Typography',
-  textAlign: 'Typography', textDecoration: 'Typography', textTransform: 'Typography',
-  color: 'Typography', textShadow: 'Typography',
-  // ── Position ──────────────────────────────────────────────────────────────
-  position: 'Position', top: 'Position', right: 'Position', bottom: 'Position',
-  left: 'Position', zIndex: 'Position',
-  // ── Effects (Visual/Background + Border + Effects from KNOWN_PROPERTIES) ──
-  backgroundColor: 'Effects', background: 'Effects', backgroundImage: 'Effects',
-  backgroundSize: 'Effects', backgroundPosition: 'Effects', backgroundRepeat: 'Effects',
-  objectFit: 'Effects', objectPosition: 'Effects',
-  opacity: 'Effects', overflow: 'Effects', overflowX: 'Effects', overflowY: 'Effects',
-  border: 'Effects', borderTop: 'Effects', borderRight: 'Effects',
-  borderBottom: 'Effects', borderLeft: 'Effects',
-  borderRadius: 'Effects', borderTopLeftRadius: 'Effects', borderTopRightRadius: 'Effects',
-  borderBottomLeftRadius: 'Effects', borderBottomRightRadius: 'Effects',
-  outline: 'Effects', outlineOffset: 'Effects',
-  boxShadow: 'Effects', filter: 'Effects', backdropFilter: 'Effects',
-  transform: 'Effects', transformOrigin: 'Effects',
-  // ── Transform (Motion + Interaction + Scrollbar from KNOWN_PROPERTIES) ────
-  transition: 'Transform', animation: 'Transform',
-  cursor: 'Transform', pointerEvents: 'Transform', userSelect: 'Transform',
-  scrollBehavior: 'Transform',
-}
-
-/**
- * Returns the user-facing picker category for a given CSS property.
- * Delegates to the exhaustive PROPERTY_CATEGORIES table above.
- */
-export function getCSSPropertyCategory(prop: keyof CSSPropertyBag): CSSPropertyCategory {
-  return PROPERTY_CATEGORIES[prop]
-}
-
-/**
- * Ordered display sequence for the 6 picker category buckets.
- * Matches UX Spec #673 §3 ordering: Layout → Spacing → Typography → Position → Effects → Transform.
- */
-export const PICKER_CATEGORY_ORDER: ReadonlyArray<CSSPropertyCategory> = [
-  'Layout',
-  'Spacing',
-  'Typography',
-  'Position',
-  'Effects',
-  'Transform',
-]
 
 // ---------------------------------------------------------------------------
 // Class style inspector sections

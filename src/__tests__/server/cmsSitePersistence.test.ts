@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test'
-import type { SiteDocument } from '../../../core/page-tree/types'
+import type { SiteDocument } from '../../core/page-tree/types'
 import type { DbClient, DbResult } from '../../../server/cms/db'
 import {
   loadDraftSite,

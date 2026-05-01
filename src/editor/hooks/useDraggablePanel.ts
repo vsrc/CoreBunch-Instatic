@@ -38,7 +38,7 @@ export interface PanelPosition {
   y: number
 }
 
-export interface UseDraggablePanelResult {
+interface UseDraggablePanelResult {
   /** Attach to the panel root element so drag can imperatively update CSS vars. */
   panelRef: React.RefObject<HTMLElement | null>
   /** Spread onto the draggable header element. */

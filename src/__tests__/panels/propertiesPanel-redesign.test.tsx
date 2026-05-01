@@ -29,9 +29,7 @@ import userEvent from '@testing-library/user-event'
 import { readFileSync } from 'fs'
 import { join } from 'path'
 import { PropertiesPanel } from '../../editor/components/PropertiesPanel/PropertiesPanel'
-import { parseCSSDeclarations } from '../../editor/components/PropertiesPanel/parseCSSDeclarations'
-import { getCSSPropertyDefaultValue, ALL_CSS_PROPERTIES } from '../../editor/components/PropertiesPanel/cssControlTypes'
-import type { CSSPropertyBag } from '../../core/page-tree/types'
+import { getCSSPropertyDefaultValue } from '../../editor/components/PropertiesPanel/cssControlTypes'
 import { useEditorStore } from '../../core/editor-store/store'
 import { makeSite, makePage, makeNode } from '../fixtures'
 import '../../modules/base/index'
@@ -519,7 +517,6 @@ describe('PP-16 — No inline styles / no Tailwind / no !important in new files'
     'ClassComposer.module.css',
     'ClassPropertyRow.tsx',
     'ClassPropertyRow.module.css',
-    'parseCSSDeclarations.ts',
     'cssControlTypes.ts',
     'PropertiesPanel.tsx',
     'PropertiesPanel.module.css',
@@ -657,120 +654,6 @@ describe('HF-2 — Switching class pills resets ClassComposer local state', () =
     fireEvent.click(pill2)
     expect(document.querySelector('[data-testid="css-property-row-fontFamily"]')).toBeNull()
     expect(document.querySelectorAll('[data-testid^="css-property-row-"]').length).toBe(0)
-  })
-})
-
-// ---------------------------------------------------------------------------
-// HF-3: parseCSSDeclarations correctly handles justifySelf and scrollBehavior
-// ---------------------------------------------------------------------------
-
-describe('HF-3 — parseCSSDeclarations recognises justify-self and scroll-behavior', () => {
-  it('justify-self: center → { justifySelf: "center" }', () => {
-    const result = parseCSSDeclarations('justify-self: center')
-    expect(result).not.toBeNull()
-    expect(result?.justifySelf).toBe('center')
-  })
-
-  it('scroll-behavior: smooth → { scrollBehavior: "smooth" }', () => {
-    const result = parseCSSDeclarations('scroll-behavior: smooth')
-    expect(result).not.toBeNull()
-    expect(result?.scrollBehavior).toBe('smooth')
-  })
-
-  it('both together: returns { justifySelf: "center", scrollBehavior: "smooth" }', () => {
-    const result = parseCSSDeclarations('justify-self: center; scroll-behavior: smooth;')
-    expect(result).toEqual({ justifySelf: 'center', scrollBehavior: 'smooth' })
-  })
-})
-
-// ---------------------------------------------------------------------------
-// HF-4: KNOWN_PROPERTIES covers every key of CSSPropertyBag (static audit gate)
-//
-// Ensures parseCSSDeclarations.ts KNOWN_PROPERTIES cannot drift from CSSPropertyBag.
-// Strategy: build a CSS string containing every CSSPropertyBag key (camelCase → kebab)
-// then assert that parseCSSDeclarations returns ALL of them — none silently dropped.
-// ---------------------------------------------------------------------------
-
-describe('HF-4 — KNOWN_PROPERTIES is a complete superset of CSSPropertyBag keys', () => {
-  /** Convert camelCase to kebab-case CSS property name */
-  function camelToKebab(camel: string): string {
-    return camel.replace(/([A-Z])/g, '-$1').toLowerCase()
-  }
-
-  /**
-   * Exhaustive Record of every key in CSSPropertyBag — MF-A fix (CR #676 / Architect msg #2075).
-   *
-   * WHY Record<keyof CSSPropertyBag, true> and NOT ReadonlyArray<keyof CSSPropertyBag>:
-   *   ReadonlyArray accepts SUBSETS — a subset of keyof CSSPropertyBag is still assignable,
-   *   so adding a new field to CSSPropertyBag (e.g. `borderImageSource?: string`) would
-   *   silently pass TypeScript here. The Record pattern requires ALL keys to be present;
-   *   a missing key produces a compile error before tests run (pre-commit / pre-push `tsc`).
-   *   Same pattern as ARIA-role enumeration in earlier suites (Constraint #234 family).
-   *
-   * Section order mirrors parseCSSDeclarations.ts KNOWN_PROPERTIES for visual diff-ability.
-   */
-  const ALL_KEYS_RECORD: Record<keyof CSSPropertyBag, true> = {
-    // Typography
-    fontFamily: true, fontSize: true, fontWeight: true, fontStyle: true,
-    letterSpacing: true, lineHeight: true, textAlign: true, textDecoration: true,
-    textTransform: true, color: true, textShadow: true,
-    // Layout
-    display: true, flexDirection: true, flexWrap: true, alignItems: true,
-    justifyContent: true, justifyItems: true, alignSelf: true, justifySelf: true, flex: true,
-    gap: true, rowGap: true, columnGap: true,
-    gridTemplateColumns: true, gridTemplateRows: true, gridColumn: true, gridRow: true,
-    // Size
-    width: true, height: true, minWidth: true, maxWidth: true, minHeight: true,
-    maxHeight: true, aspectRatio: true, boxSizing: true,
-    // Spacing
-    margin: true, marginTop: true, marginRight: true, marginBottom: true, marginLeft: true,
-    padding: true, paddingTop: true, paddingRight: true, paddingBottom: true, paddingLeft: true,
-    // Position
-    position: true, top: true, right: true, bottom: true, left: true, zIndex: true,
-    // Visual
-    backgroundColor: true, background: true, backgroundImage: true, backgroundSize: true,
-    backgroundPosition: true, backgroundRepeat: true, opacity: true,
-    overflow: true, overflowX: true, overflowY: true,
-    // Border
-    border: true, borderTop: true, borderRight: true, borderBottom: true, borderLeft: true,
-    borderRadius: true, borderTopLeftRadius: true, borderTopRightRadius: true,
-    borderBottomLeftRadius: true, borderBottomRightRadius: true, outline: true, outlineOffset: true,
-    // Effects
-    boxShadow: true, filter: true, backdropFilter: true, transform: true, transformOrigin: true,
-    // Motion
-    transition: true, animation: true,
-    // Interaction
-    cursor: true, pointerEvents: true, userSelect: true,
-    // Scrollbar
-    scrollBehavior: true,
-  }
-
-  /** Derived from the exhaustive Record above — same keys, ordered for camelToKebab iteration. */
-  const ALL_CSS_PROPERTY_BAG_KEYS = Object.keys(ALL_KEYS_RECORD) as Array<keyof CSSPropertyBag>
-
-  it('parseCSSDeclarations accepts every CSSPropertyBag key; no key is silently dropped', () => {
-    // Build a CSS string: "font-family: x; font-size: x; ..."
-    const cssString = ALL_CSS_PROPERTY_BAG_KEYS
-      .map((k) => `${camelToKebab(k)}: x`)
-      .join('; ')
-
-    const result = parseCSSDeclarations(cssString)
-    expect(result).not.toBeNull()
-
-    const missingKeys = ALL_CSS_PROPERTY_BAG_KEYS.filter(
-      (k) => !(k in (result ?? {})),
-    )
-
-    // If this fails, add the missing keys to KNOWN_PROPERTIES in parseCSSDeclarations.ts
-    expect(missingKeys).toEqual([])
-  })
-
-  it('ALL_CSS_PROPERTY_BAG_KEYS list is exhaustive — compile-time lock via Record<keyof CSSPropertyBag, true>', () => {
-    // Primary lock = TypeScript: Record<keyof CSSPropertyBag, true> above MUST include ALL keys.
-    // If CSSPropertyBag gains a new field, TS errors here at compile time (pre-commit / tsc).
-    // Runtime assertion = defence-in-depth count check (catches build-tool bypasses).
-    // Add new keys to ALL_KEYS_RECORD + KNOWN_PROPERTIES + cssControlTypes.ts together.
-    expect(ALL_CSS_PROPERTY_BAG_KEYS.length).toBe(84)
   })
 })
 
@@ -970,26 +853,6 @@ describe('PP-22 — Module settings is the first visible accordion', () => {
 })
 
 // ---------------------------------------------------------------------------
-// PP-23: parseCSSDeclarations still exists as a serialisation utility
-// ---------------------------------------------------------------------------
-
-describe('PP-23 — parseCSSDeclarations.ts still exports parseCSSDeclarations (utility, not textarea-bound)', () => {
-  it('parseCSSDeclarations.ts file exports parseCSSDeclarations function', () => {
-    const src = readFileSync(join(PP_DIR, 'parseCSSDeclarations.ts'), 'utf-8')
-    expect(src).toContain('export function parseCSSDeclarations')
-  })
-
-  it('ClassComposer.tsx does NOT import parseCSSDeclarations (no textarea binding)', () => {
-    const src = readFileSync(join(PP_DIR, 'ClassComposer.tsx'), 'utf-8')
-    // The textarea that bound to parseCSSDeclarations is gone in Phase 3.
-    // The import statement (not doc-comment references) must be absent.
-    expect(src).not.toMatch(/import.*parseCSSDeclarations/)
-    // Calling parseCSSDeclarations at runtime must also be gone
-    expect(src).not.toMatch(/parseCSSDeclarations\(/)
-  })
-})
-
-// ---------------------------------------------------------------------------
 // PP-24: ClassComposer shows only assigned style categories and uses shared Section
 // ---------------------------------------------------------------------------
 
@@ -1045,86 +908,6 @@ describe('PP-25 — Keyboard navigation reaches ClassPropertyRow controls and re
     }
 
     expect(foundRemoveBtn).toBe(true)
-  })
-})
-
-// ---------------------------------------------------------------------------
-// PP3-2: getCSSPropertyDefaultValue round-trips through parseCSSDeclarations
-//
-// For every non-empty default value returned by getCSSPropertyDefaultValue,
-// verify that parseCSSDeclarations can ingest it without silently dropping
-// the key. This catches two future failure modes:
-//   1. A default value that uses a CSS syntax parseCSSDeclarations cannot parse
-//      (e.g. a value containing ':' that splits incorrectly).
-//   2. A new CSSPropertyBag key that is in DEFAULT_CSS_VALUES but missing from
-//      KNOWN_PROPERTIES in parseCSSDeclarations.ts.
-// ---------------------------------------------------------------------------
-
-describe('PP3-2 — getCSSPropertyDefaultValue values survive parseCSSDeclarations round-trip', () => {
-  /** Convert camelCase to kebab-case CSS property name */
-  function camelToKebab(camel: string): string {
-    return camel.replace(/([A-Z])/g, '-$1').toLowerCase()
-  }
-
-  it('every non-empty default round-trips through parseCSSDeclarations without being dropped', () => {
-    // Properties intentionally left empty — user must specify manually (border shorthands,
-    // background shorthand, aspectRatio). parseCSSDeclarations drops empty values by design.
-    const INTENTIONAL_EMPTY_DEFAULTS = new Set<keyof CSSPropertyBag>([
-      'border', 'borderTop', 'borderRight', 'borderBottom', 'borderLeft',
-      'background', 'aspectRatio',
-    ])
-
-    const failures: string[] = []
-
-    for (const prop of ALL_CSS_PROPERTIES) {
-      if (INTENTIONAL_EMPTY_DEFAULTS.has(prop)) continue
-
-      const defaultVal = getCSSPropertyDefaultValue(prop)
-      // Number-typed props (opacity, zIndex) need String() conversion for CSS string
-      const valStr = String(defaultVal)
-
-      const cssStr = `${camelToKebab(prop)}: ${valStr}`
-      const parsed = parseCSSDeclarations(cssStr)
-
-      if (parsed === null || !(prop in parsed)) {
-        failures.push(
-          `${prop}: ${JSON.stringify(defaultVal)} → parseCSSDeclarations returned ` +
-          `${parsed === null ? 'null' : 'object missing key'}`,
-        )
-      }
-    }
-
-    if (failures.length > 0) {
-      throw new Error(
-        'getCSSPropertyDefaultValue returns values silently dropped by parseCSSDeclarations:\n' +
-        failures.map((f) => `  ${f}`).join('\n') +
-        '\nFix: ensure KNOWN_PROPERTIES in parseCSSDeclarations.ts contains these keys ' +
-        'and DEFAULT_CSS_VALUES uses non-empty string defaults.',
-      )
-    }
-
-    expect(failures).toHaveLength(0)
-  })
-
-  it('intentionally-empty defaults are exactly the 7 documented border/background shorthands', () => {
-    // These properties use empty string "" by design — the user fills them in manually.
-    // Pinning the set here means adding a new empty-default requires an explicit code change,
-    // preventing silent drift where a non-trivial property accidentally gets an empty default.
-    const EXPECTED_EMPTY_DEFAULTS: Array<keyof CSSPropertyBag> = [
-      'aspectRatio',
-      'background',
-      'border',
-      'borderBottom',
-      'borderLeft',
-      'borderRight',
-      'borderTop',
-    ]
-
-    const actualEmptyDefaults = ALL_CSS_PROPERTIES
-      .filter((prop) => getCSSPropertyDefaultValue(prop) === '')
-      .sort()
-
-    expect(actualEmptyDefaults).toEqual(EXPECTED_EMPTY_DEFAULTS)
   })
 })
 

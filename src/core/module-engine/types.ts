@@ -18,7 +18,7 @@ export type PropertyCondition =
 // Property Controls — drive the Properties Panel UI
 // ---------------------------------------------------------------------------
 
-export type PropertyControlBase = {
+type PropertyControlBase = {
   label: string
   description?: string
   condition?: PropertyCondition
@@ -67,19 +67,19 @@ export interface ModuleStyleBinding {
   isSet?: (styles: Partial<CSSPropertyBag>) => boolean
 }
 
-export type ModuleStyleBindings = Record<string, ModuleStyleBinding>
+type ModuleStyleBindings = Record<string, ModuleStyleBinding>
 
-export type ModuleField =
+type ModuleField =
   | { kind: 'prop'; control: PropertyControl }
   | ({ kind: 'style' } & ModuleStyleBinding)
 
-export type ModuleFields = Record<string, ModuleField>
+type ModuleFields = Record<string, ModuleField>
 
 // ---------------------------------------------------------------------------
 // Module package dependencies — dependency-backed editor runtimes
 // ---------------------------------------------------------------------------
 
-export interface ModuleDependencySpec {
+interface ModuleDependencySpec {
   /** Semver/range tracked for dependency-backed module runtimes. */
   version: string
   /** true writes to devDependencies; false/omitted writes to dependencies. */
@@ -92,7 +92,7 @@ export type ModuleDependencies = Record<string, string | ModuleDependencySpec>
 // Editor runtime sandbox — dependency-backed live previews
 // ---------------------------------------------------------------------------
 
-export interface ModuleSandboxRuntime {
+interface ModuleSandboxRuntime {
   /**
    * ESM source executed inside an isolated editor iframe. The module should
    * export `mount(root, context)`. `mount()` may return a cleanup function or
@@ -104,7 +104,7 @@ export interface ModuleSandboxRuntime {
   minHeight?: number
 }
 
-export interface ModuleEditorRuntime {
+interface ModuleEditorRuntime {
   sandbox?: ModuleSandboxRuntime
 }
 
@@ -211,9 +211,8 @@ export interface ModuleDefinition<
   dependencies?: ModuleDependencies
 
   /**
-   * Optional author-facing field manifest. `defineModule()` can derive `schema`
-   * and `classStyleBindings` from this, while the editor can still inspect a
-   * single list of module-exposed fields.
+   * Optional author-facing field manifest. The editor can inspect this single
+   * list of module-exposed fields alongside schema and classStyleBindings.
    */
   fields?: ModuleFields
 

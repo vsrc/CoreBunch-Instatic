@@ -1,9 +1,9 @@
 import { nanoid } from 'nanoid'
 import type { DbClient } from './db'
 
-export type ContentEntryStatus = 'draft' | 'published' | 'unpublished'
+type ContentEntryStatus = 'draft' | 'published' | 'unpublished'
 
-export interface ContentCollection {
+interface ContentCollection {
   id: string
   name: string
   slug: string
@@ -13,7 +13,7 @@ export interface ContentCollection {
   updatedAt: string
 }
 
-export interface ContentEntry {
+interface ContentEntry {
   id: string
   collectionId: string
   title: string
@@ -29,7 +29,7 @@ export interface ContentEntry {
   deletedAt: string | null
 }
 
-export interface PublishedContentEntry {
+interface PublishedContentEntry {
   id: string
   entryId: string
   collectionId: string
@@ -46,7 +46,7 @@ export interface PublishedContentEntry {
   createdAt: string
 }
 
-export interface ContentEntryVersion {
+interface ContentEntryVersion {
   id: string
   entryId: string
   versionNumber: number
@@ -60,7 +60,7 @@ export interface ContentEntryVersion {
   createdAt: string
 }
 
-export interface CreateContentCollectionInput {
+interface CreateContentCollectionInput {
   id?: string
   name: string
   slug: string
@@ -68,7 +68,7 @@ export interface CreateContentCollectionInput {
   pluralLabel: string
 }
 
-export interface CreateContentEntryInput {
+interface CreateContentEntryInput {
   id?: string
   collectionId: string
   title: string
@@ -79,7 +79,7 @@ export interface CreateContentEntryInput {
   seoDescription?: string
 }
 
-export interface SaveContentEntryDraftInput {
+interface SaveContentEntryDraftInput {
   title: string
   slug: string
   bodyMarkdown: string

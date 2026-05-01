@@ -9,7 +9,7 @@ import { safeUrl } from '../utils/escape'
 import styles from './button.module.css'
 import { cn } from '../../../ui/cn'
 
-export interface ButtonProps extends Record<string, unknown> {
+interface ButtonProps extends Record<string, unknown> {
   label: string
   href: string
   target: '_blank' | '_self' | '_parent'

@@ -1,5 +1,2 @@
 export { CanvasRoot } from './CanvasRoot'
-export { CanvasTransformLayer } from './CanvasTransformLayer'
-export { BreakpointFrame } from './BreakpointFrame'
-export { NodeRenderer, CanvasSelectionContext } from './NodeRenderer'
 export * from './math'

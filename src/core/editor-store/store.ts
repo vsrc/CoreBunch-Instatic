@@ -160,23 +160,12 @@ export const selectActiveCanvasPage = (s: EditorStore): Page | null => {
  * Select the currently selected PageNode.
  *
  * Uses selectActiveCanvasPage so this works in BOTH page mode and VC canvas mode.
- * Without this, PropertiesPanel + SelectionOverlay return null when a node is
+ * Without this, PropertiesPanel returns null when a node is
  * selected inside a VC tree (O-1 / CR #666 finding — promoted to MUST-FIX).
  */
 export const selectSelectedNode = (s: EditorStore) => {
   if (!s.selectedNodeId) return null
   return selectActiveCanvasPage(s)?.nodes[s.selectedNodeId] ?? null
-}
-
-/**
- * Select the hovered PageNode.
- *
- * Uses selectActiveCanvasPage for the same reason as selectSelectedNode — hover
- * feedback (SelectionOverlay) must work inside VC trees (O-1 / CR #666).
- */
-export const selectHoveredNode = (s: EditorStore) => {
-  if (!s.hoveredNodeId) return null
-  return selectActiveCanvasPage(s)?.nodes[s.hoveredNodeId] ?? null
 }
 
 // ---------------------------------------------------------------------------

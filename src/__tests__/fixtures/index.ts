@@ -149,28 +149,6 @@ export function makeNode(overrides: Partial<PageNode> & { id?: string } = {}): P
   }
 }
 
-/**
- * Build a flat `nodes` map from an adjacency description.
- * Each entry is: nodeId → child IDs array.
- *
- * @example
- * const nodes = makeNodeTree({
- *   root: ['a', 'b'],
- *   a: [],
- *   b: ['c'],
- *   c: [],
- * })
- */
-export function makeNodeTree(
-  adjacency: Record<string, string[]>
-): Record<string, PageNode> {
-  const nodes: Record<string, PageNode> = {}
-  for (const [id, children] of Object.entries(adjacency)) {
-    nodes[id] = makeNode({ id, children })
-  }
-  return nodes
-}
-
 // ---------------------------------------------------------------------------
 // Page factories
 // ---------------------------------------------------------------------------
@@ -188,26 +166,6 @@ export function makePage(overrides: Partial<Page> = {}): Page {
     rootNodeId: rootId,
     nodes: overrides.nodes ?? defaultNodes,
   }
-}
-
-/**
- * Create a page with a pre-built node tree (adjacency map style).
- * The root node is automatically added to `nodes` if not present.
- *
- * @example
- * const page = makePageWithTree('root', {
- *   root: ['a', 'b'],
- *   a: [],
- *   b: ['c'],
- *   c: [],
- * })
- */
-export function makePageWithTree(
-  rootId: string,
-  adjacency: Record<string, string[]>
-): Page {
-  const nodes = makeNodeTree(adjacency)
-  return makePage({ rootNodeId: rootId, nodes })
 }
 
 // ---------------------------------------------------------------------------

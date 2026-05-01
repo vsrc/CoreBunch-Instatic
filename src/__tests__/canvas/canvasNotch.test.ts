@@ -5,7 +5,6 @@ const CANVAS_ROOT = new URL('../../editor/components/Canvas/CanvasRoot.tsx', imp
 const CANVAS_NOTCH = new URL('../../editor/components/Canvas/CanvasNotch.tsx', import.meta.url)
 const CANVAS_NOTCH_CSS = new URL('../../editor/components/Canvas/CanvasNotch.module.css', import.meta.url)
 const TOOLBAR = new URL('../../editor/components/Toolbar/Toolbar.tsx', import.meta.url)
-const SELECTION_OVERLAY = new URL('../../editor/components/Canvas/SelectionOverlay.tsx', import.meta.url)
 
 describe('CanvasNotch', () => {
   it('is rendered by CanvasRoot as fixed canvas chrome', () => {
@@ -48,13 +47,5 @@ describe('CanvasNotch', () => {
 
     expect(src).not.toContain('ModulePickerDropdown')
     expect(src).not.toContain('toolbar-add-module-btn')
-  })
-
-  it('removes the floating Duplicate/Delete selection toolbar', () => {
-    const src = readFileSync(SELECTION_OVERLAY, 'utf-8')
-
-    expect(src).not.toContain('Duplicate selected element')
-    expect(src).not.toContain('Delete selected element')
-    expect(src).not.toContain('role="toolbar"')
   })
 })

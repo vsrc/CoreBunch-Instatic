@@ -7,7 +7,7 @@ import { registry } from '../../core/module-engine/registry'
 import { cn } from '../../ui/cn'
 import styles from './root.module.css'
 
-export type RootProps = Record<string, unknown>
+type RootProps = Record<string, unknown>
 
 const MODULE_CLASS = 'pb-root'
 

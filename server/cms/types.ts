@@ -12,10 +12,3 @@ export interface AdminUserRow {
   password_hash: string
   created_at: Date | string
 }
-
-export interface SessionRow {
-  id_hash: string
-  admin_user_id: string
-  expires_at: Date | string
-  created_at: Date | string
-}

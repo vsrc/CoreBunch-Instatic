@@ -52,8 +52,7 @@
  * IMPORTANT: this does NOT prevent browser zoom on Mac desktop trackpad (which
  * uses wheel events, not touch events) — see Gate 4 for the Mac desktop fix.
  *
- * Required: `touch-none` Tailwind class OR `touchAction: 'none'` inline style
- * on the canvas root div in CanvasRoot.tsx.
+ * Required: `touch-action: none` in the CanvasRoot CSS module.
  *
  * ── Gate 3 — resetView pattern (reference) ──────────────────────────────────
  *
@@ -207,14 +206,8 @@ describe('Gate 2 — CanvasRoot canvas element must set touch-action: none', () 
     const cssModulePath = CANVAS_ROOT_PATH.replace('.tsx', '.module.css')
     const cssModuleSource = existsSync(cssModulePath) ? readFileSync(cssModulePath, 'utf8') : ''
 
-    // Accept: CSS-in-JS style prop OR Tailwind class OR CSS module declaration
+    // Accept the post-CSS-module contract only.
     const hasTouchActionNone =
-      source.includes("touchAction: 'none'") ||
-      source.includes('touchAction: "none"') ||
-      source.includes('touch-action: none') ||
-      source.includes('touch-action-none') || // tailwind utility
-      source.includes('class="touch-none') ||
-      (source.includes("className={cn(") && source.includes('touch-none')) ||
       cssModuleSource.includes('touch-action: none')  // CSS module (Task #399)
 
     if (!hasTouchActionNone) {

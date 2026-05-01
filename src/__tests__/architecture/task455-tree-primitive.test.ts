@@ -14,7 +14,6 @@ import { join } from 'path'
 const ROOT = join(import.meta.dir, '../../../')
 const TREE_PRIMITIVE_TSX = join(ROOT, 'src/editor/ui/Tree/Tree.tsx')
 const TREE_PRIMITIVE_INDEX = join(ROOT, 'src/editor/ui/Tree/index.ts')
-const TREE_MODULE_CSS = join(ROOT, 'src/editor/ui/Tree/Tree.module.css')
 const TREE_ROW_TSX = join(ROOT, 'src/editor/ui/Tree/TreeRow.tsx')
 const TREE_ROW_CSS = join(ROOT, 'src/editor/ui/Tree/TreeRow.module.css')
 const DOM_PANEL_TSX = join(ROOT, 'src/editor/components/DomPanel/DomPanel.tsx')
@@ -33,14 +32,12 @@ describe('Tree primitive', () => {
   it('keeps the generic tree implementation at the canonical path', () => {
     expect(existsSync(TREE_PRIMITIVE_TSX)).toBe(true)
     expect(existsSync(TREE_PRIMITIVE_INDEX)).toBe(true)
-    expect(existsSync(TREE_MODULE_CSS)).toBe(true)
     expect(existsSync(TREE_ROW_TSX)).toBe(true)
     expect(existsSync(TREE_ROW_CSS)).toBe(true)
   })
 
-  it('exports the public tree and row building blocks', () => {
+  it('exports the public tree container and row building blocks', () => {
     const source = src(TREE_PRIMITIVE_INDEX)
-    expect(source.includes('Tree')).toBe(true)
     expect(source.includes('TreeContainer')).toBe(true)
     expect(source.includes('TreeRow')).toBe(true)
     expect(source.includes('TreeChevron')).toBe(true)
@@ -63,18 +60,6 @@ describe('Tree primitive', () => {
     expect(source.includes("'visual-component'")).toBe(false)
     expect(source.includes("kind === 'file'")).toBe(false)
     expect(source.includes('useEditorStore')).toBe(false)
-  })
-
-  it('owns keyboard navigation for structural trees', () => {
-    const source = src(TREE_PRIMITIVE_TSX)
-    expect(source.includes("'ArrowDown'")).toBe(true)
-    expect(source.includes("'ArrowUp'")).toBe(true)
-    expect(source.includes("'ArrowLeft'")).toBe(true)
-    expect(source.includes("'ArrowRight'")).toBe(true)
-    expect(source.includes("'Home'")).toBe(true)
-    expect(source.includes("'End'")).toBe(true)
-    expect(source.includes("'Enter'")).toBe(true)
-    expect(source.includes("' '")).toBe(true)
   })
 })
 

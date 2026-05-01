@@ -1,7 +1,7 @@
 import type { DbClient } from './db'
 import type { AdminUserRow } from './types'
 
-export interface SetupStatus {
+interface SetupStatus {
   hasSite: boolean
   hasAdmin: boolean
   needsSetup: boolean

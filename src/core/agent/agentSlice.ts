@@ -550,7 +550,7 @@ export function buildPageContext(
   }
 }
 
-export async function buildLivePageContext(
+async function buildLivePageContext(
   state: EditorStore,
   activePage: import('../page-tree/types').Page | undefined,
 ): Promise<PageContext> {

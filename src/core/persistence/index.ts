@@ -1,8 +1,6 @@
-export type { IPersistenceAdapter } from './types'
-export { CmsAdapter, cmsAdapter } from './cms'
+export { cmsAdapter } from './cms'
 export { getCmsPublishStatus, publishCmsDraft } from './cmsPublish'
-export type { CmsPublishResult, CmsPublishStatus } from './cmsPublish'
-export { deleteCmsMediaAsset, listCmsMediaAssets, renameCmsMediaAsset, uploadCmsMediaAsset } from './cmsMedia'
+export { listCmsMediaAssets } from './cmsMedia'
 export type { CmsMediaAsset } from './cmsMedia'
 export {
   createCmsContentEntry,
@@ -11,7 +9,5 @@ export {
   publishCmsContentEntry,
   saveCmsContentEntryDraft,
 } from './cmsContent'
-export { getCmsSetupStatus, loginCms, logoutCms, probeCmsSession, setupCms } from './cmsAuth'
-export type { CmsLoginInput, CmsSetupInput, CmsSetupStatus } from './cmsAuth'
-export { validateSite, SiteValidationError } from './validate'
+export { getCmsSetupStatus, loginCms, probeCmsSession, setupCms } from './cmsAuth'
 // usePersistence moved to src/editor/hooks/usePersistence.ts (Constraint #179 — no React in core)

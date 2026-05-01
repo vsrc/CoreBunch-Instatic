@@ -88,16 +88,6 @@ export function flattenSubtree(page: Page, nodeId: string): string[] {
 }
 
 /**
- * Return the flattened subtree as PageNode objects.
- * Convenience wrapper over flattenSubtree.
- */
-export function flattenSubtreeNodes(page: Page, nodeId: string): PageNode[] {
-  return flattenSubtree(page, nodeId)
-    .map((id) => page.nodes[id])
-    .filter((n): n is PageNode => n !== undefined)
-}
-
-/**
  * Check whether ancestorId is an ancestor of nodeId.
  * Used to prevent illegal moves in drag-to-reorder (cannot drop a node inside itself).
  */

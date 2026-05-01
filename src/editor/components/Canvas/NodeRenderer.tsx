@@ -33,7 +33,7 @@ import styles from './NodeRenderer.module.css'
 // Each NodeRenderer subscribes to its own boolean directly from the store.
 // ---------------------------------------------------------------------------
 
-export interface CanvasSelectionContextValue {
+interface CanvasSelectionContextValue {
   onNodeClick: (nodeId: string, e: React.MouseEvent) => void
   onNodeHover: (nodeId: string | null) => void
   onNodeContextMenu: (nodeId: string, e: React.MouseEvent) => void
@@ -148,7 +148,7 @@ export const NodeRenderer = memo(function NodeRenderer({ nodeId }: NodeRendererP
   )
 })
 
-export function getCanvasNodeClassIds(
+function getCanvasNodeClassIds(
   classIds: readonly string[] | undefined,
   previewClassAssignment: ClassPreviewAssignment | null,
   nodeId: string,
@@ -180,7 +180,7 @@ export function getCanvasNodeClassName(
 // ---------------------------------------------------------------------------
 
 // Exported for testing (keyboard navigation, ARIA attributes)
-export interface NodeWrapperProps {
+interface NodeWrapperProps {
   nodeId: string
   moduleId?: string
   isSelected: boolean

@@ -1,7 +1,7 @@
 import type { StateCreator } from 'zustand'
 import type { EditorStore } from '../store'
 
-export type CanvasMode = 'select' | 'pan' | 'insert'
+type CanvasMode = 'select' | 'pan' | 'insert'
 
 export const MIN_ZOOM = 0.1
 export const MAX_ZOOM = 4
@@ -36,7 +36,6 @@ export interface CanvasSlice {
   zoomTo: (zoom: number, originX?: number, originY?: number) => void
 }
 
-const ZOOM_STEP = 0.1
 const ZOOM_STEPS = [0.1, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4]
 
 function clampZoom(z: number): number {
@@ -104,4 +103,4 @@ export const createCanvasSlice: StateCreator<EditorStore, [], [], CanvasSlice> =
 // Zoom math utilities — exported as pure functions for unit testing
 // ---------------------------------------------------------------------------
 
-export { clampZoom, clampPan, nearestZoomStep, ZOOM_STEPS, ZOOM_STEP }
+export { clampZoom, clampPan, nearestZoomStep, ZOOM_STEPS }

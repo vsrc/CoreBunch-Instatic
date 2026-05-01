@@ -11,7 +11,7 @@ import styles from './ColorInput.module.css'
 
 type ColorInputSize = 'xs' | 'sm' | 'md'
 
-export interface ColorInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type' | 'size'> {
+interface ColorInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type' | 'size'> {
   fieldSize?: ColorInputSize
   swatchValue?: string
 }

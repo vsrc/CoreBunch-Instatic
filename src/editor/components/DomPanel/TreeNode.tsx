@@ -49,7 +49,7 @@ import {
 } from '../../ui/Tree'
 import styles from './TreeNode.module.css'
 
-export interface TreeNodeProps {
+interface TreeNodeProps {
   nodeId: string
   depth: number
 }

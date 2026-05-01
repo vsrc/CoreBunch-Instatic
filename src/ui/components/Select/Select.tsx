@@ -25,7 +25,7 @@ import styles from './Select.module.css'
 type FieldSize = 'xs' | 'sm' | 'md'
 type TextEmphasis = 'default' | 'strong'
 
-export interface SelectOption {
+interface SelectOption {
   value: string | number
   label: ReactNode
   textValue?: string
@@ -47,7 +47,7 @@ interface MenuPosition {
   width: number
 }
 
-export interface SelectProps extends Omit<SelectHTMLAttributes<HTMLSelectElement>, 'size'> {
+interface SelectProps extends Omit<SelectHTMLAttributes<HTMLSelectElement>, 'size'> {
   invalid?: boolean
   fieldSize?: FieldSize
   emphasis?: TextEmphasis

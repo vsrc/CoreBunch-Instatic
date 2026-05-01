@@ -1,4 +1,4 @@
-export interface RenderContentDocumentInput {
+interface RenderContentDocumentInput {
   title: string
   bodyMarkdown: string
   seoTitle: string
@@ -36,7 +36,7 @@ function renderInlineMarkdown(value: string): string {
   })
 }
 
-export function renderContentMarkdown(markdown: string): string {
+function renderContentMarkdown(markdown: string): string {
   const blocks: string[] = []
   const paragraphLines: string[] = []
 

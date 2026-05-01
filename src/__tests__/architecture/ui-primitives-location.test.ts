@@ -24,17 +24,12 @@ const REQUIRED_PRIMITIVES = [
   'Select/Select.module.css',
   'Switch/Switch.tsx',
   'Switch/Switch.module.css',
-  'Slider/Slider.tsx',
-  'Slider/Slider.module.css',
   'Separator/Separator.tsx',
   'Separator/Separator.module.css',
   'ColorInput/ColorInput.tsx',
   'ColorInput/ColorInput.module.css',
   'FileUpload/FileUpload.tsx',
   'FileUpload/FileUpload.module.css',
-  'Tooltip/Tooltip.tsx',
-  'Tooltip/Tooltip.module.css',
-  'index.ts',
 ]
 
 function collectTSXFiles(dir: string): string[] {

@@ -15,12 +15,6 @@
  * #435 (Decision 2) explicitly requires unit tests for coordinate conversion
  * functions — this file satisfies that requirement for math.ts.
  *
- * Relationship to canvas.utils.ts tests:
- *   canvas.utils.ts  (`viewportToDocument` / `documentToViewport`) uses a
- *   `pan: { x, y }` object signature.  math.ts uses flat `panX, panY`
- *   parameters.  Both implement the same geometric transform; these tests
- *   cover the math.ts variant independently.
- *
  * All functions are pure — no Zustand store required.
  *
  * @see src/editor/components/Canvas/math.ts

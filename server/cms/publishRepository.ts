@@ -9,11 +9,11 @@ export interface PublishedPageSnapshot {
   site: SiteDocument
 }
 
-export interface PublishResult {
+interface PublishResult {
   publishedPages: number
 }
 
-export interface DraftPublishStatus {
+interface DraftPublishStatus {
   hasPublishedVersion: boolean
   draftMatchesPublished: boolean
   draftPages: number

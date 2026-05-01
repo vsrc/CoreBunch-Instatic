@@ -1,4 +1,4 @@
-export type ContentEntryStatus = 'draft' | 'published' | 'unpublished'
+type ContentEntryStatus = 'draft' | 'published' | 'unpublished'
 
 export interface ContentCollection {
   id: string

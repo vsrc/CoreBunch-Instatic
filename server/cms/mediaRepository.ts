@@ -1,6 +1,6 @@
 import type { DbClient } from './db'
 
-export interface MediaAsset {
+interface MediaAsset {
   id: string
   filename: string
   mimeType: string
@@ -9,7 +9,7 @@ export interface MediaAsset {
   createdAt: string
 }
 
-export interface CreateMediaAssetInput {
+interface CreateMediaAssetInput {
   id: string
   filename: string
   mimeType: string

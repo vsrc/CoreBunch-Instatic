@@ -8,7 +8,7 @@ import { safeUrl } from '../utils/escape'
 import styles from './link.module.css'
 import { cn } from '../../../ui/cn'
 
-export interface LinkProps extends Record<string, unknown> {
+interface LinkProps extends Record<string, unknown> {
   href: string
   text: string
   target: '_blank' | '_self' | '_parent'

@@ -53,7 +53,7 @@ interface StreamingToolState {
   inputJson: string
 }
 
-export interface AgentSdkStreamState {
+interface AgentSdkStreamState {
   sessionId: string | null
   sawPartialAssistantMessage: boolean
   textParser: AgentResponseStreamParser

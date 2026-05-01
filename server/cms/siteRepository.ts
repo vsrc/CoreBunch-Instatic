@@ -6,7 +6,7 @@ import {
 import type { DbClient } from './db'
 import type { SiteRow } from './types'
 
-export const CMS_SITE_SCHEMA_VERSION = 1
+const CMS_SITE_SCHEMA_VERSION = 1
 
 type SiteShell = Omit<SiteDocument, 'name' | 'pages'>
 

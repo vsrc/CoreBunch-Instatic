@@ -154,7 +154,7 @@ describe('Phase 6 Gate 1 — SettingsModal must have correct ARIA dialog attribu
       if (!src.includes('aria-describedby')) {
         violations.push(
           `${rel} — missing aria-describedby ` +
-          '(screen readers read the dialog description on focus — add an sr-only <p id="settings-modal-desc"> ' +
+          '(screen readers read the dialog description on focus — add a CSS-module visually hidden <p id="settings-modal-desc"> ' +
           'with content like "SiteDocument-level configuration. Press Escape to close." and reference it here)'
         )
       }
@@ -179,7 +179,7 @@ describe('Phase 6 Gate 1 — SettingsModal must have correct ARIA dialog attribu
         '    data-testid="settings-modal"\n' +
         '  >\n' +
         '    <h2 id="settings-modal-title">Settings</h2>\n' +
-        '    <p id="settings-modal-desc" className="sr-only">\n' +
+        '    <p id="settings-modal-desc" className={styles.screenReaderOnly}>\n' +
         '      SiteDocument-level configuration. Press Escape to close.\n' +
         '    </p>\n' +
         '    ...\n' +
@@ -474,7 +474,7 @@ describe('Phase 6 Gate 6 — Modal backdrop must be aria-hidden or inert (Guidel
         'The overlay/backdrop element must not be reachable by keyboard Tab or AT virtual cursor.\n' +
         'Required: add aria-hidden="true" or the `inert` attribute to the backdrop element:\n' +
         '  <div\n' +
-        '    className="fixed inset-0 backdrop-blur-sm"\n' +
+        '    className={styles.backdrop}\n' +
         '    aria-hidden="true"          {/* prevents AT from reading/focusing backdrop */}\n' +
         '    onClick={closeModal}         {/* click-outside-to-close is fine */}\n' +
         '  />\n' +

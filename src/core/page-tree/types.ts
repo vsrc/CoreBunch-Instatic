@@ -14,13 +14,10 @@
 // ---------------------------------------------------------------------------
 
 import type { SiteFile } from '../files/types'
-export type { SiteFile } from '../files/types'
 
 import type { VisualComponent } from '../visualComponents/types'
-export type { VisualComponent } from '../visualComponents/types'
 
 import type { SitePackageJson } from '../site-dependencies/manifest'
-export type { SitePackageJson } from '../site-dependencies/manifest'
 
 // ---------------------------------------------------------------------------
 // Phase C — CSS Class System types
@@ -342,9 +339,8 @@ export interface SiteDocument {
    *
    * Pages are NOT stored here — they remain first-class in `pages[]`.
    *
-   * Why flat array: same reasoning as Page.nodes — O(1) path lookup via
-   * getFileByPath(), single Immer reference per mutation, trivial serialization.
-   * The display tree is derived via buildFileTree() in selectors.ts.
+   * Why flat array: same reasoning as Page.nodes — a single Immer reference per
+   * mutation and trivial serialization.
    *
    * Defaults to [] on hydration of legacy projects (validateSite handles this).
    */

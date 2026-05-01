@@ -1,8 +1,8 @@
 import type { Page } from '../../../core/page-tree/types'
 import { getParent, isAncestor } from '../../../core/page-tree/selectors'
 
-export type DomDropPosition = 'before' | 'after' | 'inside'
-export type DomDropZone = DomDropPosition
+type DomDropPosition = 'before' | 'after' | 'inside'
+type DomDropZone = DomDropPosition
 
 export interface DomDropTarget {
   draggedId: string
@@ -13,7 +13,7 @@ export interface DomDropTarget {
   overId: string
 }
 
-export interface DomDropRowRect {
+interface DomDropRowRect {
   top: number
   bottom: number
   height: number
@@ -24,7 +24,7 @@ export interface DomDropRowMeta {
   rect: DomDropRowRect
 }
 
-export interface ResolveDomDropTargetInput {
+interface ResolveDomDropTargetInput {
   page: Page
   draggedId: string
   overId: string

@@ -11,7 +11,7 @@ import { registry } from '../../../core/module-engine/registry'
 import styles from './text.module.css'
 import { cn } from '../../../ui/cn'
 
-export type TextTag =
+type TextTag =
   | 'p'
   | 'h1'
   | 'h2'
@@ -25,7 +25,7 @@ export type TextTag =
   | 'strong'
   | 'em'
 
-export interface TextProps extends Record<string, unknown> {
+interface TextProps extends Record<string, unknown> {
   text: string
   tag: TextTag
 }

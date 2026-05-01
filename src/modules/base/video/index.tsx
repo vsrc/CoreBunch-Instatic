@@ -9,7 +9,7 @@ import { safeUrl } from '../utils/escape'
 import styles from './video.module.css'
 import { cn } from '../../../ui/cn'
 
-export interface VideoProps extends Record<string, unknown> {
+interface VideoProps extends Record<string, unknown> {
   source: 'media' | 'youtube' | 'url'
   youtubeId: string
   videoUrl: string

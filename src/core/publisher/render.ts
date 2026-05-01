@@ -18,7 +18,7 @@ import { escapeHtml, isSafeUrl } from './utils'
 
 // Re-export canonical utilities so existing imports from this file keep working
 // (render.test.ts imports escapeHtml / isSafeUrl from here)
-export { escapeHtml, isSafeUrl, safeUrl } from './utils'
+export { escapeHtml, isSafeUrl } from './utils'
 
 // ---------------------------------------------------------------------------
 // Security — prop escaping (Constraint #211)
@@ -188,7 +188,7 @@ export function renderNode(nodeId: string, ctx: RenderContext): string {
 // Page publisher
 // ---------------------------------------------------------------------------
 
-export interface PublishedPage {
+interface PublishedPage {
   /** Filename for this page in the ZIP archive, e.g. "index.html", "about-us.html" */
   filename: string
   /** Complete <!DOCTYPE html> document — no editor dependencies */

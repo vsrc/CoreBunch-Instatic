@@ -1,10 +1,10 @@
 import { responseErrorMessage } from './httpErrors'
 
-export interface CmsPublishResult {
+interface CmsPublishResult {
   publishedPages: number
 }
 
-export interface CmsPublishStatus {
+interface CmsPublishStatus {
   hasPublishedVersion: boolean
   draftMatchesPublished: boolean
   draftPages: number

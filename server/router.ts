@@ -8,7 +8,7 @@ import { renderPublishedSnapshot } from './cms/publicRenderer'
 import { jsonResponse } from './http'
 import { serveAdminApp, serveStaticFile } from './static'
 
-export interface ServerRuntime {
+interface ServerRuntime {
   db: DbClient
   staticDir?: string
   uploadsDir?: string

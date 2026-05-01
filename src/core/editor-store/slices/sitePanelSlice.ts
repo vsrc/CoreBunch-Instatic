@@ -35,7 +35,7 @@ import { isSafePackageName } from '../../site-dependencies/packageNames'
  * Minimal package.json shape for the in-memory manifest.
    * Stores only the dependency maps relevant to DependenciesPanel.
  */
-export type PackageJson = SitePackageJson
+type PackageJson = SitePackageJson
 
 export interface SitePanelSlice {
   /**

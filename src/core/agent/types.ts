@@ -13,7 +13,7 @@
 // Agent actions — the page-builder operations Claude can request
 // ---------------------------------------------------------------------------
 
-export type AgentActionType =
+type AgentActionType =
   | 'insertNode'
   | 'insertTree'
   | 'deleteNode'
@@ -27,7 +27,7 @@ export type AgentActionType =
   | 'addPage'
   | 'updateSiteSettings'
 
-export interface InsertNodeAction {
+interface InsertNodeAction {
   type: 'insertNode'
   moduleId: string
   /** Existing parent node ID. Required unless parentRef is provided. */
@@ -47,7 +47,7 @@ export interface InsertNodeAction {
   classIds?: string[]
 }
 
-export interface AgentTreeClassDefinition {
+interface AgentTreeClassDefinition {
   name: string
   styles?: Record<string, string | number>
   /** Per-breakpoint class styles keyed by configured Breakpoint.id. */
@@ -69,7 +69,7 @@ export interface InsertTreeNode {
   children?: InsertTreeNode[]
 }
 
-export interface InsertTreeAction {
+interface InsertTreeAction {
   type: 'insertTree'
   /** Existing parent node ID. Required unless parentRef is provided. */
   parentId?: string
@@ -83,14 +83,14 @@ export interface InsertTreeAction {
   tree: InsertTreeNode
 }
 
-export interface DeleteNodeAction {
+interface DeleteNodeAction {
   type: 'deleteNode'
   nodeId?: string
   /** Temporary ref from an earlier insertNode in the same action batch. */
   nodeRef?: string
 }
 
-export interface UpdateNodePropsAction {
+interface UpdateNodePropsAction {
   type: 'updateNodeProps'
   nodeId?: string
   /** Temporary ref from an earlier insertNode in the same action batch. */
@@ -100,7 +100,7 @@ export interface UpdateNodePropsAction {
   patch: Record<string, unknown>
 }
 
-export interface MoveNodeAction {
+interface MoveNodeAction {
   type: 'moveNode'
   nodeId?: string
   /** Temporary ref from an earlier insertNode in the same action batch. */
@@ -112,7 +112,7 @@ export interface MoveNodeAction {
   newIndex: number
 }
 
-export interface RenameNodeAction {
+interface RenameNodeAction {
   type: 'renameNode'
   nodeId?: string
   /** Temporary ref from an earlier insertNode in the same action batch. */
@@ -120,7 +120,7 @@ export interface RenameNodeAction {
   label: string
 }
 
-export interface CreateClassAction {
+interface CreateClassAction {
   type: 'createClass'
   name: string
   styles?: Record<string, string | number>
@@ -128,7 +128,7 @@ export interface CreateClassAction {
   breakpointStyles?: Record<string, Record<string, string | number>>
 }
 
-export interface UpdateClassStylesAction {
+interface UpdateClassStylesAction {
   type: 'updateClassStyles'
   classId: string
   /** Optional configured breakpoint ID. When set, writes class breakpoint styles. */
@@ -136,7 +136,7 @@ export interface UpdateClassStylesAction {
   patch: Record<string, string | number>
 }
 
-export interface AssignClassAction {
+interface AssignClassAction {
   type: 'assignClass'
   nodeId?: string
   /** Temporary ref from an earlier insertNode in the same action batch. */
@@ -144,7 +144,7 @@ export interface AssignClassAction {
   classId: string
 }
 
-export interface RemoveClassAction {
+interface RemoveClassAction {
   type: 'removeClass'
   nodeId?: string
   /** Temporary ref from an earlier insertNode in the same action batch. */
@@ -152,13 +152,13 @@ export interface RemoveClassAction {
   classId: string
 }
 
-export interface AddPageAction {
+interface AddPageAction {
   type: 'addPage'
   title: string
   slug?: string
 }
 
-export interface UpdateSiteSettingsAction {
+interface UpdateSiteSettingsAction {
   type: 'updateSiteSettings'
   patch: Record<string, unknown>
 }
@@ -193,37 +193,37 @@ export interface AgentActionResult {
 // ---------------------------------------------------------------------------
 
 /** A chunk of text from the assistant's message. */
-export interface TextEvent {
+interface TextEvent {
   type: 'text'
   text: string
 }
 
 /** One or more validated page-builder actions to execute in the browser. */
-export interface ActionsEvent {
+interface ActionsEvent {
   type: 'actions'
   actions: AgentAction[]
 }
 
 /** A single action has been executed and the result is available. */
-export interface ActionResultEvent {
+interface ActionResultEvent {
   type: 'actionResult'
   actionType: AgentActionType
   result: AgentActionResult
 }
 
 /** Stream finished normally. */
-export interface DoneEvent {
+interface DoneEvent {
   type: 'done'
 }
 
 /** Stream terminated due to a server-side error. */
-export interface ErrorEvent {
+interface ErrorEvent {
   type: 'error'
   message: string
 }
 
 /** Status update for SDK/MCP tools used by Claude before page-builder actions. */
-export interface ToolStatusEvent {
+interface ToolStatusEvent {
   type: 'toolStatus'
   toolCallId: string
   name: string
@@ -233,7 +233,7 @@ export interface ToolStatusEvent {
 }
 
 /** Current Claude Agent SDK session ID for follow-up resume calls. */
-export interface SessionEvent {
+interface SessionEvent {
   type: 'session'
   sessionId: string
 }
@@ -291,7 +291,7 @@ export interface AgentRequestBody {
   pageContext: PageContext
 }
 
-export interface AgentModulePropOptionContext {
+interface AgentModulePropOptionContext {
   label: string
   value: unknown
 }

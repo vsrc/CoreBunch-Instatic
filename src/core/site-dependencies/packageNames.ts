@@ -3,7 +3,7 @@
  * Keeps package manifest writes data-only and safe for the future bridge layer.
  */
 
-export const SAFE_PACKAGE_NAME =
+const SAFE_PACKAGE_NAME =
   /^(?:@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/
 
 export function isSafePackageName(name: string): boolean {

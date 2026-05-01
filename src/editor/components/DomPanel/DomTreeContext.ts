@@ -6,7 +6,7 @@
  */
 import { createContext, useContext } from 'react'
 
-export interface DomTreeContextValue {
+interface DomTreeContextValue {
   /** Set of expanded node IDs */
   expanded: Set<string>
   isExpanded: (nodeId: string) => boolean
