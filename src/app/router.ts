@@ -5,6 +5,7 @@ import { AppLoadingScreen } from './AppLoadingScreen'
 
 const Dashboard = lazy(() => import('./Dashboard'))
 const EditorLayout = lazy(() => import('./EditorLayout'))
+const AdminEntry = lazy(() => import('./AdminEntry'))
 
 function withSuspense(element: ReactElement) {
   return createElement(
@@ -21,7 +22,7 @@ export const router = createBrowserRouter([
   },
   {
     path: '/admin',
-    element: withSuspense(createElement(EditorLayout, { persistenceMode: 'cms' })),
+    element: withSuspense(createElement(AdminEntry)),
   },
   {
     path: '/editor/:projectId',

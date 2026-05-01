@@ -9,7 +9,7 @@ describe('admin CMS route wiring', () => {
     const router = readFileSync(join(root, 'src/app/router.ts'), 'utf8')
 
     expect(router).toContain("path: '/admin'")
-    expect(router).toContain("persistenceMode: 'cms'")
+    expect(router).toContain('AdminEntry')
   })
 
   it('uses the server CMS adapter without local last-project tracking', () => {
@@ -17,5 +17,15 @@ describe('admin CMS route wiring', () => {
 
     expect(editor).toContain('cmsAdapter')
     expect(editor).toContain('rememberLastProject: false')
+  })
+
+  it('gates the CMS editor behind setup and login checks', () => {
+    const admin = readFileSync(join(root, 'src/app/AdminEntry.tsx'), 'utf8')
+
+    expect(admin).toContain('getCmsSetupStatus')
+    expect(admin).toContain('probeCmsSession')
+    expect(admin).toContain('setupCms')
+    expect(admin).toContain('loginCms')
+    expect(admin).toContain('persistenceMode="cms"')
   })
 })
