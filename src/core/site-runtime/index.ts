@@ -32,6 +32,7 @@ export {
 export {
   analyzeRuntimeScriptImports,
   extractRuntimeImportSpecifiers,
+  isNodeBuiltinImportSpecifier,
   packageNameFromImportSpecifier,
 } from './importAnalysis'
 export {

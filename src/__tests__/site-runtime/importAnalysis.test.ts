@@ -118,4 +118,17 @@ describe('runtime script import analysis', () => {
       }),
     ])
   })
+
+  it('rejects Node builtin imports in browser runtime scripts', () => {
+    const analysis = analyzeRuntimeScriptImports(
+      [scriptFile('node-api', 'src/scripts/node-api.ts', `import fs from 'node:fs'; import path from 'path'`)],
+      { dependencies: {}, devDependencies: {} },
+    )
+
+    expect(analysis.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+      'runtime-dependency-node-builtin',
+      'runtime-dependency-node-builtin',
+    ])
+    expect(analysis.diagnostics.every((diagnostic) => diagnostic.severity === 'error')).toBe(true)
+  })
 })

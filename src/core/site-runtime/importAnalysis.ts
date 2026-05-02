@@ -9,6 +9,31 @@ import type {
   SiteRuntimeDiagnostic,
 } from './types'
 
+const NODE_BUILTIN_PACKAGES = new Set([
+  'assert',
+  'buffer',
+  'child_process',
+  'cluster',
+  'crypto',
+  'dns',
+  'events',
+  'fs',
+  'http',
+  'https',
+  'module',
+  'net',
+  'os',
+  'path',
+  'process',
+  'stream',
+  'tls',
+  'url',
+  'util',
+  'vm',
+  'worker_threads',
+  'zlib',
+])
+
 function isIdentifierStart(char: string | undefined): boolean {
   return Boolean(char) && /[A-Za-z_$]/.test(char)
 }
@@ -228,6 +253,12 @@ export function packageNameFromImportSpecifier(specifier: string): string | null
   return parts[0] ?? null
 }
 
+export function isNodeBuiltinImportSpecifier(specifier: string): boolean {
+  const withoutProtocol = specifier.startsWith('node:') ? specifier.slice('node:'.length) : specifier
+  const packageName = packageNameFromImportSpecifier(withoutProtocol) ?? withoutProtocol
+  return NODE_BUILTIN_PACKAGES.has(packageName)
+}
+
 function importDiagnostic(
   code: string,
   message: string,
@@ -283,6 +314,18 @@ export function analyzeRuntimeScriptImports(
 
     for (const importEntry of extractRuntimeImportSpecifiers(file.content)) {
       imports.push(importEntry)
+      if (isNodeBuiltinImportSpecifier(importEntry.specifier)) {
+        diagnostics.push(importDiagnostic(
+          'runtime-dependency-node-builtin',
+          `Node builtin "${importEntry.specifier}" cannot be imported by browser runtime scripts`,
+          'error',
+          file,
+          importEntry.kind,
+          importEntry.specifier,
+        ))
+        continue
+      }
+
       const packageName = packageNameFromImportSpecifier(importEntry.specifier)
       if (!packageName) {
         if (/^[a-z][a-z0-9+.-]*:/i.test(importEntry.specifier)) {
