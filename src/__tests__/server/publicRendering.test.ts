@@ -79,6 +79,26 @@ describe('public rendering', () => {
     expect(html).toContain('<title>Public Site</title>')
   })
 
+  it('injects stored runtime asset manifests when rendering a published snapshot', () => {
+    const published = snapshot('Runtime page')
+    published.runtimeAssets = {
+      scripts: [
+        {
+          fileId: 'entry',
+          src: '/_pb/assets/version_1/entries/entry.js',
+          placement: 'body-end',
+          timing: 'dom-ready',
+          priority: 10,
+        },
+      ],
+    }
+
+    const html = renderPublishedSnapshot(published)
+
+    expect(html).toContain("script-src 'self'")
+    expect(html).toContain('/_pb/assets/version_1/entries/entry.js')
+  })
+
   it('serves / from the active published index snapshot', async () => {
     const res = await handleServerRequest(new Request('http://localhost/'), {
       db: new PublicFakeDb(snapshot('Homepage')),
