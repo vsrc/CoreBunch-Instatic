@@ -45,6 +45,19 @@ export interface RuntimeScriptEntry {
   config: SiteScriptRuntimeConfig
 }
 
+export interface PublishedRuntimeScriptAsset {
+  fileId: string
+  src: string
+  placement: SiteScriptPlacement
+  timing: SiteScriptTiming
+  priority: number
+  integrity?: string
+}
+
+export interface PublishedPageRuntimeAssets {
+  scripts: PublishedRuntimeScriptAsset[]
+}
+
 export interface CollectRuntimeScriptsInput {
   files: SiteFile[]
   runtime: SiteRuntimeConfig

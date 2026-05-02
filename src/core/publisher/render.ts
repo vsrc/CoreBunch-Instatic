@@ -18,6 +18,8 @@ import { classNamesForClassIds } from '../page-tree/classNames'
 import { sanitizeModuleCSS, collectClassCSS } from './cssCollector'
 import { generateFrameworkColorRootCss } from '../framework/colors'
 import { escapeHtml, isSafeUrl } from './utils'
+import type { PublishedPageRuntimeAssets } from '../site-runtime/types'
+import { hasPublishedRuntimeScripts, scriptTagsForRuntimeAssets } from '../site-runtime'
 
 // Re-export canonical utilities so existing imports from this file keep working
 // (render.test.ts imports escapeHtml / isSafeUrl from here)
@@ -200,6 +202,12 @@ interface PublishedPage {
   html: string
 }
 
+export interface PublishPageOptions {
+  breakpointId?: string
+  templateContext?: TemplateRenderDataContext
+  runtimeAssets?: PublishedPageRuntimeAssets
+}
+
 /**
  * Sanitize a CSS property value for safe injection inside a `<style>` block.
  *
@@ -277,11 +285,23 @@ export function publishPage(
   page: Page,
   site: SiteDocument,
   registry: IModuleRegistry,
-  breakpointId?: string,
+  breakpointIdOrOptions?: string | PublishPageOptions,
   templateContext?: TemplateRenderDataContext,
 ): PublishedPage {
+  const options: PublishPageOptions =
+    typeof breakpointIdOrOptions === 'object' && breakpointIdOrOptions !== null
+      ? breakpointIdOrOptions
+      : { breakpointId: breakpointIdOrOptions, templateContext }
+  const { breakpointId, runtimeAssets } = options
   const cssMap = new Map<string, string>()
-  const ctx: RenderContext = { page, site, registry, breakpointId, templateContext, cssMap }
+  const ctx: RenderContext = {
+    page,
+    site,
+    registry,
+    breakpointId,
+    templateContext: options.templateContext,
+    cssMap,
+  }
 
   // Render entire tree from root
   const bodyHtml = renderNode(page.rootNodeId, ctx)
@@ -308,11 +328,15 @@ export function publishPage(
       ? `\n  <link rel="stylesheet" href="${escapeHtml(settings.fontImportUrl)}">`
       : ''
 
+  const headRuntimeScripts = scriptTagsForRuntimeAssets(runtimeAssets, 'head')
+  const bodyEndRuntimeScripts = scriptTagsForRuntimeAssets(runtimeAssets, 'body-end')
+  const scriptSource = hasPublishedRuntimeScripts(runtimeAssets) ? "'self'" : "'none'"
+
   // Constraint #227: every published page must carry a Content-Security-Policy meta tag.
-  // script-src 'none' eliminates inline/external script execution in the published output.
+  // Runtime-enabled pages only allow self-hosted external script assets.
   const csp =
     `\n  <meta http-equiv="Content-Security-Policy"` +
-    ` content="default-src 'self'; script-src 'none';` +
+    ` content="default-src 'self'; script-src ${scriptSource};` +
     ` style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; frame-src 'none';">`
 
   // WCAG 2.1 AA SC 3.1.1: lang attribute must reflect the site's declared language.
@@ -327,9 +351,11 @@ export function publishPage(
     `  <meta name="viewport" content="width=device-width, initial-scale=1.0">${csp}\n` +
     `  <title>${pageTitle}</title>${metaDesc}${favicon}${fontImport}\n` +
     `  <style>\n${allCss}\n  </style>\n` +
+    `${headRuntimeScripts ? `${headRuntimeScripts}\n` : ''}` +
     `</head>\n` +
     `<body>\n` +
     `${bodyHtml}\n` +
+    `${bodyEndRuntimeScripts ? `${bodyEndRuntimeScripts}\n` : ''}` +
     `</body>\n` +
     `</html>`
 

@@ -2,6 +2,8 @@ export type {
   CollectRuntimeScriptsInput,
   LockedSiteDependency,
   RuntimeScriptEntry,
+  PublishedPageRuntimeAssets,
+  PublishedRuntimeScriptAsset,
   RuntimeImportKind,
   RuntimeImportSpecifier,
   RuntimePackageDependencyUsage,
@@ -32,3 +34,9 @@ export {
   extractRuntimeImportSpecifiers,
   packageNameFromImportSpecifier,
 } from './importAnalysis'
+export {
+  hasPublishedRuntimeScripts,
+  isSelfHostedRuntimeAssetUrl,
+  runtimeScriptsForPlacement,
+  scriptTagsForRuntimeAssets,
+} from './assetManifest'
