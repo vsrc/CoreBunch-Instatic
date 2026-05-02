@@ -22,6 +22,7 @@ import { render, screen, cleanup, fireEvent } from '@testing-library/react'
 import { PropertyControlRenderer } from '../../editor/components/PropertyControls/PropertyControlRenderer'
 import type { PropertyControl } from '../../core/module-engine/types'
 import type { CmsMediaAsset } from '../../core/persistence/cmsMedia'
+import { useEditorStore } from '../../core/editor-store/store'
 
 afterEach(() => {
   cleanup()
@@ -153,6 +154,55 @@ describe('PropertyControlRenderer — type dispatch', () => {
     // Color control renders some kind of color input or picker
     expect(html.length).toBeGreaterThan(0)
     expect(html).toContain('data-testid="property-control-bgColor"')
+  })
+
+  it('color → embeds the swatch inside the text value field', () => {
+    render(
+      <PropertyControlRenderer
+        propKey="bgColor"
+        control={{ type: 'color', label: 'Background' }}
+        value="#ffffff"
+        onChange={() => {}}
+      />
+    )
+
+    const wrapper = screen.getByTestId('property-control-bgColor')
+    const colorInput = wrapper.querySelector('input[type="color"]')
+    const textInput = screen.getByLabelText('Background')
+    const field = wrapper.querySelector('[data-color-field="true"]')
+
+    expect(colorInput).not.toBeNull()
+    expect(field).not.toBeNull()
+    expect(field?.contains(colorInput)).toBe(true)
+    expect(field?.contains(textInput)).toBe(true)
+  })
+
+  it('color → autocompletes framework color tokens as CSS variable references', () => {
+    const token = useEditorStore.getState().createSite('Token test')
+    useEditorStore.setState({ site: token } as Parameters<typeof useEditorStore.setState>[0])
+    useEditorStore.getState().createFrameworkColorToken({
+      slug: 'primary',
+      lightValue: 'hsla(238, 100%, 62%, 1)',
+      generateTransparent: false,
+      generateShades: { enabled: false, count: 0 },
+      generateTints: { enabled: false, count: 0 },
+    })
+    const changes: Array<{ key: string; value: unknown }> = []
+
+    render(
+      <PropertyControlRenderer
+        propKey="bgColor"
+        control={{ type: 'color', label: 'Background' }}
+        value=""
+        onChange={(key, value) => changes.push({ key, value })}
+      />,
+    )
+
+    fireEvent.focus(screen.getByLabelText('Background'))
+    expect(screen.getByRole('listbox', { name: /background color tokens/i })).toBeDefined()
+    fireEvent.click(screen.getByRole('option', { name: /--primary/i }))
+
+    expect(changes.at(-1)).toEqual({ key: 'bgColor', value: 'var(--primary)' })
   })
 
   it('select → renders <select>', () => {
@@ -290,6 +340,27 @@ describe('PropertyControlRenderer — type dispatch', () => {
   it('spacing → falls back to text input for MVP', () => {
     const html = renderControl({ type: 'spacing' as 'text', label: 'Padding' }, 'padding', '8px')
     expect(html).toContain('type="text"')
+  })
+})
+
+describe('PropertyControlRenderer — compact field sizing', () => {
+  it('uses the same compact field size for property panel input controls', async () => {
+    const { readFileSync } = await import('fs')
+    const controlFiles = [
+      'TextControl.tsx',
+      'NumberControl.tsx',
+      'SelectControl.tsx',
+      'UrlControl.tsx',
+      'ColorControl.tsx',
+    ]
+
+    for (const fileName of controlFiles) {
+      const src = readFileSync(
+        new URL(`../../editor/components/PropertyControls/${fileName}`, import.meta.url),
+        'utf-8',
+      )
+      expect(src).toContain('fieldSize="sm"')
+    }
   })
 })
 

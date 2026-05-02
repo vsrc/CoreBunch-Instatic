@@ -125,40 +125,59 @@
     font-weight: 650;
 }
 
-.selectorInspector {
+.generatedUtilityState {
     display: grid;
-    gap: 10px;
-    padding: 10px 14px 14px;
-}
-
-.selectorIntro {
-    display: grid;
-    gap: 5px;
-    padding: 10px;
+    gap: 8px;
+    margin: 8px 12px 14px;
+    padding: 12px;
     border: 1px solid var(--panel-border);
-    border-radius: var(--editor-radius);
-    background: rgba(255, 255, 255, 0.04);
+    border-radius: 8px;
+    background: var(--editor-surface);
 }
 
-.selectorTitle {
+.generatedUtilityHeader {
+    display: grid;
+    gap: 4px;
+}
+
+.generatedUtilityKicker {
+    color: var(--editor-text-muted);
+    font-size: 10px;
+    font-weight: 750;
+    line-height: 1;
+    text-transform: uppercase;
+}
+
+.generatedUtilityName {
     min-width: 0;
-    margin: 0;
     overflow: hidden;
     color: var(--editor-text);
     font-size: 13px;
     font-weight: 750;
-    letter-spacing: 0;
     line-height: 1.2;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.selectorCode {
-    overflow: hidden;
-    color: var(--editor-text-muted);
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+.generatedUtilityCopy {
+    margin: 0;
+    color: var(--editor-text-secondary);
     font-size: 11px;
-    line-height: 1.2;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    line-height: 1.45;
+}
+
+.generatedUtilityMeta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+.generatedUtilityMeta span {
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--editor-text-muted);
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+    padding: 4px 7px;
 }

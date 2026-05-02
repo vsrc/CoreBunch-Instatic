@@ -43,6 +43,7 @@ export function UrlControl({
         value={String(value ?? '')}
         placeholder="https://…"
         disabled={disabled}
+        fieldSize="sm"
         onChange={handleChange}
         invalid={error}
       />

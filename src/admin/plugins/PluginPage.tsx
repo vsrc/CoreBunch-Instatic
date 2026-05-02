@@ -2,14 +2,14 @@ import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import type { CmsPluginsPayload, PluginAdminPageRoute } from '@core/plugin-sdk'
 import { listCmsPlugins } from '@core/persistence'
-import EditorLayout from '../app/EditorLayout'
-import { SettingsButton } from '../editor/components/Toolbar/SettingsButton'
-import { PluginPageRenderer } from './PluginPageRenderer'
-import styles from './PluginsAdmin.module.css'
+import AdminLayout from '../AdminLayout'
+import { SettingsButton } from '../../editor/components/Toolbar/SettingsButton'
+import { PluginPageRenderer } from './components/PluginPageRenderer/PluginPageRenderer'
+import styles from './PluginsPage.module.css'
 
 const emptyPayload: CmsPluginsPayload = { plugins: [], adminPages: [] }
 
-export function PluginPageAdmin() {
+export function PluginPage() {
   const { pluginId = '', pageId = '' } = useParams()
   const [payload, setPayload] = useState<CmsPluginsPayload>(emptyPayload)
   const [loading, setLoading] = useState(true)
@@ -42,7 +42,7 @@ export function PluginPageAdmin() {
   }, [pageId, payload.adminPages, pluginId])
 
   return (
-    <EditorLayout
+    <AdminLayout
       workspace="pluginPage"
       toolbarRightSlot={<SettingsButton />}
       contentCanvas={(

@@ -5,6 +5,7 @@ import {
   getContentEntryRedirectByRoute,
   getPublishedContentEntryByRoute,
 } from './cms/contentRepository'
+import { renderContentDocumentHtml } from './cms/contentRenderer'
 import { getLatestPublishedSiteSnapshot, getPublishedPageBySlug } from './cms/publishRepository'
 import { renderPublishedContentTemplate, renderPublishedSnapshot } from './cms/publicRenderer'
 import { jsonResponse } from './http'
@@ -83,14 +84,10 @@ export async function handleServerRequest(
       )
       if (entry) {
         const siteSnapshot = await getLatestPublishedSiteSnapshot(runtime.db)
-        if (siteSnapshot) {
-          const html = renderPublishedContentTemplate(siteSnapshot, entry)
-          if (html) {
-            return new Response(html, {
-              headers: { 'content-type': 'text/html; charset=utf-8' },
-            })
-          }
-        }
+        const html = siteSnapshot ? renderPublishedContentTemplate(siteSnapshot, entry) : null
+        return new Response(html ?? renderContentDocumentHtml(entry), {
+          headers: { 'content-type': 'text/html; charset=utf-8' },
+        })
       }
 
       const redirect = await getContentEntryRedirectByRoute(

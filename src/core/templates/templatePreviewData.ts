@@ -1,4 +1,4 @@
-import type { ContentEntry } from '../../content/types'
+import type { ContentEntry } from '../content/types'
 import type { CmsMediaAsset } from '../persistence/cmsMedia'
 import { firstImagePathFromMarkdown, type TemplateEntryData } from './dynamicBindings'
 import { normalizeRouteBase } from './templateMatching'

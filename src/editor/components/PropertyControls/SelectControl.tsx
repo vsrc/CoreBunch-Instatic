@@ -10,6 +10,7 @@ interface SelectOption {
 
 interface SelectControlProps extends ControlProps<unknown> {
   options: SelectOption[]
+  placeholder?: string
 }
 
 export function SelectControl({
@@ -18,6 +19,7 @@ export function SelectControl({
   onChange,
   label,
   options,
+  placeholder,
   isOverride,
   disabled,
 }: SelectControlProps) {
@@ -34,7 +36,9 @@ export function SelectControl({
       <Select
         id={`ctrl-${propKey}`}
         value={String(value ?? '')}
+        placeholder={placeholder}
         disabled={disabled}
+        fieldSize="sm"
         onChange={(e) => {
           const raw = e.target.value
           const matched = options.find((o) => String(o.value) === raw)

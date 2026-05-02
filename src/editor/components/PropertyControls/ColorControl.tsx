@@ -1,11 +1,11 @@
-import { useState, type ChangeEvent } from 'react'
+import { useEffect, useState } from 'react'
 import type { ControlProps } from './shared'
-import { Input } from '@ui/components/Input'
-import { ColorInput } from '@ui/components/ColorInput'
 import { cn } from '@ui/cn'
+import { TokenizedColorField } from './TokenizedColorField'
 import styles from './controls.module.css'
 interface ColorControlProps extends ControlProps<string> {
   format?: 'hex' | 'rgba'
+  placeholder?: string
 }
 
 export function ColorControl({
@@ -13,35 +13,41 @@ export function ColorControl({
   value,
   onChange,
   label,
+  placeholder,
   isOverride,
   disabled,
 }: ColorControlProps) {
   const stringValue = String(value ?? '')
   const [text, setText] = useState(stringValue)
 
-  const handleSwatch = (e: ChangeEvent<HTMLInputElement>) => {
-    const v = e.target.value
-    setText(v)
-    onChange(propKey, v)
-  }
-
-  const handleText = (e: ChangeEvent<HTMLInputElement>) => {
-    setText(e.target.value)
-  }
+  useEffect(() => {
+    setText(stringValue)
+  }, [stringValue])
 
   const handleTextBlur = () => {
     // Validate before committing
     const s = text.trim()
+    const isTokenReference = /^var\(\s*--[a-z0-9_-]+\s*\)$/i.test(s)
     const cssSupportsColor =
       typeof CSS !== 'undefined' && typeof CSS.supports === 'function'
         ? CSS.supports('color', s)
         : true
-    if (s === '' || cssSupportsColor) {
+    if (s === '' || isTokenReference || cssSupportsColor) {
       onChange(propKey, s)
     } else {
       // Revert to last known-good value
       setText(String(value ?? ''))
     }
+  }
+
+  function handleSwatchChange(nextValue: string) {
+    setText(nextValue)
+    onChange(propKey, nextValue)
+  }
+
+  function handleTokenSelect(nextValue: string) {
+    setText(nextValue)
+    onChange(propKey, nextValue)
   }
 
   return (
@@ -54,29 +60,20 @@ export function ColorControl({
           {label ?? propKey}
         </label>
       </div>
-      <div className={styles.colorRow}>
-        <ColorInput
-          id={`ctrl-${propKey}-swatch`}
-          value={stringValue}
-          disabled={disabled}
-          onChange={handleSwatch}
-          aria-label={`${label ?? propKey} colour swatch`}
-          fieldSize="md"
-        />
-        {/* Manual text entry */}
-        <Input
-          id={`ctrl-${propKey}-text`}
-          type="text"
-          value={text}
-          disabled={disabled}
-          fieldSize="sm"
-          monospace
-          onChange={handleText}
-          onBlur={handleTextBlur}
-          placeholder="#000000 or rgb(…)"
-          className={styles.colorText}
-        />
-      </div>
+      <TokenizedColorField
+        id={`ctrl-${propKey}-text`}
+        value={text}
+        disabled={disabled}
+        inputLabel={label ?? propKey}
+        swatchLabel={`${label ?? propKey} colour swatch`}
+        placeholder={placeholder ?? '#000000 or rgb(...)'}
+        fieldSize="sm"
+        monospace
+        onTextChange={setText}
+        onTextBlur={handleTextBlur}
+        onSwatchChange={handleSwatchChange}
+        onTokenSelect={handleTokenSelect}
+      />
     </div>
   )
 }

@@ -60,18 +60,6 @@
   font-weight: 620;
 }
 
-.reorderGroup {
-  display: none;
-  align-items: center;
-  gap: 0;
-  margin-left: 1px;
-}
-
-.pill:hover .reorderGroup,
-.pill:focus-within .reorderGroup {
-  display: inline-flex;
-}
-
 .pillRemoveBtn {
   margin-left: 1px;
 }
@@ -84,4 +72,24 @@
   padding: 9px 10px;
   color: var(--editor-text-muted);
   font-size: 11px;
+}
+
+.suggestionLabel {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.utilityBadge {
+  flex: 0 0 auto;
+  padding: 2px 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--editor-text-muted);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  text-transform: uppercase;
 }

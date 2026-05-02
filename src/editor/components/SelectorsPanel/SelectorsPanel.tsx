@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent, type KeyboardEvent, type 
 import { createPortal } from 'react-dom'
 import { selectSelectedNode, useEditorStore } from '@core/editor-store/store'
 import { cssClassSelector } from '@core/page-tree/classNames'
+import { generatedClassKindLabel, isGeneratedClassLocked } from '@core/page-tree/classUtils'
 import type { CSSClass } from '@core/page-tree/types'
 import { Button } from '@ui/components/Button'
 import { ContextMenu, ContextMenuItem, ContextMenuSeparator } from '@ui/components/ContextMenu'
@@ -39,6 +40,15 @@ function keyboardMenuPosition(element: HTMLElement) {
     x: rect.left + Math.min(rect.width - 8, 24),
     y: rect.top + Math.min(rect.height - 8, 24),
   }
+}
+
+function normalizeClassNameInput(value: string) {
+  const trimmed = value.trim()
+  return (trimmed.startsWith('.') ? trimmed.slice(1) : trimmed).trim()
+}
+
+function selectorInputValue(className: string) {
+  return className ? `.${className}` : ''
 }
 
 export function SelectorsPanel({ variant = 'docked' }: SelectorsPanelProps) {
@@ -113,11 +123,16 @@ export function SelectorsPanel({ variant = 'docked' }: SelectorsPanelProps) {
 
   function handleRename(name: string) {
     if (!renameTarget) return
+    if (isGeneratedClassLocked(renameTarget)) return
     renameClass(renameTarget.id, name)
     setRenameTarget(null)
   }
 
   function handleDuplicate(cls: CSSClass) {
+    if (isGeneratedClassLocked(cls)) {
+      setContextMenu(null)
+      return
+    }
     const copy = duplicateClass(cls.id)
     if (copy) {
       openSelectorInProperties(copy.id)
@@ -143,6 +158,7 @@ export function SelectorsPanel({ variant = 'docked' }: SelectorsPanelProps) {
   }
 
   function handleDelete(cls: CSSClass) {
+    if (isGeneratedClassLocked(cls)) return
     deleteClass(cls.id)
     setDeleteTarget(null)
   }
@@ -227,7 +243,7 @@ export function SelectorsPanel({ variant = 'docked' }: SelectorsPanelProps) {
             setContextMenu(null)
           }}
           onRename={() => {
-            setRenameTarget(contextClass)
+            if (!isGeneratedClassLocked(contextClass)) setRenameTarget(contextClass)
             setContextMenu(null)
           }}
           onDuplicate={() => handleDuplicate(contextClass)}
@@ -235,9 +251,10 @@ export function SelectorsPanel({ variant = 'docked' }: SelectorsPanelProps) {
           onRemove={() => handleRemoveFromSelected(contextClass)}
           onCopy={() => handleCopySelector(contextClass)}
           onDelete={() => {
-            setDeleteTarget(contextClass)
+            if (!isGeneratedClassLocked(contextClass)) setDeleteTarget(contextClass)
             setContextMenu(null)
           }}
+          locked={isGeneratedClassLocked(contextClass)}
         />
       )}
 
@@ -292,13 +309,16 @@ function SelectorRow({
   onContextMenu,
   onKeyDown,
 }: SelectorRowProps) {
+  const selectorLabel = `.${cls.name}`
+  const kindLabel = generatedClassKindLabel(cls)
+
   return (
     <Button
       variant="ghost"
       size="sm"
       active={active}
       className={styles.row}
-      aria-label={`Edit selector ${cls.name}`}
+      aria-label={`Edit selector ${selectorLabel}`}
       onClick={onSelect}
       onContextMenu={onContextMenu}
       onKeyDown={(event) => {
@@ -312,10 +332,13 @@ function SelectorRow({
     >
       <PaintBucketIcon size={13} aria-hidden="true" />
       <span className={styles.rowText}>
-        <span className={styles.rowLabel}>{cls.name}</span>
+        <span className={styles.rowLabel}>{selectorLabel}</span>
         <span className={styles.rowMeta}>{summary}</span>
       </span>
-      <span className={styles.rowUsage}>{usage}</span>
+      <span className={styles.rowAside}>
+        {kindLabel && <span className={styles.utilityBadge}>{kindLabel}</span>}
+        <span className={styles.rowUsage}>{usage}</span>
+      </span>
     </Button>
   )
 }
@@ -333,6 +356,7 @@ function SelectorContextMenu({
   onRemove,
   onCopy,
   onDelete,
+  locked,
 }: {
   x: number
   y: number
@@ -346,18 +370,19 @@ function SelectorContextMenu({
   onRemove: () => void
   onCopy: () => void
   onDelete: () => void
+  locked: boolean
 }) {
   return (
     <ContextMenu x={x} y={y} ariaLabel="Selector actions" onClose={onClose}>
       <ContextMenuItem onClick={onEdit}>
         <span aria-hidden="true"><EditIcon size={13} /></span>
-        Edit
+        {locked ? 'View utility' : 'Edit'}
       </ContextMenuItem>
-      <ContextMenuItem onClick={onRename}>
+      <ContextMenuItem disabled={locked} onClick={onRename}>
         <span aria-hidden="true"><EditIcon size={13} /></span>
         Rename
       </ContextMenuItem>
-      <ContextMenuItem onClick={onDuplicate}>
+      <ContextMenuItem disabled={locked} onClick={onDuplicate}>
         <span aria-hidden="true"><Copy2SharpIcon size={13} /></span>
         Duplicate
       </ContextMenuItem>
@@ -375,7 +400,7 @@ function SelectorContextMenu({
         Copy selector
       </ContextMenuItem>
       <ContextMenuSeparator />
-      <ContextMenuItem danger onClick={onDelete}>
+      <ContextMenuItem danger disabled={locked} onClick={onDelete}>
         <span aria-hidden="true"><DeleteIcon size={13} /></span>
         Delete
       </ContextMenuItem>
@@ -396,9 +421,9 @@ function SelectorNameDialog({
   onCancel: () => void
   onSubmit: (name: string) => void
 }) {
-  const [name, setName] = useState(initialValue)
+  const [name, setName] = useState(selectorInputValue(initialValue))
   const [error, setError] = useState<string | null>(null)
-  const trimmedName = name.trim()
+  const trimmedName = normalizeClassNameInput(name)
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault()
@@ -434,7 +459,7 @@ function SelectorNameDialog({
         </div>
         <form className={dialogStyles.form} onSubmit={handleSubmit}>
           <label className={dialogStyles.field}>
-            <span className={dialogStyles.label}>Name</span>
+            <span className={dialogStyles.label}>Class name</span>
             <Input
               fieldSize="sm"
               value={name}
@@ -442,7 +467,7 @@ function SelectorNameDialog({
                 setName(event.target.value)
                 setError(null)
               }}
-              aria-label="Selector name"
+              aria-label="Class name"
               autoComplete="off"
               spellCheck={false}
             />
@@ -474,6 +499,8 @@ function DeleteSelectorDialog({
   onCancel: () => void
   onDelete: () => void
 }) {
+  const selectorLabel = `.${cls.name}`
+
   return createPortal(
     <div
       className={dialogStyles.backdrop}
@@ -498,7 +525,7 @@ function DeleteSelectorDialog({
         </div>
         <div className={dialogStyles.form}>
           <p className={styles.dialogCopy}>
-            Delete <span className={styles.dialogStrong}>{cls.name}</span> ({cssClassSelector(cls)})?
+            Delete <span className={styles.dialogStrong}>{selectorLabel}</span>?
             This selector is {usage.toLowerCase()}.
           </p>
           <div className={dialogStyles.actions}>

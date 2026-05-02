@@ -4,81 +4,95 @@
 
 /* ── Outer wrapper (position:relative for the remove button overlay) ──────── */
 .propertyRowWrap {
-  position: relative;
-  --class-remove-label-column: 120px;
-  --class-remove-row-center: 14px;
-  --class-remove-button-size: 22px;
-  --class-remove-fade-width: 64px;
-  --class-remove-row-bg: var(--editor-bg);
+    position: relative;
+    color: var(--editor-text);
+    --class-remove-label-column: 120px;
+    --class-remove-row-center: 14px;
+    --class-remove-button-size: 22px;
+    --class-remove-fade-width: 64px;
+    --class-remove-row-bg: var(--editor-bg);
+}
+.propertyRowWrap label {
+    color: var(--editor-text);
 }
 
 .propertyRowWrap[data-state="set"] {
-  box-sizing: border-box;
+    box-sizing: border-box;
 }
 
 .propertyRowWrap[data-state="set"]::after {
-  position: absolute;
-  top: calc(var(--class-remove-row-center) - (var(--class-remove-button-size) / 2));
-  left: calc(var(--class-remove-label-column) - var(--class-remove-fade-width));
-  z-index: 1;
-  width: var(--class-remove-fade-width);
-  height: var(--class-remove-button-size);
-  background: linear-gradient(
-    90deg,
-    rgba(0, 0, 0, 0) 0%,
-    var(--class-remove-row-bg) 48%,
-    var(--class-remove-row-bg) 100%
-  );
-  content: "";
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 100ms ease;
+    position: absolute;
+    top: calc(
+        var(--class-remove-row-center) - (var(--class-remove-button-size) / 2)
+    );
+    left: calc(
+        var(--class-remove-label-column) - var(--class-remove-fade-width)
+    );
+    z-index: 1;
+    width: var(--class-remove-fade-width);
+    height: var(--class-remove-button-size);
+    background: linear-gradient(
+        90deg,
+        rgba(0, 0, 0, 0) 0%,
+        var(--class-remove-row-bg) 48%,
+        var(--class-remove-row-bg) 100%
+    );
+    content: "";
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 100ms ease;
 }
 
 .propertyRowUnset {
-  --class-row-label-color: var(--editor-text-muted);
+    --class-row-label-color: var(--editor-text-muted);
 }
 
 .propertyRowUnset :global(label) {
-  color: var(--class-row-label-color);
+    color: var(--class-row-label-color);
 }
 
 /* ── Remove button — overlays the fixed label column, leaving controls full-width ───── */
 /* Hidden by default; revealed on row hover or keyboard focus-within (WCAG 2.1.1) */
 .removeBtn {
-  position: absolute;
-  top: calc(var(--class-remove-row-center) - (var(--class-remove-button-size) / 2));
-  left: calc(var(--class-remove-label-column) - var(--class-remove-button-size) - 4px);
-  z-index: 2;
-  opacity: 0;
-  pointer-events: none;
-  transition:
-    opacity 100ms ease,
-    background-color 100ms ease,
-    color 100ms ease;
+    position: absolute;
+    top: calc(
+        var(--class-remove-row-center) - (var(--class-remove-button-size) / 2)
+    );
+    left: calc(
+        var(--class-remove-label-column) - var(--class-remove-button-size) - 4px
+    );
+    z-index: 2;
+    opacity: 0;
+    pointer-events: none;
+    transition:
+        opacity 100ms ease,
+        background-color 100ms ease,
+        color 100ms ease;
 }
 
 .removeBtn.removeBtn {
-  width: var(--class-remove-button-size);
-  height: var(--class-remove-button-size);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--editor-text-secondary);
+    width: var(--class-remove-button-size);
+    height: var(--class-remove-button-size);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--editor-text-secondary);
+    border: 1px solid var(--editor-border-med);
+    box-shadow: 0 0 5px black;
 }
 
 .removeBtn.removeBtn:hover,
 .removeBtn.removeBtn:focus-visible {
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--editor-text);
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--editor-text);
 }
 
 .propertyRowWrap:hover .removeBtn,
 .propertyRowWrap:focus-within .removeBtn {
-  opacity: 1;
-  pointer-events: auto;
+    opacity: 1;
+    pointer-events: auto;
 }
 
 .propertyRowWrap:hover::after,
 .propertyRowWrap:focus-within::after {
-  opacity: 1;
+    opacity: 1;
 }

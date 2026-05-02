@@ -5,11 +5,11 @@ import React from 'react'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
-import { ContentAdmin } from '../../content/ContentAdmin'
+import { ContentPage } from '../../admin/content/ContentPage'
 import { useEditorStore } from '../../core/editor-store/store'
 import { makeSite } from '../fixtures'
 import { Toolbar } from '../../editor/components/Toolbar'
-import { AdminSectionNavigation } from '../../app/EditorLayout'
+import { AdminSectionNavigation } from '../../admin/AdminLayout'
 
 const originalFetch = globalThis.fetch
 
@@ -37,6 +37,24 @@ const videoAsset = {
   createdAt: '2026-05-01T10:05:00.000Z',
 }
 
+const allCollectionFields = {
+  builtIn: {
+    body: true,
+    featuredMedia: true,
+    seo: true,
+  },
+  custom: [],
+}
+
+const titleOnlyCollectionFields = {
+  builtIn: {
+    body: false,
+    featuredMedia: false,
+    seo: false,
+  },
+  custom: [],
+}
+
 interface FetchCall {
   input: RequestInfo | URL
   init?: RequestInit
@@ -52,6 +70,16 @@ function json(body: unknown, status = 200) {
 function LocationProbe() {
   const location = useLocation()
   return <output aria-label="current route">{location.pathname}</output>
+}
+
+function clickToolbarSaveDraft() {
+  fireEvent.click(screen.getByRole('button', { name: /more publishing actions/i }))
+  const menu = screen.getByRole('menu', { name: /publishing actions/i })
+  fireEvent.click(within(menu).getByRole('menuitem', { name: /save draft/i }))
+}
+
+function clickToolbarPublish() {
+  fireEvent.click(screen.getByTestId('toolbar-publish-btn'))
 }
 
 beforeEach(() => {
@@ -200,7 +228,7 @@ afterEach(() => {
   cleanup()
 })
 
-describe('ContentAdmin', () => {
+describe('ContentPage', () => {
   it('uses SPA navigation with active Site and Content labels in the shared toolbar', () => {
     render(
       <MemoryRouter initialEntries={['/admin/site']}>
@@ -292,14 +320,14 @@ describe('ContentAdmin', () => {
     expect(screen.getByLabelText('current route').textContent).toBe('/admin/content')
     expect(screen.getByText('content controls')).toBeDefined()
 
-    const layoutSource = readFileSync(join(process.cwd(), 'src/app/EditorLayout.tsx'), 'utf8')
+    const layoutSource = readFileSync(join(process.cwd(), 'src/admin/AdminLayout.tsx'), 'utf8')
     expect(layoutSource).not.toContain('setLeftSidebarPanel(null)')
     expect(layoutSource).not.toContain('setPropertiesPanel({ collapsed: true })')
     expect(layoutSource).not.toContain('onBeforeWorkspaceExit')
   })
 
   it('does not fade or view-transition the central canvas surface during admin navigation', () => {
-    const layoutCss = readFileSync(join(process.cwd(), 'src/app/EditorLayout.module.css'), 'utf8')
+    const layoutCss = readFileSync(join(process.cwd(), 'src/admin/AdminLayout.module.css'), 'utf8')
 
     expect(layoutCss).not.toContain('admin-canvas-content')
     expect(layoutCss).not.toMatch(/\.canvasContent\s*\{[^}]*animation:/s)
@@ -338,11 +366,11 @@ describe('ContentAdmin', () => {
 
     render(
       <MemoryRouter>
-        <ContentAdmin />
+        <ContentPage />
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText('Posts')).toBeDefined()
+    expect(await screen.findByRole('region', { name: 'Posts' })).toBeDefined()
     expect(screen.getByTestId('content-entries-loading')).toBeDefined()
     expect(screen.getByTestId('content-canvas-loading')).toBeDefined()
     expect(screen.getByTestId('content-settings-loading')).toBeDefined()
@@ -358,7 +386,7 @@ describe('ContentAdmin', () => {
   it('mounts content inside the existing editor shell chrome', async () => {
     render(
       <MemoryRouter>
-        <ContentAdmin />
+        <ContentPage />
       </MemoryRouter>,
     )
 
@@ -375,7 +403,7 @@ describe('ContentAdmin', () => {
   it('uses content-specific rail panels instead of editor-only panels', async () => {
     render(
       <MemoryRouter>
-        <ContentAdmin />
+        <ContentPage />
       </MemoryRouter>,
     )
 
@@ -391,7 +419,7 @@ describe('ContentAdmin', () => {
   it('reuses the shared media explorer panel in the content rail', async () => {
     render(
       <MemoryRouter>
-        <ContentAdmin />
+        <ContentPage />
       </MemoryRouter>,
     )
 
@@ -409,13 +437,13 @@ describe('ContentAdmin', () => {
   it('creates, edits, saves, and publishes a rich Markdown-backed post', async () => {
     render(
       <MemoryRouter>
-        <ContentAdmin />
+        <ContentPage />
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText('Posts')).toBeDefined()
+    expect(await screen.findByRole('region', { name: 'Posts' })).toBeDefined()
     fireEvent.click(
-      within(screen.getByRole('region', { name: 'Entries' }))
+      within(screen.getByRole('region', { name: 'Posts' }))
         .getByRole('button', { name: /new post/i }),
     )
 
@@ -428,11 +456,12 @@ describe('ContentAdmin', () => {
 
     expect(screen.getByRole('heading', { name: 'Intro' })).toBeDefined()
 
-    fireEvent.click(screen.getByRole('button', { name: /save draft/i }))
+    clickToolbarSaveDraft()
     await screen.findByText('Draft saved')
 
-    fireEvent.click(screen.getByRole('button', { name: /publish/i }))
-    await screen.findByText('Published')
+    clickToolbarPublish()
+    const publishedButton = await screen.findByRole('button', { name: /^published$/i }) as HTMLButtonElement
+    expect(publishedButton.disabled).toBe(true)
 
     const calls = (globalThis as typeof globalThis & { __contentFetchCalls?: FetchCall[] }).__contentFetchCalls ?? []
     const saveCall = calls.find((call) => String(call.input) === '/api/cms/content/entries/entry_1' && call.init?.method === 'PUT')
@@ -450,6 +479,598 @@ describe('ContentAdmin', () => {
     )).toBe(true)
   })
 
+  it('renders the post title as a wrapping multi-line editor', async () => {
+    render(
+      <MemoryRouter>
+        <ContentPage />
+      </MemoryRouter>,
+    )
+
+    await screen.findByRole('region', { name: 'Posts' })
+    fireEvent.click(
+      within(screen.getByRole('region', { name: 'Posts' }))
+        .getByRole('button', { name: /new post/i }),
+    )
+
+    const title = await screen.findByLabelText('Title') as HTMLTextAreaElement
+    const longTitle = "Here's my first long post title that needs to wrap cleanly"
+
+    expect(title.tagName).toBe('TEXTAREA')
+    expect(title.getAttribute('rows')).toBe('1')
+
+    fireEvent.change(title, { target: { value: longTitle } })
+
+    expect(title.value).toBe(longTitle)
+
+    const contentCss = readFileSync(join(process.cwd(), 'src/admin/content/ContentPage.module.css'), 'utf8')
+    expect(contentCss).toMatch(/\.titleInput\s*\{[^}]*white-space:\s*pre-wrap/s)
+    expect(contentCss).toMatch(/\.titleInput\s*\{[^}]*overflow-wrap:\s*anywhere/s)
+  })
+
+  it('creates a custom collection and adds entries under that collection label', async () => {
+    const calls: FetchCall[] = []
+    ;(globalThis as typeof globalThis & { __contentFetchCalls?: FetchCall[] }).__contentFetchCalls = calls
+    globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ input, init })
+      const url = String(input)
+
+      if (url === '/api/cms/content/collections' && init?.method === 'GET') {
+        return json({
+          collections: [{
+            id: 'posts',
+            name: 'Posts',
+            slug: 'posts',
+            routeBase: '/posts',
+            singularLabel: 'Post',
+            pluralLabel: 'Posts',
+            fields: allCollectionFields,
+            createdAt: '2026-05-01T10:00:00.000Z',
+            updatedAt: '2026-05-01T10:00:00.000Z',
+          }],
+        })
+      }
+
+      if (url === '/api/cms/content/collections/posts/entries' && init?.method === 'GET') {
+        return json({ entries: [] })
+      }
+
+      if (url === '/api/cms/content/collections' && init?.method === 'POST') {
+        const body = JSON.parse(String(init.body))
+        return json({
+          collection: {
+            id: 'products',
+            name: 'Products',
+            slug: 'products',
+            routeBase: '/products',
+            singularLabel: 'Product',
+            pluralLabel: 'Products',
+            fields: body.fields,
+            createdAt: '2026-05-01T10:03:00.000Z',
+            updatedAt: '2026-05-01T10:03:00.000Z',
+          },
+        }, 201)
+      }
+
+      if (url === '/api/cms/content/collections/products/entries' && init?.method === 'GET') {
+        return json({ entries: [] })
+      }
+
+      if (url === '/api/cms/content/collections/products/entries' && init?.method === 'POST') {
+        return json({
+          entry: {
+            id: 'product_1',
+            collectionId: 'products',
+            title: 'Untitled',
+            slug: 'untitled',
+            status: 'draft',
+            bodyMarkdown: '',
+            featuredMediaId: null,
+            seoTitle: '',
+            seoDescription: '',
+            createdAt: '2026-05-01T10:04:00.000Z',
+            updatedAt: '2026-05-01T10:04:00.000Z',
+            publishedAt: null,
+            deletedAt: null,
+          },
+        }, 201)
+      }
+
+      return json({ error: `Unhandled ${url}` }, 500)
+    }
+
+    render(
+      <MemoryRouter>
+        <ContentPage />
+      </MemoryRouter>,
+    )
+
+    await screen.findByRole('region', { name: 'Posts' })
+    fireEvent.click(
+      within(screen.getByRole('region', { name: 'Collections' }))
+        .getByRole('button', { name: /new collection/i }),
+    )
+
+    const dialog = await screen.findByRole('dialog', { name: /new collection/i })
+    fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'Product Catalog' } })
+    fireEvent.change(within(dialog).getByLabelText('Slug'), { target: { value: 'catalog-items' } })
+    fireEvent.change(within(dialog).getByLabelText('URL path'), { target: { value: '/catalog' } })
+    fireEvent.change(within(dialog).getByLabelText('Singular label'), { target: { value: 'Product' } })
+    fireEvent.change(within(dialog).getByLabelText('Plural label'), { target: { value: 'Catalog' } })
+    fireEvent.click(within(dialog).getByLabelText('Featured media'))
+    fireEvent.click(within(dialog).getByLabelText('SEO fields'))
+    fireEvent.click(within(dialog).getByRole('button', { name: /^create$/i }))
+
+    const productsRegion = await screen.findByRole('region', { name: 'Products' })
+    fireEvent.click(within(productsRegion).getByRole('button', { name: /new product/i }))
+
+    expect(await screen.findByLabelText('Title')).toBeDefined()
+
+    const createCollectionCall = calls.find((call) =>
+      String(call.input) === '/api/cms/content/collections' &&
+      call.init?.method === 'POST'
+    )
+    expect(createCollectionCall?.init?.body).toBe(JSON.stringify({
+      name: 'Product Catalog',
+      slug: 'catalog-items',
+      routeBase: '/catalog',
+      singularLabel: 'Product',
+      pluralLabel: 'Catalog',
+      fields: {
+        builtIn: {
+          body: true,
+          featuredMedia: false,
+          seo: false,
+        },
+        custom: [],
+      },
+    }))
+    expect(calls.some((call) =>
+      String(call.input) === '/api/cms/content/collections/products/entries' &&
+      call.init?.method === 'POST'
+    )).toBe(true)
+  })
+
+  it('moves the selected entry from the settings sidebar and hides fields disabled by the target collection', async () => {
+    const calls: FetchCall[] = []
+    ;(globalThis as typeof globalThis & { __contentFetchCalls?: FetchCall[] }).__contentFetchCalls = calls
+    globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ input, init })
+      const url = String(input)
+
+      if (url === '/api/cms/content/collections') {
+        return json({
+          collections: [
+            {
+              id: 'posts',
+              name: 'Posts',
+              slug: 'posts',
+              routeBase: '/posts',
+              singularLabel: 'Post',
+              pluralLabel: 'Posts',
+              fields: allCollectionFields,
+              createdAt: '2026-05-01T10:00:00.000Z',
+              updatedAt: '2026-05-01T10:00:00.000Z',
+            },
+            {
+              id: 'products',
+              name: 'Products',
+              slug: 'products',
+              routeBase: '/products',
+              singularLabel: 'Product',
+              pluralLabel: 'Products',
+              fields: titleOnlyCollectionFields,
+              createdAt: '2026-05-01T10:03:00.000Z',
+              updatedAt: '2026-05-01T10:03:00.000Z',
+            },
+          ],
+        })
+      }
+
+      if (url === '/api/cms/content/collections/posts/entries' && init?.method === 'GET') {
+        return json({
+          entries: [{
+            id: 'entry_1',
+            collectionId: 'posts',
+            title: 'Portable lamp',
+            slug: 'portable-lamp',
+            status: 'draft',
+            bodyMarkdown: 'A compact lamp',
+            featuredMediaId: imageAsset.id,
+            seoTitle: 'SEO lamp',
+            seoDescription: 'Lamp description',
+            createdAt: '2026-05-01T10:00:00.000Z',
+            updatedAt: '2026-05-01T10:01:00.000Z',
+            publishedAt: null,
+            deletedAt: null,
+          }],
+        })
+      }
+
+      if (url === '/api/cms/content/entries/entry_1/collection' && init?.method === 'PATCH') {
+        return json({
+          entry: {
+            id: 'entry_1',
+            collectionId: 'products',
+            title: 'Portable lamp',
+            slug: 'portable-lamp',
+            status: 'draft',
+            bodyMarkdown: 'A compact lamp',
+            featuredMediaId: imageAsset.id,
+            seoTitle: 'SEO lamp',
+            seoDescription: 'Lamp description',
+            createdAt: '2026-05-01T10:00:00.000Z',
+            updatedAt: '2026-05-01T10:05:00.000Z',
+            publishedAt: null,
+            deletedAt: null,
+          },
+        })
+      }
+
+      if (url === '/api/cms/content/collections/products/entries' && init?.method === 'GET') {
+        return json({
+          entries: [{
+            id: 'entry_1',
+            collectionId: 'products',
+            title: 'Portable lamp',
+            slug: 'portable-lamp',
+            status: 'draft',
+            bodyMarkdown: 'A compact lamp',
+            featuredMediaId: imageAsset.id,
+            seoTitle: 'SEO lamp',
+            seoDescription: 'Lamp description',
+            createdAt: '2026-05-01T10:00:00.000Z',
+            updatedAt: '2026-05-01T10:05:00.000Z',
+            publishedAt: null,
+            deletedAt: null,
+          }],
+        })
+      }
+
+      if (url === '/api/cms/media') {
+        return json({ assets: [imageAsset] })
+      }
+
+      return json({ error: `Unhandled ${url}` }, 500)
+    }
+
+    render(
+      <MemoryRouter>
+        <ContentPage />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByDisplayValue('Portable lamp')).toBeDefined()
+    expect(screen.getByLabelText('SEO title')).toBeDefined()
+    expect(screen.getByText('Featured media')).toBeDefined()
+
+    fireEvent.click(screen.getByLabelText('Collection'))
+    fireEvent.click(await screen.findByRole('option', { name: 'Products' }))
+
+    await waitFor(() => {
+      expect(calls.some((call) =>
+        String(call.input) === '/api/cms/content/entries/entry_1/collection' &&
+        call.init?.method === 'PATCH' &&
+        call.init?.body === JSON.stringify({ collectionId: 'products' })
+      )).toBe(true)
+    })
+
+    expect(await screen.findByRole('region', { name: 'Products' })).toBeDefined()
+    expect(screen.queryByLabelText('SEO title')).toBeNull()
+    expect(screen.queryByText('Featured media')).toBeNull()
+  })
+
+  it('opens explorer-style context menus for content collections and entries', async () => {
+    const calls: FetchCall[] = []
+    ;(globalThis as typeof globalThis & { __contentFetchCalls?: FetchCall[] }).__contentFetchCalls = calls
+    globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ input, init })
+      const url = String(input)
+
+      if (url === '/api/cms/content/collections' && init?.method === 'GET') {
+        return json({
+          collections: [
+            {
+              id: 'posts',
+              name: 'Posts',
+              slug: 'posts',
+              routeBase: '/posts',
+              singularLabel: 'Post',
+              pluralLabel: 'Posts',
+              fields: allCollectionFields,
+              createdAt: '2026-05-01T10:00:00.000Z',
+              updatedAt: '2026-05-01T10:00:00.000Z',
+            },
+            {
+              id: 'products',
+              name: 'Products',
+              slug: 'products',
+              routeBase: '/products',
+              singularLabel: 'Product',
+              pluralLabel: 'Products',
+              fields: allCollectionFields,
+              createdAt: '2026-05-01T10:03:00.000Z',
+              updatedAt: '2026-05-01T10:03:00.000Z',
+            },
+          ],
+        })
+      }
+
+      if (url === '/api/cms/content/collections/posts/entries' && init?.method === 'GET') {
+        return json({
+          entries: [
+            {
+              id: 'entry_1',
+              collectionId: 'posts',
+              title: 'Summer sale',
+              slug: 'summer-sale',
+              status: 'draft',
+              bodyMarkdown: 'Sale copy',
+              featuredMediaId: null,
+              seoTitle: '',
+              seoDescription: '',
+              createdAt: '2026-05-01T10:00:00.000Z',
+              updatedAt: '2026-05-01T10:01:00.000Z',
+              publishedAt: null,
+              deletedAt: null,
+            },
+            {
+              id: 'entry_2',
+              collectionId: 'posts',
+              title: 'Published story',
+              slug: 'published-story',
+              status: 'published',
+              bodyMarkdown: 'Published copy',
+              featuredMediaId: null,
+              seoTitle: '',
+              seoDescription: '',
+              createdAt: '2026-05-01T10:00:00.000Z',
+              updatedAt: '2026-05-01T10:02:00.000Z',
+              publishedAt: '2026-05-01T10:02:00.000Z',
+              deletedAt: null,
+            },
+          ],
+        })
+      }
+
+      if (url === '/api/cms/content/collections/products/entries' && init?.method === 'GET') {
+        return json({ entries: [] })
+      }
+
+      if (url === '/api/cms/content/entries/entry_1' && init?.method === 'PUT') {
+        const draft = JSON.parse(String(init.body))
+        return json({
+          entry: {
+            id: 'entry_1',
+            collectionId: 'posts',
+            status: 'draft',
+            createdAt: '2026-05-01T10:00:00.000Z',
+            updatedAt: '2026-05-01T10:05:00.000Z',
+            publishedAt: null,
+            deletedAt: null,
+            ...draft,
+          },
+        })
+      }
+
+      if (url === '/api/cms/content/entries/entry_1/publish' && init?.method === 'POST') {
+        return json({
+          entry: {
+            id: 'entry_1',
+            collectionId: 'posts',
+            title: 'Summer sale',
+            slug: 'summer-sale',
+            status: 'published',
+            bodyMarkdown: 'Sale copy',
+            featuredMediaId: null,
+            seoTitle: '',
+            seoDescription: '',
+            createdAt: '2026-05-01T10:00:00.000Z',
+            updatedAt: '2026-05-01T10:03:00.000Z',
+            publishedAt: '2026-05-01T10:03:00.000Z',
+            deletedAt: null,
+          },
+        })
+      }
+
+      if (url === '/api/cms/content/entries/entry_2/status' && init?.method === 'PATCH') {
+        return json({
+          entry: {
+            id: 'entry_2',
+            collectionId: 'posts',
+            title: 'Published story',
+            slug: 'published-story',
+            status: 'draft',
+            bodyMarkdown: 'Published copy',
+            featuredMediaId: null,
+            seoTitle: '',
+            seoDescription: '',
+            createdAt: '2026-05-01T10:00:00.000Z',
+            updatedAt: '2026-05-01T10:04:00.000Z',
+            publishedAt: null,
+            deletedAt: null,
+          },
+        })
+      }
+
+      if (url === '/api/cms/content/entries/entry_1' && init?.method === 'DELETE') {
+        return json({
+          entry: {
+            id: 'entry_1',
+            collectionId: 'posts',
+            title: 'Winter sale',
+            slug: 'winter-sale',
+            status: 'draft',
+            bodyMarkdown: 'Sale copy',
+            featuredMediaId: null,
+            seoTitle: '',
+            seoDescription: '',
+            createdAt: '2026-05-01T10:00:00.000Z',
+            updatedAt: '2026-05-01T10:06:00.000Z',
+            publishedAt: null,
+            deletedAt: '2026-05-01T10:06:00.000Z',
+          },
+        })
+      }
+
+      if (url === '/api/cms/content/collections/products' && init?.method === 'PATCH') {
+        const body = JSON.parse(String(init.body))
+        return json({
+          collection: {
+            id: 'products',
+            ...body,
+            createdAt: '2026-05-01T10:03:00.000Z',
+            updatedAt: '2026-05-01T10:07:00.000Z',
+          },
+        })
+      }
+
+      if (url === '/api/cms/content/collections/products' && init?.method === 'DELETE') {
+        return json({
+          collection: {
+            id: 'products',
+            name: 'Catalog',
+            slug: 'catalog',
+            routeBase: '/catalog',
+            singularLabel: 'Product',
+            pluralLabel: 'Catalog',
+            fields: allCollectionFields,
+            createdAt: '2026-05-01T10:03:00.000Z',
+            updatedAt: '2026-05-01T10:08:00.000Z',
+          },
+        })
+      }
+
+      if (url === '/api/cms/media') {
+        return json({ assets: [] })
+      }
+
+      return json({ error: `Unhandled ${url}` }, 500)
+    }
+
+    render(
+      <MemoryRouter>
+        <ContentPage />
+      </MemoryRouter>,
+    )
+
+    const postsRegion = await screen.findByRole('region', { name: 'Posts' })
+    const publishedButton = (await within(postsRegion).findByText('Published story')).closest('button')
+    expect(publishedButton).toBeTruthy()
+
+    fireEvent.contextMenu(publishedButton as HTMLButtonElement, { clientX: 240, clientY: 300 })
+    let menu = screen.getByRole('menu', { name: 'Content item options' })
+    expect(within(menu).getByRole('menuitem', { name: /open in new tab/i })).toBeDefined()
+    expect(within(menu).getByRole('menuitem', { name: /convert to draft/i })).toBeDefined()
+    expect(within(menu).queryByRole('menuitem', { name: /^publish$/i })).toBeNull()
+    fireEvent.click(within(menu).getByRole('menuitem', { name: /convert to draft/i }))
+    await waitFor(() => {
+      expect(calls.some((call) =>
+        String(call.input) === '/api/cms/content/entries/entry_2/status' &&
+        call.init?.method === 'PATCH' &&
+        call.init?.body === JSON.stringify({ status: 'draft' })
+      )).toBe(true)
+    })
+
+    const entryButton = (await within(postsRegion).findByText('Summer sale')).closest('button')
+    expect(entryButton).toBeTruthy()
+
+    fireEvent.contextMenu(entryButton as HTMLButtonElement, { clientX: 240, clientY: 320 })
+    menu = screen.getByRole('menu', { name: 'Content item options' })
+    expect(within(menu).getByRole('menuitem', { name: /^publish$/i })).toBeDefined()
+    expect(within(menu).queryByRole('menuitem', { name: /convert to draft/i })).toBeNull()
+    expect(within(menu).queryByRole('menuitem', { name: /open in new tab/i })).toBeNull()
+    fireEvent.click(within(menu).getByRole('menuitem', { name: /^publish$/i }))
+    await waitFor(() => {
+      expect(calls.some((call) =>
+        String(call.input) === '/api/cms/content/entries/entry_1/publish' &&
+        call.init?.method === 'POST'
+      )).toBe(true)
+    })
+
+    fireEvent.contextMenu(entryButton as HTMLButtonElement, { clientX: 240, clientY: 320 })
+    menu = screen.getByRole('menu', { name: 'Content item options' })
+    fireEvent.click(within(menu).getByRole('menuitem', { name: /^rename$/i }))
+
+    let dialog = await screen.findByRole('dialog', { name: /rename post/i })
+    fireEvent.change(within(dialog).getByLabelText('Title'), { target: { value: 'Winter sale' } })
+    fireEvent.change(within(dialog).getByLabelText('Slug'), { target: { value: 'winter-sale' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: /^save$/i }))
+
+    expect(await within(postsRegion).findByText('Winter sale')).toBeDefined()
+    expect(calls.some((call) =>
+      String(call.input) === '/api/cms/content/entries/entry_1' &&
+      call.init?.method === 'PUT' &&
+      call.init?.body === JSON.stringify({
+        title: 'Winter sale',
+        slug: 'winter-sale',
+        bodyMarkdown: 'Sale copy',
+        featuredMediaId: null,
+        seoTitle: '',
+        seoDescription: '',
+      })
+    )).toBe(true)
+
+    const collectionsRegion = screen.getByRole('region', { name: 'Collections' })
+    const productsButton = within(collectionsRegion)
+      .getByText('Products')
+      .closest('button')
+    expect(productsButton).toBeTruthy()
+
+    fireEvent.contextMenu(productsButton as HTMLButtonElement, { clientX: 220, clientY: 210 })
+    menu = screen.getByRole('menu', { name: 'Content item options' })
+    fireEvent.click(within(menu).getByRole('menuitem', { name: /collection settings/i }))
+
+    dialog = await screen.findByRole('dialog', { name: /collection settings/i })
+    fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'Catalog' } })
+    fireEvent.change(within(dialog).getByLabelText('Slug'), { target: { value: 'catalog' } })
+    fireEvent.change(within(dialog).getByLabelText('URL path'), { target: { value: '/catalog' } })
+    fireEvent.change(within(dialog).getByLabelText('Plural label'), { target: { value: 'Catalog' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: /^save$/i }))
+
+    expect(await within(collectionsRegion).findByText('Catalog')).toBeDefined()
+    expect(calls.some((call) =>
+      String(call.input) === '/api/cms/content/collections/products' &&
+      call.init?.method === 'PATCH' &&
+      call.init?.body === JSON.stringify({
+        name: 'Catalog',
+        slug: 'catalog',
+        routeBase: '/catalog',
+        singularLabel: 'Product',
+        pluralLabel: 'Catalog',
+        fields: allCollectionFields,
+      })
+    )).toBe(true)
+
+    const renamedEntryButton = within(screen.getByRole('region', { name: 'Posts' }))
+      .getByRole('button', { name: /winter sale draft/i })
+    fireEvent.contextMenu(renamedEntryButton as HTMLButtonElement, { clientX: 240, clientY: 320 })
+    menu = screen.getByRole('menu', { name: 'Content item options' })
+    fireEvent.click(within(menu).getByRole('menuitem', { name: /^delete$/i }))
+
+    await waitFor(() => {
+      expect(calls.some((call) =>
+        String(call.input) === '/api/cms/content/entries/entry_1' &&
+        call.init?.method === 'DELETE'
+      )).toBe(true)
+    })
+    expect(within(screen.getByRole('region', { name: 'Posts' })).queryByText('Winter sale')).toBeNull()
+
+    const catalogButton = within(screen.getByRole('region', { name: 'Collections' }))
+      .getByText('Catalog')
+      .closest('button')
+    fireEvent.contextMenu(catalogButton as HTMLButtonElement, { clientX: 220, clientY: 210 })
+    menu = screen.getByRole('menu', { name: 'Content item options' })
+    fireEvent.click(within(menu).getByRole('menuitem', { name: /^delete$/i }))
+
+    await waitFor(() => {
+      expect(calls.some((call) =>
+        String(call.input) === '/api/cms/content/collections/products' &&
+        call.init?.method === 'DELETE'
+      )).toBe(true)
+    })
+    expect(within(screen.getByRole('region', { name: 'Collections' })).queryByText('Catalog')).toBeNull()
+  })
+
   it('opens the selected post in a new browser tab from the content toolbar', async () => {
     const originalOpen = window.open
     const openCalls: unknown[] = []
@@ -461,20 +1082,22 @@ describe('ContentAdmin', () => {
     try {
       render(
         <MemoryRouter>
-          <ContentAdmin />
+          <ContentPage />
         </MemoryRouter>,
       )
 
-      await screen.findByText('Posts')
+      await screen.findByRole('region', { name: 'Posts' })
       fireEvent.click(
-        within(screen.getByRole('region', { name: 'Entries' }))
+        within(screen.getByRole('region', { name: 'Posts' }))
           .getByRole('button', { name: /new post/i }),
       )
 
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: /open post in new tab/i }).hasAttribute('disabled')).toBe(false)
+        expect(screen.getByRole('button', { name: /more publishing actions/i }).hasAttribute('disabled')).toBe(false)
       })
-      fireEvent.click(screen.getByRole('button', { name: /open post in new tab/i }))
+      fireEvent.click(screen.getByRole('button', { name: /more publishing actions/i }))
+      const menu = screen.getByRole('menu', { name: /publishing actions/i })
+      fireEvent.click(within(menu).getByRole('menuitem', { name: /open live post/i }))
 
       expect(openCalls).toEqual([['/posts/untitled', '_blank', 'noopener,noreferrer']])
     } finally {
@@ -485,13 +1108,13 @@ describe('ContentAdmin', () => {
   it('opens semantic paragraph, heading level, and media choices from the block chrome', async () => {
     render(
       <MemoryRouter>
-        <ContentAdmin />
+        <ContentPage />
       </MemoryRouter>,
     )
 
-    await screen.findByText('Posts')
+    await screen.findByRole('region', { name: 'Posts' })
     fireEvent.click(
-      within(screen.getByRole('region', { name: 'Entries' }))
+      within(screen.getByRole('region', { name: 'Posts' }))
         .getByRole('button', { name: /new post/i }),
     )
 
@@ -513,7 +1136,7 @@ describe('ContentAdmin', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: /heading 3/i }))
     expect(screen.getByRole('heading', { level: 3, name: 'First block' })).toBeDefined()
 
-    fireEvent.click(screen.getByRole('button', { name: /save draft/i }))
+    clickToolbarSaveDraft()
     await screen.findByText('Draft saved')
 
     const calls = (globalThis as typeof globalThis & { __contentFetchCalls?: FetchCall[] }).__contentFetchCalls ?? []
@@ -531,13 +1154,13 @@ describe('ContentAdmin', () => {
   it('uses one media block type that can select image and video assets', async () => {
     render(
       <MemoryRouter>
-        <ContentAdmin />
+        <ContentPage />
       </MemoryRouter>,
     )
 
-    await screen.findByText('Posts')
+    await screen.findByRole('region', { name: 'Posts' })
     fireEvent.click(
-      within(screen.getByRole('region', { name: 'Entries' }))
+      within(screen.getByRole('region', { name: 'Posts' }))
         .getByRole('button', { name: /new post/i }),
     )
 
@@ -557,7 +1180,7 @@ describe('ContentAdmin', () => {
     expect(screen.getAllByTestId(/content-block-frame-/)).toHaveLength(1)
     expect(screen.getByText('/uploads/intro.mp4')).toBeDefined()
 
-    fireEvent.click(screen.getByRole('button', { name: /save draft/i }))
+    clickToolbarSaveDraft()
     await screen.findByText('Draft saved')
 
     const calls = (globalThis as typeof globalThis & { __contentFetchCalls?: FetchCall[] }).__contentFetchCalls ?? []
@@ -575,13 +1198,13 @@ describe('ContentAdmin', () => {
   it('reorders blocks by vertically dragging the block handle', async () => {
     render(
       <MemoryRouter>
-        <ContentAdmin />
+        <ContentPage />
       </MemoryRouter>,
     )
 
-    await screen.findByText('Posts')
+    await screen.findByRole('region', { name: 'Posts' })
     fireEvent.click(
-      within(screen.getByRole('region', { name: 'Entries' }))
+      within(screen.getByRole('region', { name: 'Posts' }))
         .getByRole('button', { name: /new post/i }),
     )
 
@@ -653,13 +1276,13 @@ describe('ContentAdmin', () => {
   it('keeps the dragged block visually anchored on drop before settling into place', async () => {
     render(
       <MemoryRouter>
-        <ContentAdmin />
+        <ContentPage />
       </MemoryRouter>,
     )
 
-    await screen.findByText('Posts')
+    await screen.findByRole('region', { name: 'Posts' })
     fireEvent.click(
-      within(screen.getByRole('region', { name: 'Entries' }))
+      within(screen.getByRole('region', { name: 'Posts' }))
         .getByRole('button', { name: /new post/i }),
     )
 
@@ -730,19 +1353,20 @@ describe('ContentAdmin', () => {
   it('edits slug, status, and featured media from the settings sidebar', async () => {
     render(
       <MemoryRouter>
-        <ContentAdmin />
+        <ContentPage />
       </MemoryRouter>,
     )
 
-    await screen.findByText('Posts')
+    await screen.findByRole('region', { name: 'Posts' })
     fireEvent.click(
-      within(screen.getByRole('region', { name: 'Entries' }))
+      within(screen.getByRole('region', { name: 'Posts' }))
         .getByRole('button', { name: /new post/i }),
     )
     const title = await screen.findByLabelText('Title')
     fireEvent.change(title, { target: { value: 'My first post' } })
-    fireEvent.click(screen.getByRole('button', { name: /publish/i }))
-    await screen.findByText('Published')
+    clickToolbarPublish()
+    const publishedButton = await screen.findByRole('button', { name: /^published$/i }) as HTMLButtonElement
+    expect(publishedButton.disabled).toBe(true)
 
     const slugInput = screen.getByLabelText('Slug') as HTMLInputElement
     expect(slugInput.disabled).toBe(false)
@@ -751,7 +1375,7 @@ describe('ContentAdmin', () => {
     fireEvent.click(screen.getByRole('button', { name: /choose featured media/i }))
     fireEvent.click(await screen.findByRole('button', { name: /hero\.png/i }))
 
-    fireEvent.click(screen.getByRole('button', { name: /save draft/i }))
+    clickToolbarSaveDraft()
     await screen.findByText('Draft saved')
 
     fireEvent.change(screen.getByLabelText('Status'), {
@@ -805,7 +1429,7 @@ describe('ContentAdmin', () => {
 
     render(
       <MemoryRouter>
-        <ContentAdmin />
+        <ContentPage />
       </MemoryRouter>,
     )
 
@@ -818,13 +1442,13 @@ describe('ContentAdmin', () => {
     const user = userEvent.setup()
     render(
       <MemoryRouter>
-        <ContentAdmin />
+        <ContentPage />
       </MemoryRouter>,
     )
 
-    await screen.findByText('Posts')
+    await screen.findByRole('region', { name: 'Posts' })
     fireEvent.click(
-      within(screen.getByRole('region', { name: 'Entries' }))
+      within(screen.getByRole('region', { name: 'Posts' }))
         .getByRole('button', { name: /new post/i }),
     )
 
@@ -839,13 +1463,13 @@ describe('ContentAdmin', () => {
     const user = userEvent.setup()
     render(
       <MemoryRouter>
-        <ContentAdmin />
+        <ContentPage />
       </MemoryRouter>,
     )
 
-    await screen.findByText('Posts')
+    await screen.findByRole('region', { name: 'Posts' })
     fireEvent.click(
-      within(screen.getByRole('region', { name: 'Entries' }))
+      within(screen.getByRole('region', { name: 'Posts' }))
         .getByRole('button', { name: /new post/i }),
     )
 
@@ -864,9 +1488,21 @@ describe('ContentAdmin', () => {
   })
 
   it('keeps contenteditable text blocks uncontrolled so rerenders do not reset the caret', () => {
-    const src = readFileSync(join(process.cwd(), 'src/content/RichMarkdownEditor.tsx'), 'utf8')
+    const src = readFileSync(join(process.cwd(), 'src/admin/content/RichMarkdownEditor.tsx'), 'utf8')
 
     expect(src).toContain('EditableTextBlock')
     expect(src).not.toContain('{block.text}')
+  })
+
+  it('uses the content publish button as the single published-state indicator', () => {
+    const src = readFileSync(join(process.cwd(), 'src/admin/content/components/ContentToolbar/ContentToolbar.tsx'), 'utf8')
+
+    expect(src).toContain("'Retry publish'")
+    expect(src).toContain("'Published'")
+    expect(src).toContain('statusLabel={isCleanPublished ? null : statusText}')
+    expect(src).toContain('publishDisabled={!selectedEntry || isPublishing || isCleanPublished}')
+    expect(src).not.toContain("'Live'")
+    expect(src).toContain('isCleanPublished ? CheckIcon')
+    expect(src).not.toContain("'Publish failed'")
   })
 })

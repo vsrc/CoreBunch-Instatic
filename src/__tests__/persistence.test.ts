@@ -333,4 +333,91 @@ describe('validateSite — classes field', () => {
     const result = validateSite(p as unknown)
     expect(result.classes).toEqual({})
   })
+
+  it('preserves generated framework class lock metadata', () => {
+    const p = validSite()
+    p.classes = {
+      'framework:color:primary-token:base:text': {
+        id: 'framework:color:primary-token:base:text',
+        name: 'text-primary',
+        styles: { color: 'var(--primary)' },
+        breakpointStyles: {},
+        generated: {
+          origin: 'framework',
+          family: 'color',
+          sourceId: 'primary-token',
+          utility: 'text',
+          tokenName: 'primary',
+          locked: true,
+        },
+        createdAt: 1,
+        updatedAt: 2,
+      },
+    }
+
+    const result = validateSite(p)
+    expect(result.classes['framework:color:primary-token:base:text'].generated).toEqual({
+      origin: 'framework',
+      family: 'color',
+      sourceId: 'primary-token',
+      utility: 'text',
+      tokenName: 'primary',
+      locked: true,
+    })
+  })
+})
+
+describe('validateSite — framework color settings', () => {
+  it('preserves structured color framework settings', () => {
+    const p = validSite()
+    p.settings.framework = {
+      colors: {
+        categories: [{ id: 'brand', name: 'Brand', order: 0 }],
+        tokens: [
+          {
+            id: 'primary-token',
+            categoryId: 'brand',
+            slug: 'Primary Color',
+            lightValue: 'hsla(238, 100%, 62%, 1)',
+            darkValue: 'hsla(238, 100%, 42%, 1)',
+            darkModeEnabled: true,
+            generateUtilities: {
+              text: true,
+              background: true,
+              border: true,
+              fill: true,
+            },
+            generateTransparent: true,
+            generateShades: { enabled: true, count: 4 },
+            generateTints: { enabled: false, count: 0 },
+            order: 0,
+            createdAt: 1,
+            updatedAt: 2,
+          },
+        ],
+      },
+    }
+
+    const result = validateSite(p)
+    expect(result.settings.framework?.colors.categories).toEqual([
+      { id: 'brand', name: 'Brand', order: 0 },
+    ])
+    expect(result.settings.framework?.colors.tokens[0]).toMatchObject({
+      id: 'primary-token',
+      categoryId: 'brand',
+      slug: 'primary-color',
+      lightValue: 'hsla(238, 100%, 62%, 1)',
+      darkValue: 'hsla(238, 100%, 42%, 1)',
+      darkModeEnabled: true,
+      generateUtilities: {
+        text: true,
+        background: true,
+        border: true,
+        fill: true,
+      },
+      generateTransparent: true,
+      generateShades: { enabled: true, count: 4 },
+      generateTints: { enabled: false, count: 0 },
+    })
+  })
 })

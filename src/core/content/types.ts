@@ -1,5 +1,24 @@
 export type ContentEntryStatus = 'draft' | 'published' | 'unpublished'
 
+export type BuiltInContentCollectionField = 'body' | 'featuredMedia' | 'seo'
+
+export interface ContentCollectionBuiltInFields {
+  body: boolean
+  featuredMedia: boolean
+  seo: boolean
+}
+
+export interface ContentCustomFieldDefinition {
+  id: string
+  label: string
+  type: string
+}
+
+export interface ContentCollectionFieldSchema {
+  builtIn: ContentCollectionBuiltInFields
+  custom: ContentCustomFieldDefinition[]
+}
+
 export interface ContentCollection {
   id: string
   name: string
@@ -7,12 +26,27 @@ export interface ContentCollection {
   routeBase: string
   singularLabel: string
   pluralLabel: string
+  fields?: ContentCollectionFieldSchema
   createdAt: string
   updatedAt: string
 }
 
+export interface CreateContentCollectionInput {
+  name: string
+  slug?: string
+  routeBase?: string
+  singularLabel?: string
+  pluralLabel?: string
+  fields?: ContentCollectionFieldSchema
+}
+
 export interface UpdateContentCollectionInput {
-  routeBase: string
+  name?: string
+  slug?: string
+  routeBase?: string
+  singularLabel?: string
+  pluralLabel?: string
+  fields?: ContentCollectionFieldSchema
 }
 
 export interface ContentEntry {
@@ -47,6 +81,10 @@ export interface CreateContentEntryInput {
   featuredMediaId?: string | null
   seoTitle?: string
   seoDescription?: string
+}
+
+export interface UpdateContentEntryCollectionInput {
+  collectionId: string
 }
 
 export type ContentMediaType = 'image' | 'video'

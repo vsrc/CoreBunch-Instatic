@@ -9,12 +9,12 @@ import {
   probeCmsSession,
   setupCms,
 } from '@core/persistence'
-import { ContentAdmin } from '../content/ContentAdmin'
-import { PluginPageAdmin } from '../plugins/PluginPageAdmin'
-import { PluginsAdmin } from '../plugins/PluginsAdmin'
+import { ContentPage } from './content/ContentPage'
+import { PluginPage } from './plugins/PluginPage'
+import { PluginsPage } from './plugins/PluginsPage'
+import { SitePage } from './site/SitePage'
 import { AppLoadingScreen } from './AppLoadingScreen'
-import EditorLayout from './EditorLayout'
-import type { AdminWorkspace } from './EditorLayout'
+import type { AdminWorkspace } from './AdminLayout'
 import styles from './AdminEntry.module.css'
 
 type AdminPhase = 'loading' | 'setup' | 'login' | 'editor'
@@ -98,10 +98,10 @@ export default function AdminEntry({ section = 'site' }: AdminEntryProps) {
 
   if (phase === 'loading') return <AppLoadingScreen />
   if (phase === 'editor') {
-    if (section === 'content') return <ContentAdmin />
-    if (section === 'plugins') return <PluginsAdmin />
-    if (section === 'pluginPage') return <PluginPageAdmin />
-    return <EditorLayout />
+    if (section === 'content') return <ContentPage />
+    if (section === 'plugins') return <PluginsPage />
+    if (section === 'pluginPage') return <PluginPage />
+    return <SitePage />
   }
 
   const isSetup = phase === 'setup'

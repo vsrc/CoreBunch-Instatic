@@ -328,11 +328,11 @@ describe('Gate 4 — No Unicode/emoji characters used as visual icons (user dire
     { char: '⬆',  desc: 'upwards black arrow', replacement: 'ArrowUpIcon' },
   ]
 
-  // Scan src/editor/ and src/app/ (excluding dead src/App.tsx / src/main.tsx)
-  const APP_DIR = join(PROJECT_ROOT, 'src/app')
+  // Scan src/editor/ and src/admin/.
+  const APP_DIR = join(PROJECT_ROOT, 'src/admin')
   const ACTIVE_APP_FILES = [
-    join(APP_DIR, 'EditorLayout.tsx'),
-    join(APP_DIR, 'router.tsx'),
+    join(APP_DIR, 'AdminLayout.tsx'),
+    join(APP_DIR, 'router.ts'),
   ]
 
   for (const { char, desc, replacement } of FORBIDDEN_ICON_CHARS) {

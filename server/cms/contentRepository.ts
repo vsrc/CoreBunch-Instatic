@@ -1,6 +1,8 @@
 import { nanoid } from 'nanoid'
 import type { DbClient } from './db'
 import { normalizeRouteBase } from '../../src/core/templates/templateMatching'
+import { normalizeContentCollectionFields } from '../../src/core/content/fields'
+import type { ContentCollectionFieldSchema } from '../../src/core/content/types'
 
 type ContentEntryStatus = 'draft' | 'published' | 'unpublished'
 
@@ -11,6 +13,7 @@ interface ContentCollection {
   routeBase: string
   singularLabel: string
   pluralLabel: string
+  fields: ContentCollectionFieldSchema
   createdAt: string
   updatedAt: string
 }
@@ -70,10 +73,16 @@ interface CreateContentCollectionInput {
   routeBase?: string
   singularLabel: string
   pluralLabel: string
+  fields?: ContentCollectionFieldSchema
 }
 
 interface UpdateContentCollectionInput {
-  routeBase: string
+  name?: string
+  slug?: string
+  routeBase?: string
+  singularLabel?: string
+  pluralLabel?: string
+  fields?: ContentCollectionFieldSchema
 }
 
 interface CreateContentEntryInput {
@@ -103,6 +112,7 @@ interface ContentCollectionRow {
   route_base: string
   singular_label: string
   plural_label: string
+  fields_json?: unknown
   created_at: Date | string
   updated_at: Date | string
 }
@@ -163,6 +173,10 @@ export interface ContentEntryRedirect {
   targetPath: string
 }
 
+export type UpdateContentEntryCollectionResult =
+  | { ok: true; entry: ContentEntry }
+  | { ok: false; reason: 'entry_not_found' | 'collection_not_found' | 'slug_conflict' }
+
 function toIsoString(value: Date | string): string {
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString()
 }
@@ -179,6 +193,7 @@ function mapCollection(row: ContentCollectionRow): ContentCollection {
     routeBase: row.route_base ? normalizeRouteBase(row.route_base) : normalizeRouteBase(row.slug),
     singularLabel: row.singular_label,
     pluralLabel: row.plural_label,
+    fields: normalizeContentCollectionFields(row.fields_json),
     createdAt: toIsoString(row.created_at),
     updatedAt: toIsoString(row.updated_at),
   }
@@ -248,7 +263,7 @@ function mapRedirect(row: ContentEntryRedirectRow): ContentEntryRedirect | null 
 
 export async function listContentCollections(db: DbClient): Promise<ContentCollection[]> {
   const result = await db.query<ContentCollectionRow>(
-    `select id, name, slug, route_base, singular_label, plural_label, created_at, updated_at
+    `select id, name, slug, route_base, singular_label, plural_label, fields_json, created_at, updated_at
      from content_collections
      where deleted_at is null
      order by created_at asc`,
@@ -260,10 +275,11 @@ export async function createContentCollection(
   db: DbClient,
   input: CreateContentCollectionInput,
 ): Promise<ContentCollection> {
+  const fields = normalizeContentCollectionFields(input.fields)
   const result = await db.query<ContentCollectionRow>(
-    `insert into content_collections (id, name, slug, route_base, singular_label, plural_label)
-     values ($1, $2, $3, $4, $5, $6)
-     returning id, name, slug, route_base, singular_label, plural_label, created_at, updated_at`,
+    `insert into content_collections (id, name, slug, route_base, singular_label, plural_label, fields_json)
+     values ($1, $2, $3, $4, $5, $6, $7)
+     returning id, name, slug, route_base, singular_label, plural_label, fields_json, created_at, updated_at`,
     [
       input.id ?? nanoid(),
       input.name,
@@ -271,6 +287,7 @@ export async function createContentCollection(
       normalizeRouteBase(input.routeBase ?? input.slug),
       input.singularLabel,
       input.pluralLabel,
+      fields,
     ],
   )
   return mapCollection(result.rows[0])
@@ -281,14 +298,28 @@ export async function updateContentCollection(
   collectionId: string,
   input: UpdateContentCollectionInput,
 ): Promise<ContentCollection | null> {
+  const fields = input.fields === undefined ? null : normalizeContentCollectionFields(input.fields)
   const result = await db.query<ContentCollectionRow>(
     `update content_collections
-     set route_base = $2,
+     set name = coalesce($2, name),
+         slug = coalesce($3, slug),
+         route_base = coalesce($4, route_base),
+         singular_label = coalesce($5, singular_label),
+         plural_label = coalesce($6, plural_label),
+         fields_json = coalesce($7, fields_json),
          updated_at = now()
      where id = $1
        and deleted_at is null
-     returning id, name, slug, route_base, singular_label, plural_label, created_at, updated_at`,
-    [collectionId, normalizeRouteBase(input.routeBase)],
+     returning id, name, slug, route_base, singular_label, plural_label, fields_json, created_at, updated_at`,
+    [
+      collectionId,
+      input.name ?? null,
+      input.slug ?? null,
+      input.routeBase === undefined ? null : normalizeRouteBase(input.routeBase),
+      input.singularLabel ?? null,
+      input.pluralLabel ?? null,
+      fields,
+    ],
   )
   return result.rows[0] ? mapCollection(result.rows[0]) : null
 }
@@ -313,7 +344,7 @@ export async function softDeleteContentCollection(
      set deleted_at = now(), updated_at = now()
      where id = $1
        and deleted_at is null
-     returning id, name, slug, route_base, singular_label, plural_label, created_at, updated_at`,
+     returning id, name, slug, route_base, singular_label, plural_label, fields_json, created_at, updated_at`,
     [collectionId],
   )
   return result.rows[0] ? mapCollection(result.rows[0]) : null
@@ -420,6 +451,48 @@ export async function softDeleteContentEntry(
     [entryId],
   )
   return result.rows[0] ? mapEntry(result.rows[0]) : null
+}
+
+export async function updateContentEntryCollection(
+  db: DbClient,
+  entryId: string,
+  collectionId: string,
+): Promise<UpdateContentEntryCollectionResult> {
+  const entry = await getContentEntry(db, entryId)
+  if (!entry) return { ok: false, reason: 'entry_not_found' }
+  if (entry.collectionId === collectionId) return { ok: true, entry }
+
+  const collection = await db.query<{ id: string }>(
+    `select id from content_collections
+     where id = $1
+       and deleted_at is null
+     limit 1`,
+    [collectionId],
+  )
+  if (!collection.rows[0]) return { ok: false, reason: 'collection_not_found' }
+
+  const conflict = await db.query<{ id: string }>(
+    `select id from content_entries
+     where collection_id = $1
+       and slug = $2
+       and id <> $3
+       and deleted_at is null
+     limit 1`,
+    [collectionId, entry.slug, entryId],
+  )
+  if (conflict.rows[0]) return { ok: false, reason: 'slug_conflict' }
+
+  const result = await db.query<ContentEntryRow>(
+    `update content_entries set collection_id = $2,
+                                updated_at = now()
+     where id = $1
+       and deleted_at is null
+     returning id, collection_id, title, slug, status, body_markdown, featured_media_id,
+               seo_title, seo_description, created_at, updated_at, published_at, deleted_at`,
+    [entryId, collectionId],
+  )
+  if (!result.rows[0]) return { ok: false, reason: 'entry_not_found' }
+  return { ok: true, entry: mapEntry(result.rows[0]) }
 }
 
 export async function updateContentEntryStatus(

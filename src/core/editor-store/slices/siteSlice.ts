@@ -12,6 +12,9 @@ import {
   type SiteSettings,
   type PageTemplateConfig,
   type DynamicPropBinding,
+  type FrameworkColorCategory,
+  type FrameworkColorToken,
+  type FrameworkColorUtilityType,
   DEFAULT_BREAKPOINTS,
   DEFAULT_SITE_SETTINGS,
   createNode,
@@ -35,6 +38,11 @@ import {
   clonePackageJson,
   DEFAULT_SITE_PACKAGE_JSON,
 } from '../../site-dependencies/manifest'
+import {
+  generateDefaultDarkColor,
+  generateFrameworkColorUtilityClasses,
+  normalizeFrameworkColorSlug,
+} from '../../framework/colors'
 
 /** Maximum undo history depth — prevents unbounded memory growth */
 const MAX_HISTORY = 50
@@ -80,6 +88,16 @@ export interface SiteSlice {
   // SiteDocument settings mutations
   updateSiteSettings: (patch: Partial<SiteSettings>) => void
 
+  // Framework color mutations
+  createFrameworkColorCategory: (name: string) => FrameworkColorCategory
+  renameFrameworkColorCategory: (categoryId: string, name: string) => void
+  deleteFrameworkColorCategory: (categoryId: string) => void
+  createFrameworkColorToken: (input: CreateFrameworkColorTokenInput) => FrameworkColorToken
+  updateFrameworkColorToken: (tokenId: string, patch: UpdateFrameworkColorTokenPatch) => void
+  duplicateFrameworkColorToken: (tokenId: string) => FrameworkColorToken | null
+  reorderFrameworkColorToken: (tokenId: string, direction: 'up' | 'down') => void
+  deleteFrameworkColorToken: (tokenId: string) => void
+
   // ─── Undo / Redo ──────────────────────────────────────────────────────────
   /** Snapshots of previous site states — most recent last */
   _historyPast: SiteDocument[]
@@ -98,6 +116,33 @@ export interface SiteSlice {
   pushHistory: () => void
 }
 
+type ColorVariantOptions = { enabled: boolean; count: number }
+
+interface CreateFrameworkColorTokenInput {
+  categoryId?: string | null
+  slug: string
+  lightValue: string
+  darkValue?: string
+  darkModeEnabled?: boolean
+  generateUtilities?: Partial<Record<FrameworkColorUtilityType, boolean>>
+  generateTransparent?: boolean
+  generateShades?: Partial<ColorVariantOptions>
+  generateTints?: Partial<ColorVariantOptions>
+}
+
+type UpdateFrameworkColorTokenPatch = Partial<{
+  categoryId: string | null
+  slug: string
+  lightValue: string
+  darkValue: string
+  darkModeEnabled: boolean
+  generateUtilities: Partial<Record<FrameworkColorUtilityType, boolean>>
+  generateTransparent: boolean
+  generateShades: Partial<ColorVariantOptions>
+  generateTints: Partial<ColorVariantOptions>
+  order: number
+}>
+
 function createDefaultSiteDocument(name: string): SiteDocument {
   const rootNode = createNode('base.root')
   const homePage: Page = {
@@ -115,10 +160,195 @@ function createDefaultSiteDocument(name: string): SiteDocument {
     visualComponents: [],  // Contribution #619 — visual components data layer
     packageJson: clonePackageJson(DEFAULT_SITE_PACKAGE_JSON),
     breakpoints: DEFAULT_BREAKPOINTS,
-    settings: DEFAULT_SITE_SETTINGS,
+    settings: structuredClone(DEFAULT_SITE_SETTINGS),
     classes: {},
     createdAt: Date.now(),
     updatedAt: Date.now(),
+  }
+}
+
+const DEFAULT_COLOR_UTILITIES: Record<FrameworkColorUtilityType, boolean> = {
+  text: true,
+  background: true,
+  border: true,
+  fill: false,
+}
+
+const DEFAULT_COLOR_VARIANTS: ColorVariantOptions = { enabled: true, count: 4 }
+
+function ensureFrameworkColors(site: SiteDocument): NonNullable<SiteSettings['framework']>['colors'] {
+  if (!site.settings.framework) {
+    site.settings.framework = { colors: { categories: [], tokens: [] } }
+  }
+  if (!site.settings.framework.colors) {
+    site.settings.framework.colors = { categories: [], tokens: [] }
+  }
+  site.settings.framework.colors.categories ??= []
+  site.settings.framework.colors.tokens ??= []
+  return site.settings.framework.colors
+}
+
+function nextOrder(items: Array<{ order: number }>): number {
+  return items.reduce((max, item) => Math.max(max, item.order), -1) + 1
+}
+
+function uniqueColorSlug(
+  tokens: FrameworkColorToken[],
+  desiredSlug: string,
+  excludeTokenId?: string,
+): string {
+  const base = normalizeFrameworkColorSlug(desiredSlug)
+  const existing = new Set(
+    tokens
+      .filter((token) => token.id !== excludeTokenId)
+      .map((token) => normalizeFrameworkColorSlug(token.slug)),
+  )
+  if (!existing.has(base)) return base
+
+  let suffix = 2
+  while (existing.has(`${base}-${suffix}`)) {
+    suffix += 1
+  }
+  return `${base}-${suffix}`
+}
+
+function createFrameworkColorTokenFromInput(
+  input: CreateFrameworkColorTokenInput,
+  colors: NonNullable<SiteSettings['framework']>['colors'],
+): FrameworkColorToken {
+  const now = Date.now()
+  const lightValue = input.lightValue.trim()
+  return {
+    id: nanoid(),
+    categoryId: input.categoryId ?? null,
+    slug: uniqueColorSlug(colors.tokens, input.slug),
+    lightValue,
+    darkValue: input.darkValue?.trim() || generateDefaultDarkColor(lightValue),
+    darkModeEnabled: input.darkModeEnabled ?? false,
+    generateUtilities: {
+      ...DEFAULT_COLOR_UTILITIES,
+      ...(input.generateUtilities ?? {}),
+    },
+    generateTransparent: input.generateTransparent ?? true,
+    generateShades: {
+      ...DEFAULT_COLOR_VARIANTS,
+      ...(input.generateShades ?? {}),
+    },
+    generateTints: {
+      ...DEFAULT_COLOR_VARIANTS,
+      ...(input.generateTints ?? {}),
+    },
+    order: nextOrder(colors.tokens),
+    createdAt: now,
+    updatedAt: now,
+  }
+}
+
+function applyFrameworkColorTokenPatch(
+  token: FrameworkColorToken,
+  patch: UpdateFrameworkColorTokenPatch,
+  colors: NonNullable<SiteSettings['framework']>['colors'],
+): void {
+  if (patch.categoryId !== undefined) token.categoryId = patch.categoryId
+  if (patch.slug !== undefined) token.slug = uniqueColorSlug(colors.tokens, patch.slug, token.id)
+  if (patch.lightValue !== undefined) token.lightValue = patch.lightValue.trim()
+  if (patch.darkValue !== undefined) token.darkValue = patch.darkValue.trim()
+  if (patch.darkModeEnabled !== undefined) {
+    token.darkModeEnabled = patch.darkModeEnabled
+    if (patch.darkModeEnabled && !patch.darkValue && !token.darkValue) {
+      token.darkValue = generateDefaultDarkColor(token.lightValue)
+    }
+  }
+  if (patch.generateUtilities) {
+    token.generateUtilities = {
+      ...token.generateUtilities,
+      ...patch.generateUtilities,
+    }
+  }
+  if (patch.generateTransparent !== undefined) token.generateTransparent = patch.generateTransparent
+  if (patch.generateShades) {
+    token.generateShades = { ...token.generateShades, ...patch.generateShades }
+  }
+  if (patch.generateTints) {
+    token.generateTints = { ...token.generateTints, ...patch.generateTints }
+  }
+  if (patch.order !== undefined) token.order = patch.order
+  token.updatedAt = Date.now()
+}
+
+function cloneFrameworkColorToken(
+  token: FrameworkColorToken,
+  colors: NonNullable<SiteSettings['framework']>['colors'],
+): FrameworkColorToken {
+  const now = Date.now()
+  return {
+    ...structuredClone(token),
+    id: nanoid(),
+    slug: uniqueColorSlug(colors.tokens, `${token.slug}-copy`),
+    order: nextOrder(colors.tokens),
+    createdAt: now,
+    updatedAt: now,
+  }
+}
+
+function reorderFrameworkColorTokenInGroup(
+  colors: NonNullable<SiteSettings['framework']>['colors'],
+  tokenId: string,
+  direction: 'up' | 'down',
+): void {
+  const token = colors.tokens.find((candidate) => candidate.id === tokenId)
+  if (!token) return
+
+  const group = colors.tokens
+    .filter((candidate) => candidate.categoryId === token.categoryId)
+    .sort((a, b) => a.order - b.order || a.slug.localeCompare(b.slug))
+  const currentIndex = group.findIndex((candidate) => candidate.id === tokenId)
+  const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1
+  if (currentIndex < 0 || targetIndex < 0 || targetIndex >= group.length) return
+
+  const orderValues = group.map((candidate) => candidate.order).sort((a, b) => a - b)
+  const reordered = [...group]
+  const [moved] = reordered.splice(currentIndex, 1)
+  reordered.splice(targetIndex, 0, moved)
+
+  for (let index = 0; index < reordered.length; index += 1) {
+    reordered[index].order = orderValues[index] ?? index
+    reordered[index].updatedAt = Date.now()
+  }
+}
+
+function isGeneratedColorClassId(id: string, site: SiteDocument): boolean {
+  return site.classes[id]?.generated?.origin === 'framework' && site.classes[id]?.generated?.family === 'color'
+}
+
+function pruneClassIdFromNodes(site: SiteDocument, classId: string): void {
+  for (const page of site.pages) {
+    for (const node of Object.values(page.nodes)) {
+      if (node.classIds?.includes(classId)) {
+        node.classIds = node.classIds.filter((id) => id !== classId)
+      }
+    }
+  }
+}
+
+function reconcileFrameworkColorClasses(site: SiteDocument): void {
+  const colors = ensureFrameworkColors(site)
+  const nextClasses = generateFrameworkColorUtilityClasses(colors)
+  const nextClassIds = new Set(Object.keys(nextClasses))
+
+  for (const classId of Object.keys(site.classes)) {
+    if (!isGeneratedColorClassId(classId, site)) continue
+    if (nextClassIds.has(classId)) continue
+    delete site.classes[classId]
+    pruneClassIdFromNodes(site, classId)
+  }
+
+  for (const [classId, nextClass] of Object.entries(nextClasses)) {
+    const existing = site.classes[classId]
+    site.classes[classId] = {
+      ...nextClass,
+      createdAt: existing?.createdAt ?? nextClass.createdAt,
+    }
   }
 }
 
@@ -296,6 +526,9 @@ export const createSiteSlice: StateCreator<EditorStore, [], [], SiteSlice> = (se
       // (Guideline #307 / Architect message #1216 — critical integration note)
       renderCache.clear()
       const migratedSite = migrateLegacyTextModules(site)
+      if (migratedSite.settings.framework?.colors) {
+        reconcileFrameworkColorClasses(migratedSite)
+      }
       const packageJson = clonePackageJson(migratedSite.packageJson)
       set({
         site: { ...migratedSite, packageJson },
@@ -487,6 +720,100 @@ export const createSiteSlice: StateCreator<EditorStore, [], [], SiteSlice> = (se
     updateSiteSettings: (patch) => {
       mutateSite((p) => {
         Object.assign(p.settings, patch)
+      })
+    },
+
+    createFrameworkColorCategory: (name) => {
+      const { site } = get()
+      if (!site) throw new Error('[siteSlice] Site document is not initialized')
+      const colors = ensureFrameworkColors(site)
+      const category: FrameworkColorCategory = {
+        id: nanoid(),
+        name: name.trim() || 'Untitled',
+        order: nextOrder(colors.categories),
+      }
+
+      mutateSite((draftSite) => {
+        ensureFrameworkColors(draftSite).categories.push(category)
+      })
+
+      return category
+    },
+
+    renameFrameworkColorCategory: (categoryId, name) => {
+      const trimmed = name.trim()
+      if (!trimmed) return
+      mutateSite((site) => {
+        const category = ensureFrameworkColors(site).categories.find((candidate) => candidate.id === categoryId)
+        if (!category || category.name === trimmed) return
+        category.name = trimmed
+      })
+    },
+
+    deleteFrameworkColorCategory: (categoryId) => {
+      mutateSite((site) => {
+        const colors = ensureFrameworkColors(site)
+        colors.categories = colors.categories.filter((category) => category.id !== categoryId)
+        for (const token of colors.tokens) {
+          if (token.categoryId === categoryId) token.categoryId = null
+        }
+      })
+    },
+
+    createFrameworkColorToken: (input) => {
+      const { site } = get()
+      if (!site) throw new Error('[siteSlice] Site document is not initialized')
+      const token = createFrameworkColorTokenFromInput(input, ensureFrameworkColors(site))
+
+      mutateSite((draftSite) => {
+        const colors = ensureFrameworkColors(draftSite)
+        colors.tokens.push(token)
+        reconcileFrameworkColorClasses(draftSite)
+      })
+
+      return token
+    },
+
+    updateFrameworkColorToken: (tokenId, patch) => {
+      mutateSite((site) => {
+        const colors = ensureFrameworkColors(site)
+        const token = colors.tokens.find((candidate) => candidate.id === tokenId)
+        if (!token) return
+        applyFrameworkColorTokenPatch(token, patch, colors)
+        reconcileFrameworkColorClasses(site)
+      })
+    },
+
+    duplicateFrameworkColorToken: (tokenId) => {
+      const { site } = get()
+      if (!site) return null
+      const colors = ensureFrameworkColors(site)
+      const token = colors.tokens.find((candidate) => candidate.id === tokenId)
+      if (!token) return null
+      const copy = cloneFrameworkColorToken(token, colors)
+
+      mutateSite((draftSite) => {
+        const draftColors = ensureFrameworkColors(draftSite)
+        draftColors.tokens.push(copy)
+        reconcileFrameworkColorClasses(draftSite)
+      })
+
+      return copy
+    },
+
+    reorderFrameworkColorToken: (tokenId, direction) => {
+      mutateSite((site) => {
+        const colors = ensureFrameworkColors(site)
+        reorderFrameworkColorTokenInGroup(colors, tokenId, direction)
+        reconcileFrameworkColorClasses(site)
+      })
+    },
+
+    deleteFrameworkColorToken: (tokenId) => {
+      mutateSite((site) => {
+        const colors = ensureFrameworkColors(site)
+        colors.tokens = colors.tokens.filter((token) => token.id !== tokenId)
+        reconcileFrameworkColorClasses(site)
       })
     },
   }

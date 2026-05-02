@@ -18,8 +18,8 @@ import { DragAndDropIcon } from '@ui/icons/icons/drag-and-drop'
 import { HeadingIcon } from '@ui/icons/icons/heading'
 import { ImagesIcon } from '@ui/icons/icons/images'
 import { TextStartTIcon } from '@ui/icons/icons/text-start-t'
-import { autoformatMarkdownShortcut, createMediaBlock, createParagraphBlock } from './markdown'
-import type { ContentBlock, ContentMediaType } from './types'
+import { autoformatMarkdownShortcut, createMediaBlock, createParagraphBlock } from '@core/content/markdown'
+import type { ContentBlock, ContentMediaType } from '@core/content/types'
 import styles from './RichMarkdownEditor.module.css'
 
 type BodyHeadingLevel = 2 | 3 | 4

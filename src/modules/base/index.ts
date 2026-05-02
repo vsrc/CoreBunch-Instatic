@@ -2,7 +2,7 @@
  * Base module registration — imports all base modules so they self-register
  * with the global registry singleton on import.
  *
- * Import this file once in src/app/main.tsx before the app mounts.
+ * Import this file once in src/admin/main.tsx before the app mounts.
  * Order matters only for module IDs that reference each other — keep alphabetical.
  */
 

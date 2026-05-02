@@ -25,6 +25,10 @@ import type {
   DynamicPropBinding,
   DynamicBindingFormat,
   TemplateCondition,
+  FrameworkColorSettings,
+  FrameworkColorToken,
+  FrameworkColorUtilityType,
+  GeneratedClassMetadata,
 } from '../page-tree/types'
 import type { SiteFile, SiteFileType } from '../files/types'
 import type { VisualComponent, VCParam } from '../visualComponents/types'
@@ -33,6 +37,7 @@ import { validateComponentName } from '../visualComponents/nameValidation'
 import { sanitizeRichtext, isRichtextPropKey } from '../sanitize'
 import { normalizeSitePackageJson } from '../site-dependencies/manifest'
 import { pageSlugDuplicateError, pageSlugError } from '../page-tree/slugs'
+import { generateDefaultDarkColor, normalizeFrameworkColorSlug } from '../framework/colors'
 
 // ---------------------------------------------------------------------------
 // Error type
@@ -74,6 +79,14 @@ function assertArray(v: unknown, path: string): asserts v is unknown[] {
 // ---------------------------------------------------------------------------
 
 const VALID_DYNAMIC_FORMATS = new Set<DynamicBindingFormat>(['plain', 'html', 'url', 'media'])
+const VALID_FRAMEWORK_COLOR_UTILITIES = new Set<FrameworkColorUtilityType>(['text', 'background', 'border', 'fill'])
+const DEFAULT_FRAMEWORK_COLOR_UTILITIES: Record<FrameworkColorUtilityType, boolean> = {
+  text: true,
+  background: true,
+  border: true,
+  fill: false,
+}
+const DEFAULT_COLOR_VARIANT_COUNT = 4
 
 function validateDynamicBindings(raw: unknown): Record<string, DynamicPropBinding> | undefined {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
@@ -254,6 +267,106 @@ function validateBreakpoint(raw: unknown, path: string): Breakpoint {
   }
 }
 
+function validateFrameworkColorVariantOptions(raw: unknown): { enabled: boolean; count: number } {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return { enabled: true, count: DEFAULT_COLOR_VARIANT_COUNT }
+  }
+  const options = raw as Record<string, unknown>
+  const count = typeof options.count === 'number' && isFinite(options.count)
+    ? Math.max(0, Math.min(12, Math.floor(options.count)))
+    : DEFAULT_COLOR_VARIANT_COUNT
+  return {
+    enabled: typeof options.enabled === 'boolean' ? options.enabled : true,
+    count,
+  }
+}
+
+function validateFrameworkColorUtilities(raw: unknown): Record<FrameworkColorUtilityType, boolean> {
+  const utilities = { ...DEFAULT_FRAMEWORK_COLOR_UTILITIES }
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return utilities
+
+  for (const utility of VALID_FRAMEWORK_COLOR_UTILITIES) {
+    const value = (raw as Record<string, unknown>)[utility]
+    if (typeof value === 'boolean') utilities[utility] = value
+  }
+
+  return utilities
+}
+
+function validateFrameworkColorToken(
+  raw: unknown,
+  index: number,
+  categoryIds: Set<string>,
+): FrameworkColorToken | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
+  const token = raw as Record<string, unknown>
+  if (typeof token.id !== 'string' || token.id.trim() === '') return null
+  if (typeof token.slug !== 'string' || token.slug.trim() === '') return null
+  if (typeof token.lightValue !== 'string' || token.lightValue.trim() === '') return null
+
+  const lightValue = token.lightValue.trim()
+  const categoryId = typeof token.categoryId === 'string' && categoryIds.has(token.categoryId)
+    ? token.categoryId
+    : null
+
+  return {
+    id: token.id,
+    categoryId,
+    slug: normalizeFrameworkColorSlug(token.slug),
+    lightValue,
+    darkValue: typeof token.darkValue === 'string' && token.darkValue.trim() !== ''
+      ? token.darkValue.trim()
+      : generateDefaultDarkColor(lightValue),
+    darkModeEnabled: typeof token.darkModeEnabled === 'boolean' ? token.darkModeEnabled : false,
+    generateUtilities: validateFrameworkColorUtilities(token.generateUtilities),
+    generateTransparent: typeof token.generateTransparent === 'boolean' ? token.generateTransparent : true,
+    generateShades: validateFrameworkColorVariantOptions(token.generateShades),
+    generateTints: validateFrameworkColorVariantOptions(token.generateTints),
+    order: typeof token.order === 'number' && isFinite(token.order) ? token.order : index,
+    createdAt: typeof token.createdAt === 'number' && isFinite(token.createdAt) ? token.createdAt : Date.now(),
+    updatedAt: typeof token.updatedAt === 'number' && isFinite(token.updatedAt) ? token.updatedAt : Date.now(),
+  }
+}
+
+function validateFrameworkColorSettings(raw: unknown): FrameworkColorSettings {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return { categories: [], tokens: [] }
+  }
+  const colors = raw as Record<string, unknown>
+  const categories = Array.isArray(colors.categories)
+    ? colors.categories
+        .map((category, index) => {
+          if (!category || typeof category !== 'object' || Array.isArray(category)) return null
+          const item = category as Record<string, unknown>
+          if (typeof item.id !== 'string' || item.id.trim() === '') return null
+          if (typeof item.name !== 'string' || item.name.trim() === '') return null
+          return {
+            id: item.id,
+            name: item.name.trim(),
+            order: typeof item.order === 'number' && isFinite(item.order) ? item.order : index,
+          }
+        })
+        .filter((category): category is FrameworkColorSettings['categories'][number] => category !== null)
+    : []
+
+  const categoryIds = new Set(categories.map((category) => category.id))
+  const tokens = Array.isArray(colors.tokens)
+    ? colors.tokens
+        .map((token, index) => validateFrameworkColorToken(token, index, categoryIds))
+        .filter((token): token is FrameworkColorToken => token !== null)
+    : []
+
+  return { categories, tokens }
+}
+
+function validateFrameworkSettings(raw: unknown): SiteSettings['framework'] | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const framework = raw as Record<string, unknown>
+  return {
+    colors: validateFrameworkColorSettings(framework.colors),
+  }
+}
+
 function validateSettings(raw: unknown, path: string): SiteSettings {
   assertObject(raw, path)
   return {
@@ -266,6 +379,7 @@ function validateSettings(raw: unknown, path: string): SiteSettings {
       raw.colorTokens && typeof raw.colorTokens === 'object' && !Array.isArray(raw.colorTokens)
         ? (raw.colorTokens as Record<string, string>)
         : {},
+    framework: validateFrameworkSettings(raw.framework),
     typeScale:
       raw.typeScale && typeof raw.typeScale === 'object' && !Array.isArray(raw.typeScale)
         ? {
@@ -283,6 +397,27 @@ function validateSettings(raw: unknown, path: string): SiteSettings {
       raw.shortcuts && typeof raw.shortcuts === 'object' && !Array.isArray(raw.shortcuts)
         ? (raw.shortcuts as Record<string, string>)
         : {},
+  }
+}
+
+function validateGeneratedClassMetadata(raw: unknown): GeneratedClassMetadata | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const generated = raw as Record<string, unknown>
+  if (generated.origin !== 'framework') return undefined
+  if (generated.family !== 'color') return undefined
+  if (typeof generated.sourceId !== 'string' || generated.sourceId.trim() === '') return undefined
+  if (!VALID_FRAMEWORK_COLOR_UTILITIES.has(generated.utility as FrameworkColorUtilityType)) return undefined
+  if (typeof generated.tokenName !== 'string' || generated.tokenName.trim() === '') return undefined
+  if (generated.locked !== true) return undefined
+
+  return {
+    origin: 'framework',
+    family: 'color',
+    sourceId: generated.sourceId,
+    utility: generated.utility as FrameworkColorUtilityType,
+    tokenName: generated.tokenName,
+    variantName: typeof generated.variantName === 'string' ? generated.variantName : undefined,
+    locked: true,
   }
 }
 
@@ -479,6 +614,7 @@ export function validateSite(raw: unknown): SiteDocument {
             styles: (c.styles && typeof c.styles === 'object' && !Array.isArray(c.styles) ? c.styles : {}) as Record<string, unknown>,
             breakpointStyles: (c.breakpointStyles && typeof c.breakpointStyles === 'object' && !Array.isArray(c.breakpointStyles) ? c.breakpointStyles : {}) as Record<string, Record<string, unknown>>,
             tags: Array.isArray(c.tags) ? (c.tags as string[]).filter((t) => typeof t === 'string') : undefined,
+            generated: validateGeneratedClassMetadata(c.generated),
             createdAt: typeof c.createdAt === 'number' ? c.createdAt : Date.now(),
             updatedAt: typeof c.updatedAt === 'number' ? c.updatedAt : Date.now(),
           }

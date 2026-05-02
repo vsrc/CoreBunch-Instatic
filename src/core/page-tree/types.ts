@@ -111,6 +111,7 @@ export interface CSSPropertyBag {
   borderRight?: string
   borderBottom?: string
   borderLeft?: string
+  borderColor?: string
   borderRadius?: string
   borderTopLeftRadius?: string
   borderTopRightRadius?: string
@@ -137,6 +138,21 @@ export interface CSSPropertyBag {
 
   // Scrollbar
   scrollBehavior?: string
+
+  // SVG / icon color utilities
+  fill?: string
+}
+
+export type FrameworkColorUtilityType = 'text' | 'background' | 'border' | 'fill'
+
+export interface GeneratedClassMetadata {
+  origin: 'framework'
+  family: 'color'
+  sourceId: string
+  utility: FrameworkColorUtilityType
+  tokenName: string
+  variantName?: string
+  locked: true
 }
 
 /**
@@ -160,6 +176,8 @@ export interface CSSClass {
   breakpointStyles: Record<string, Partial<CSSPropertyBag>>
   /** Optional tags for search/filtering in the Class Manager */
   tags?: string[]
+  /** Metadata for framework-generated classes that are assignable but not directly editable. */
+  generated?: GeneratedClassMetadata
   createdAt: number
   updatedAt: number
 }
@@ -343,9 +361,48 @@ export interface SiteSettings {
   language?: string
   /** Global CSS custom property tokens (design tokens) */
   colorTokens: Record<string, string>
+  /** Structured framework token settings. Color is the first supported family. */
+  framework?: FrameworkSettings
   typeScale: TypeScale
   /** Keyboard shortcut overrides: action → key combo string */
   shortcuts: Record<string, string>
+}
+
+export interface FrameworkSettings {
+  colors: FrameworkColorSettings
+}
+
+export interface FrameworkColorSettings {
+  categories: FrameworkColorCategory[]
+  tokens: FrameworkColorToken[]
+}
+
+export interface FrameworkColorCategory {
+  id: string
+  name: string
+  order: number
+}
+
+export interface FrameworkColorToken {
+  id: string
+  categoryId: string | null
+  slug: string
+  lightValue: string
+  darkValue: string
+  darkModeEnabled: boolean
+  generateUtilities: Record<FrameworkColorUtilityType, boolean>
+  generateTransparent: boolean
+  generateShades: {
+    enabled: boolean
+    count: number
+  }
+  generateTints: {
+    enabled: boolean
+    count: number
+  }
+  order: number
+  createdAt: number
+  updatedAt: number
 }
 
 export const DEFAULT_TYPE_SCALE: TypeScale = { baseSize: 16, ratio: 1.25 }

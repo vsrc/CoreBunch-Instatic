@@ -87,6 +87,7 @@ export const CMS_MIGRATIONS: Migration[] = [
         route_base text not null default '',
         singular_label text not null,
         plural_label text not null,
+        fields_json jsonb not null default '{"builtIn":{"body":true,"featuredMedia":true,"seo":true},"custom":[]}'::jsonb,
         created_at timestamptz not null default now(),
         updated_at timestamptz not null default now(),
         deleted_at timestamptz
@@ -245,6 +246,13 @@ export const CMS_MIGRATIONS: Migration[] = [
 
       create index if not exists content_entry_redirects_target_idx
         on content_entry_redirects (target_entry_id, created_at desc);
+    `,
+  },
+  {
+    id: '010_content_collection_fields',
+    sql: `
+      alter table content_collections
+        add column if not exists fields_json jsonb not null default '{"builtIn":{"body":true,"featuredMedia":true,"seo":true},"custom":[]}'::jsonb;
     `,
   },
 ]

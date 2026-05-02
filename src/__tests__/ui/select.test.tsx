@@ -1,0 +1,133 @@
+import { describe, it, expect, afterEach } from 'bun:test'
+import React from 'react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { Select } from '../../ui/components/Select'
+
+afterEach(cleanup)
+
+const OPTIONS = [
+  { value: 'draft', label: 'Draft' },
+  { value: 'published', label: 'Published' },
+  { value: 'archived', label: 'Archived' },
+]
+
+describe('Select', () => {
+  it('opens the option list when the chevron icon area is clicked', () => {
+    render(
+      <Select
+        id="status"
+        aria-label="Status"
+        value="draft"
+        options={OPTIONS}
+        onChange={() => {}}
+      />,
+    )
+
+    const combobox = screen.getByRole('combobox', { name: /status/i })
+    const chevron = combobox.nextElementSibling as HTMLElement
+
+    fireEvent.click(chevron)
+
+    expect(screen.getByRole('listbox', { name: /status/i })).toBeDefined()
+    expect(combobox.getAttribute('aria-expanded')).toBe('true')
+  })
+
+  it('exposes listbox semantics and commits keyboard selection', () => {
+    let selected = 'draft'
+    render(
+      <Select
+        id="workflow-status"
+        aria-label="Workflow status"
+        value={selected}
+        options={OPTIONS}
+        onChange={(event) => {
+          selected = event.target.value
+        }}
+      />,
+    )
+
+    const combobox = screen.getByRole('combobox', { name: /workflow status/i })
+    combobox.focus()
+
+    fireEvent.keyDown(combobox, { key: 'ArrowDown' })
+    fireEvent.keyDown(combobox, { key: 'ArrowDown' })
+
+    const listbox = screen.getByRole('listbox', { name: /workflow status/i })
+    const publishedOption = screen.getByRole('option', { name: 'Published' })
+
+    expect(listbox).toBeDefined()
+    expect(combobox.getAttribute('aria-haspopup')).toBe('listbox')
+    expect(combobox.getAttribute('aria-activedescendant')).toBe(publishedOption.id)
+
+    fireEvent.keyDown(combobox, { key: 'Enter' })
+
+    expect(selected).toBe('published')
+    expect(screen.queryByRole('listbox', { name: /workflow status/i })).toBeNull()
+    expect(combobox.getAttribute('aria-expanded')).toBe('false')
+  })
+
+  it('closes when a mouse selection is confirmed', () => {
+    let selected = 'draft'
+    render(
+      <Select
+        id="mouse-status"
+        aria-label="Mouse status"
+        value={selected}
+        options={OPTIONS}
+        onChange={(event) => {
+          selected = event.target.value
+        }}
+      />,
+    )
+
+    const combobox = screen.getByRole('combobox', { name: /mouse status/i })
+
+    fireEvent.click(combobox.nextElementSibling as HTMLElement)
+    fireEvent.click(screen.getByRole('option', { name: 'Published' }))
+
+    expect(selected).toBe('published')
+    expect(screen.queryByRole('listbox', { name: /mouse status/i })).toBeNull()
+    expect(combobox.getAttribute('aria-expanded')).toBe('false')
+  })
+
+  it('closes when the backdrop is clicked', () => {
+    render(
+      <Select
+        id="outside-status"
+        aria-label="Outside status"
+        value="draft"
+        options={OPTIONS}
+        onChange={() => {}}
+      />,
+    )
+
+    const combobox = screen.getByRole('combobox', { name: /outside status/i })
+
+    fireEvent.click(combobox.nextElementSibling as HTMLElement)
+
+    const backdrop = screen.getByRole('listbox', { name: /outside status/i })
+      .previousElementSibling as HTMLElement
+    fireEvent.click(backdrop)
+
+    expect(screen.queryByRole('listbox', { name: /outside status/i })).toBeNull()
+    expect(combobox.getAttribute('aria-expanded')).toBe('false')
+  })
+
+  it('shows placeholder text instead of a selected value for an empty value', () => {
+    render(
+      <Select
+        id="placeholder-status"
+        aria-label="Placeholder status"
+        value=""
+        placeholder="Browser default"
+        options={[{ value: '', label: '—' }, ...OPTIONS]}
+        onChange={() => {}}
+      />,
+    )
+
+    const combobox = screen.getByRole('combobox', { name: /placeholder status/i }) as HTMLInputElement
+
+    expect(combobox.value).toBe('')
+    expect(combobox.placeholder).toBe('Browser default')
+  })
+})

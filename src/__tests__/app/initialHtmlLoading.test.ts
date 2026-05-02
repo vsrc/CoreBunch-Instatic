@@ -9,7 +9,7 @@ describe('initial HTML loading shell', () => {
     const html = readFileSync(INDEX_HTML_PATH, 'utf8')
     const styleIndex = html.indexOf('<style data-initial-loader>')
     const rootIndex = html.indexOf('<div id="root">')
-    const scriptIndex = html.indexOf('<script type="module" src="/src/app/main.tsx">')
+    const scriptIndex = html.indexOf('<script type="module" src="/src/admin/main.tsx">')
 
     expect(styleIndex).toBeGreaterThan(-1)
     expect(rootIndex).toBeGreaterThan(-1)

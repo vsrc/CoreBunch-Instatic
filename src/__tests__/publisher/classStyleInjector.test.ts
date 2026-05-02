@@ -74,6 +74,15 @@ describe('bagToCSS', () => {
     expect(css).toContain('opacity: 0.5;')
   })
 
+  it('serializes color framework utility properties', () => {
+    const css = bagToCSS({
+      borderColor: 'var(--primary)',
+      fill: 'var(--primary)',
+    })
+    expect(css).toContain('border-color: var(--primary);')
+    expect(css).toContain('fill: var(--primary);')
+  })
+
   it('returns empty string for an empty bag', () => {
     expect(bagToCSS({})).toBe('')
   })

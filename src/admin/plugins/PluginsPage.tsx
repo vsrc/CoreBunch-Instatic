@@ -25,10 +25,10 @@ import {
   removeCmsPlugin,
   setCmsPluginEnabled,
 } from "@core/persistence";
-import EditorLayout from "../app/EditorLayout";
-import { SettingsButton } from "../editor/components/Toolbar/SettingsButton";
-import { notifyCmsPluginsChanged } from "./pluginEvents";
-import styles from "./PluginsAdmin.module.css";
+import AdminLayout from "../AdminLayout";
+import { SettingsButton } from "../../editor/components/Toolbar/SettingsButton";
+import { notifyCmsPluginsChanged } from "./utils/pluginEvents";
+import styles from "./PluginsPage.module.css";
 
 const emptyPayload: CmsPluginsPayload = { plugins: [], adminPages: [] };
 
@@ -67,7 +67,7 @@ function pluginStatus(plugin: InstalledPlugin): {
   return { label: "Active", status: "active" };
 }
 
-export function PluginsAdmin() {
+export function PluginsPage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [payload, setPayload] = useState<CmsPluginsPayload>(emptyPayload);
   const [loading, setLoading] = useState(true);
@@ -215,7 +215,7 @@ export function PluginsAdmin() {
   );
 
   return (
-    <EditorLayout
+    <AdminLayout
       workspace="plugins"
       toolbarRightSlot={toolbarRightSlot}
       contentCanvas={

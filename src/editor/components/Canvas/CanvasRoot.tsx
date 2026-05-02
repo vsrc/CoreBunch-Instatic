@@ -22,12 +22,13 @@
 
 import { useRef, useCallback, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { useEditorStore, selectActiveCanvasPage } from '../../../core/editor-store/store'
+import { useEditorStore, selectActiveCanvasPage, selectRightSidebarExpanded } from '../../../core/editor-store/store'
 import type { Breakpoint } from '../../../core/page-tree/types'
 import { registry } from '../../../core/module-engine/registry'
 import { useCanvas } from '../../hooks/useCanvas'
 import { CanvasTransformLayer } from './CanvasTransformLayer'
 import { CanvasNotch } from './CanvasNotch'
+import { CanvasBreakpointSelector } from './CanvasBreakpointSelector'
 import { CanvasSelectionContext } from './CanvasContexts'
 import { ClassStyleInjector } from './ClassStyleInjector'
 import { LayerNodeContextMenu } from '../DomPanel/LayerNodeContextMenu'
@@ -52,6 +53,7 @@ export function CanvasRoot() {
   const canvasPage = useEditorStore(selectActiveCanvasPage)
   const breakpoints = useEditorStore((s) => s.site?.breakpoints ?? EMPTY_BREAKPOINTS)
   const activeBreakpointId = useEditorStore((s) => s.activeBreakpointId)
+  const rightSidebarExpanded = useEditorStore(selectRightSidebarExpanded)
   // selectedNodeId is needed here for canvas-level keyboard shortcuts (Delete, Ctrl+D).
   // hoveredNodeId is NOT subscribed here — NodeRenderer handles its own hover state
   // via per-node selectors to avoid O(N) re-renders on every hover event (#495).
@@ -78,12 +80,15 @@ export function CanvasRoot() {
   // ─── Selection context value ───────────────────────────────────────────────
 
   const onNodeClick = useCallback(
-    (nodeId: string, e: React.MouseEvent) => {
+    (nodeId: string, e: React.MouseEvent, breakpointId?: string) => {
       e.stopPropagation()
+      if (breakpointId && breakpointId !== activeBreakpointId) {
+        setActiveBreakpoint(breakpointId)
+      }
       selectNode(nodeId)
       setFocusedPanel('canvas')
     },
-    [selectNode, setFocusedPanel],
+    [activeBreakpointId, selectNode, setActiveBreakpoint, setFocusedPanel],
   )
 
   const onNodeHover = useCallback(
@@ -94,14 +99,17 @@ export function CanvasRoot() {
   )
 
   const onNodeContextMenu = useCallback(
-    (nodeId: string, e: React.MouseEvent) => {
+    (nodeId: string, e: React.MouseEvent, breakpointId?: string) => {
       e.preventDefault()
       e.stopPropagation()
+      if (breakpointId && breakpointId !== activeBreakpointId) {
+        setActiveBreakpoint(breakpointId)
+      }
       selectNode(nodeId)
       setFocusedPanel('canvas')
       setContextMenu({ x: e.clientX, y: e.clientY, nodeId })
     },
-    [selectNode, setFocusedPanel],
+    [activeBreakpointId, selectNode, setActiveBreakpoint, setFocusedPanel],
   )
 
   /**
@@ -232,6 +240,14 @@ export function CanvasRoot() {
 
         {/* Fixed insert controls — part of canvas chrome, not the zoom layer. */}
         <CanvasNotch />
+
+        {rightSidebarExpanded && (
+          <CanvasBreakpointSelector
+            breakpoints={breakpoints}
+            activeBreakpointId={activeBreakpointId}
+            onBreakpointChange={setActiveBreakpoint}
+          />
+        )}
 
         {/* The transform layer — pan/zoom applied here */}
         <CanvasTransformLayer

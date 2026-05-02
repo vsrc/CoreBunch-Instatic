@@ -1,7 +1,8 @@
 import { describe, expect, it, beforeEach } from 'bun:test'
-import { render, screen, cleanup } from '@testing-library/react'
+import { fireEvent, render, screen, cleanup } from '@testing-library/react'
 import { useEditorStore } from '../../core/editor-store/store'
 import { BreakpointFrame } from '../../editor/components/Canvas/BreakpointFrame'
+import { CanvasRoot } from '../../editor/components/Canvas/CanvasRoot'
 import '../../modules/base'
 
 beforeEach(() => {
@@ -16,6 +17,7 @@ beforeEach(() => {
     hoveredNodeId: null,
     activeDocument: null,
     activePageId: null,
+    activeBreakpointId: 'desktop',
     hasUnsavedChanges: false,
   })
 })
@@ -44,5 +46,26 @@ describe('canvas breakpoint rendering', () => {
 
     expect(screen.getByText('Mobile headline')).toBeTruthy()
     expect(screen.queryByText('Desktop headline')).toBeNull()
+  })
+
+  it('activates the clicked breakpoint when selecting a node inside that frame', () => {
+    const site = useEditorStore.getState().createSite('Breakpoint Selection')
+    const page = site.pages[0]
+    const textId = useEditorStore.getState().insertNode('base.text', {
+      text: 'Shared headline',
+      tag: 'h1',
+    }, page.rootNodeId)
+    useEditorStore.getState().setActiveBreakpoint('desktop')
+
+    render(<CanvasRoot />)
+
+    const mobileNode = document.querySelector(`[data-breakpoint-id="mobile"] [data-node-id="${textId}"]`)
+    expect(mobileNode).toBeTruthy()
+
+    fireEvent.click(mobileNode!)
+
+    const state = useEditorStore.getState()
+    expect(state.selectedNodeId).toBe(textId)
+    expect(state.activeBreakpointId).toBe('mobile')
   })
 })

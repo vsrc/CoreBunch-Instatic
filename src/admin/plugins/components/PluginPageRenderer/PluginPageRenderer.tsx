@@ -16,7 +16,7 @@ import {
   deleteCmsPluginResourceRecord,
   loadCmsPluginResource,
 } from '@core/persistence'
-import styles from './PluginsAdmin.module.css'
+import styles from '../../PluginsPage.module.css'
 
 interface PluginPageRendererProps {
   page: PluginAdminPageRoute

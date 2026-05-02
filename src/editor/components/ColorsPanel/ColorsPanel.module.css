@@ -1,0 +1,223 @@
+.panel {
+    position: relative;
+    display: flex;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    flex-direction: column;
+    overflow: hidden;
+    background: transparent;
+    outline: none;
+}
+
+.content {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
+    gap: 10px;
+    overflow: auto;
+    padding: 8px;
+}
+
+.toolbar {
+    display: grid;
+    gap: 8px;
+}
+
+.categoryRow {
+    display: flex;
+    min-width: 0;
+    gap: 5px;
+    overflow-x: auto;
+    padding-bottom: 1px;
+}
+
+.rows {
+    display: grid;
+    align-content: start;
+    gap: 6px;
+}
+
+.card {
+    display: grid;
+    overflow: hidden;
+}
+
+.row {
+    display: grid;
+    width: 100%;
+    min-height: 42px;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    border-radius: 12px;
+    background: var(--editor-surface);
+    color: var(--editor-text);
+    font: inherit;
+    padding: 6px 8px;
+}
+
+.row:hover,
+.row:focus-within {
+    background: var(--editor-surface);
+}
+
+.swatches {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.rowToggle {
+    display: grid;
+    min-width: 0;
+    grid-column: 2 / 4;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    font: inherit;
+    padding: 0;
+    text-align: left;
+}
+
+.rowText {
+    display: grid;
+    min-width: 0;
+    gap: 2px;
+}
+
+.rowTitle {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--editor-text);
+    font-size: 12px;
+    font-weight: 750;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.rowMeta,
+.rowSummary {
+    color: var(--editor-text-muted);
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.rowSummary {
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.editor {
+    display: grid;
+    gap: 8px;
+    padding: 8px;
+}
+
+.field {
+    display: grid;
+    grid-template-columns: 86px minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+    color: var(--editor-text-secondary);
+    font-size: 11px;
+    font-weight: 650;
+}
+
+.checkboxRow {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    min-height: 26px;
+    color: var(--editor-text-secondary);
+    font-size: 11px;
+    font-weight: 650;
+}
+
+.checkboxRow input {
+    width: 14px;
+    height: 14px;
+    accent-color: var(--editor-accent);
+}
+
+.stepperRow {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    min-height: 28px;
+    color: var(--editor-text-secondary);
+    font-size: 11px;
+    font-weight: 650;
+}
+
+.stepperControl {
+    display: grid;
+    grid-template-columns: 26px 32px 26px;
+    align-items: center;
+    overflow: hidden;
+    border: 1px solid var(--input-border);
+    border-radius: var(--input-radius);
+    background: var(--input-bg);
+}
+
+.stepperControl button {
+    border-radius: 0;
+}
+
+.stepperValue {
+    display: grid;
+    min-height: 26px;
+    place-items: center;
+    border-right: 1px solid var(--input-border);
+    border-left: 1px solid var(--input-border);
+    color: var(--editor-text);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    font-weight: 760;
+    line-height: 1;
+}
+
+.utilityGrid {
+    display: grid;
+    gap: 4px;
+    padding-top: 3px;
+    border-top: 1px solid var(--panel-border);
+}
+
+.variantControl {
+    display: grid;
+    gap: 7px;
+    padding-top: 7px;
+    border-top: 1px solid var(--panel-border);
+}
+
+.variantPreview {
+    display: flex;
+    min-width: 0;
+    gap: 4px;
+    overflow: hidden;
+}
+
+.emptyState {
+    display: grid;
+    gap: 10px;
+    justify-items: start;
+    padding: 14px;
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    background: var(--editor-surface);
+    color: var(--editor-text-muted);
+    font-size: 12px;
+    line-height: 1.5;
+}

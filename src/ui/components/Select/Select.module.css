@@ -64,6 +64,11 @@
     text-overflow: ellipsis;
 }
 
+.trigger::placeholder {
+    color: var(--editor-text-subtle);
+    opacity: 1;
+}
+
 .trigger:disabled {
     cursor: not-allowed;
 }

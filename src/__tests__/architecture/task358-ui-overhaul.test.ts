@@ -3,7 +3,7 @@
  *
  * Guards for the UI Overhaul directives (Task #358 / User directive #1532):
  *
- * 1. EditorLayout canvas-wrapper uses CSS-module `position: relative` (the containing block
+ * 1. AdminLayout canvas-wrapper uses CSS-module `position: relative` (the containing block
  *    for absolutely-positioned overlay panels).
  *    Guideline #356: floating panels use `position: absolute` — they need a
  *    `position: relative` ancestor scoped to the canvas area, not the viewport.
@@ -28,7 +28,7 @@ import { join, extname } from 'path'
 
 const SRC_ROOT = join(import.meta.dir, '../../')
 
-const EDITOR_LAYOUT_PATH = join(SRC_ROOT, 'app/EditorLayout.tsx')
+const EDITOR_LAYOUT_PATH = join(SRC_ROOT, 'admin/AdminLayout.tsx')
 
 // Candidate paths for the usePropertiesPanelAutoOpen hook (Task #358 Deliverable 4)
 const AUTO_OPEN_HOOK_CANDIDATES = [
@@ -75,7 +75,7 @@ function collectTs(dir: string): string[] {
 }
 
 // ---------------------------------------------------------------------------
-// Gate 1 — EditorLayout canvas-wrapper uses position:relative (Guideline #356)
+// Gate 1 — AdminLayout canvas-wrapper uses position:relative (Guideline #356)
 //
 // Floating overlay panels (DomPanel, PropertiesPanel) use:
 //   position: absolute; top: 16px; left/right: 16px; z-index: 50
@@ -91,12 +91,12 @@ function collectTs(dir: string): string[] {
 // Pre-registered until Task #358 lands (usePropertiesPanelAutoOpen.ts exists).
 // ---------------------------------------------------------------------------
 
-describe('Task #358 Gate 1 — EditorLayout canvas-wrapper must be position:relative (Guideline #356)', () => {
-  it('[pre-registered] The canvas-containing div in EditorLayout must use a CSS module class with position:relative', () => {
+describe('Task #358 Gate 1 — AdminLayout canvas-wrapper must be position:relative (Guideline #356)', () => {
+  it('[pre-registered] The canvas-containing div in AdminLayout must use a CSS module class with position:relative', () => {
     if (!TASK358_LANDED) {
       console.log(
         '[Task358 gate] Task #358 not yet landed — ' +
-        'EditorLayout position:relative containing-block gate pre-registered (Guideline #356)'
+        'AdminLayout position:relative containing-block gate pre-registered (Guideline #356)'
       )
       expect(true).toBe(true)
       return
@@ -104,13 +104,13 @@ describe('Task #358 Gate 1 — EditorLayout canvas-wrapper must be position:rela
 
     if (!existsSync(EDITOR_LAYOUT_PATH)) {
       throw new Error(
-        '[Task #358 / Guideline #356] EditorLayout.tsx not found.\n' +
+        '[Task #358 / Guideline #356] AdminLayout.tsx not found.\n' +
         'Expected at: ' + EDITOR_LAYOUT_PATH.replace(SRC_ROOT, 'src/')
       )
     }
 
     const src = readFileSync(EDITOR_LAYOUT_PATH, 'utf8')
-    const css = readFileSync(join(SRC_ROOT, 'app/EditorLayout.module.css'), 'utf8')
+    const css = readFileSync(join(SRC_ROOT, 'admin/AdminLayout.module.css'), 'utf8')
 
     const usesCanvasStageClass = /className=\{cn\(styles\.canvasStage/.test(src)
     const canvasStageBlock = css.match(/\.canvasStage\s*\{[^}]*\}/)?.[0] ?? ''
@@ -118,12 +118,12 @@ describe('Task #358 Gate 1 — EditorLayout canvas-wrapper must be position:rela
 
     if (!usesCanvasStageClass || !hasRelativePosition) {
       throw new Error(
-        '[Task #358 / Guideline #356] EditorLayout.tsx canvas-wrapper does not have position:relative.\n' +
+        '[Task #358 / Guideline #356] AdminLayout.tsx canvas-wrapper does not have position:relative.\n' +
         'Floating panels use `position: absolute` for overlay positioning.\n' +
         'Without a `position: relative` ancestor, they escape the canvas area and overlay browser chrome.\n' +
         '\n' +
-        'Required change to EditorLayout.tsx:\n' +
-        'Required pattern: EditorLayout applies styles.canvasStage and EditorLayout.module.css defines\n' +
+        'Required change to AdminLayout.tsx:\n' +
+        'Required pattern: AdminLayout applies styles.canvasStage and AdminLayout.module.css defines\n' +
         '`.canvasStage { position: relative; }`.\n' +
         'See Guideline #356 — Panel Visual Style, Task #358 Deliverable 6.'
       )

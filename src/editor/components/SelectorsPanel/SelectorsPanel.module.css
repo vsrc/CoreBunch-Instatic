@@ -75,6 +75,30 @@
     justify-self: end;
 }
 
+.rowAside {
+    display: inline-flex;
+    min-width: 0;
+    align-items: center;
+    justify-content: end;
+    gap: 5px;
+}
+
+.utilityBadge {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    border: 1px solid var(--panel-border);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--editor-text-muted);
+    font-size: 9px;
+    font-weight: 750;
+    letter-spacing: 0;
+    line-height: 1;
+    padding: 3px 5px;
+    text-transform: uppercase;
+}
+
 .emptyState {
     display: grid;
     gap: 10px;

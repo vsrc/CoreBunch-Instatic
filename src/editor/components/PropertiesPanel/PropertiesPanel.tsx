@@ -31,7 +31,7 @@ import {
 import { usePropertiesPanelAutoOpen } from './usePropertiesPanelAutoOpen'
 import { registry } from '../../../core/module-engine/registry'
 import { evaluateCondition, resolveProps } from '../../../core/page-tree/selectors'
-import { cssClassSelector } from '../../../core/page-tree/classNames'
+import { isGeneratedClassLocked } from '../../../core/page-tree/classUtils'
 import { PropertyControlRenderer } from '../PropertyControls/PropertyControlRenderer'
 import type { AnyModuleDefinition, PropertyControl } from '../../../core/module-engine/types'
 import type { CSSClass, PageNode, SiteDocument } from '../../../core/page-tree/types'
@@ -339,14 +339,17 @@ export function PropertiesPanel({ variant = 'floating' }: PropertiesPanelProps) 
             </Section>
 
             {activeClassId && activeClass && (
+              isGeneratedClassLocked(activeClass) ? (
+                <GeneratedUtilityLockedState cls={activeClass} />
+              ) : (
               <ClassComposer
-                key={activeClassId}
+                key={`${activeClassId}-${isNonDesktopBp ? activeBreakpointId : 'base'}`}
                 classId={activeClassId}
                 cls={activeClass}
                 moduleDefinition={definition}
                 moduleProps={resolvedPropsForBreakpoint ?? selectedNode.props}
-                preferredBreakpointId={isNonDesktopBp ? activeBreakpointId : undefined}
               />
+              )
             )}
           </div>
         )}
@@ -448,12 +451,13 @@ interface SelectorHeaderProps {
 function SelectorHeader({ cls, onRename }: SelectorHeaderProps) {
   const [isEditing, setIsEditing] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const selectorLabel = `.${cls.name}`
 
   useEffect(() => {
     if (inputRef.current) {
-      inputRef.current.value = cls.name
+      inputRef.current.value = selectorLabel
     }
-  }, [cls.id, cls.name, isEditing])
+  }, [cls.id, selectorLabel, isEditing])
 
   useEffect(() => {
     if (!isEditing) return
@@ -461,23 +465,24 @@ function SelectorHeader({ cls, onRename }: SelectorHeaderProps) {
   }, [isEditing])
 
   const commitRename = useCallback((input: HTMLInputElement) => {
-    const nextName = input.value.trim()
+    const rawName = input.value.trim()
+    const nextName = (rawName.startsWith('.') ? rawName.slice(1) : rawName).trim()
     if (nextName && nextName !== cls.name) {
       try {
         onRename(nextName)
       } catch {
-        input.value = cls.name
+        input.value = selectorLabel
       }
     } else {
-      input.value = cls.name
+      input.value = selectorLabel
     }
     setIsEditing(false)
-  }, [cls.name, onRename])
+  }, [cls.name, onRename, selectorLabel])
 
   const cancelRename = useCallback((input: HTMLInputElement) => {
-    input.value = cls.name
+    input.value = selectorLabel
     setIsEditing(false)
-  }, [cls.name])
+  }, [selectorLabel])
 
   if (isEditing) {
     return (
@@ -486,7 +491,7 @@ function SelectorHeader({ cls, onRename }: SelectorHeaderProps) {
         type="text"
         fieldSize="xs"
         emphasis="strong"
-        defaultValue={cls.name}
+        defaultValue={selectorLabel}
         onBlur={(e) => commitRename(e.target)}
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
@@ -498,7 +503,7 @@ function SelectorHeader({ cls, onRename }: SelectorHeaderProps) {
             cancelRename(e.target as HTMLInputElement)
           }
         }}
-        aria-label="Selector name"
+        aria-label="Class name"
         className={styles.headerNameInput}
       />
     )
@@ -506,13 +511,13 @@ function SelectorHeader({ cls, onRename }: SelectorHeaderProps) {
 
   return (
     <div className={styles.headerNodeTitle}>
-      <span className={styles.headerNodeLabel} title={cls.name}>{cls.name}</span>
+      <span className={styles.headerNodeLabel} title={selectorLabel} role="heading" aria-level={2}>{selectorLabel}</span>
       <Button
         variant="ghost"
         size="xs"
         iconOnly
         onClick={() => setIsEditing(true)}
-        aria-label={`Rename selector ${cls.name}`}
+        aria-label={`Rename selector ${selectorLabel}`}
         title="Rename selector"
       >
         <EditIcon size={12} aria-hidden="true" />
@@ -524,13 +529,31 @@ function SelectorHeader({ cls, onRename }: SelectorHeaderProps) {
 function SelectorInspector({ cls }: { cls: CSSClass }) {
   return (
     <div className={styles.scrollArea}>
-      <section className={styles.selectorInspector} aria-label={`Selector ${cls.name}`}>
-        <div className={styles.selectorIntro}>
-          <h2 className={styles.selectorTitle}>{cls.name}</h2>
-          <code className={styles.selectorCode}>{cssClassSelector(cls)}</code>
+      <ClassComposer key={cls.id} classId={cls.id} cls={cls} mode="global" />
+    </div>
+  )
+}
+
+function GeneratedUtilityLockedState({ cls }: { cls: CSSClass }) {
+  const utility = cls.generated?.utility
+  const tokenName = cls.generated?.tokenName
+
+  return (
+    <div className={styles.generatedUtilityState}>
+      <div className={styles.generatedUtilityHeader}>
+        <span className={styles.generatedUtilityKicker}>Generated utility</span>
+        <span className={styles.generatedUtilityName}>.{cls.name}</span>
+      </div>
+      <p className={styles.generatedUtilityCopy}>
+        This class is managed by the framework color settings. Assign it from the class picker,
+        and edit its token, variants, or generated utility options in the Colors panel.
+      </p>
+      {(utility || tokenName) && (
+        <div className={styles.generatedUtilityMeta}>
+          {utility && <span>{utility}</span>}
+          {tokenName && <span>{tokenName}</span>}
         </div>
-        <ClassComposer key={cls.id} classId={cls.id} cls={cls} mode="global" />
-      </section>
+      )}
     </div>
   )
 }

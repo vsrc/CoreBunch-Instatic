@@ -10,7 +10,7 @@
  * router. The editor MUST NOT import or depend on react-router-dom internally —
  * it would conflict with the host app's router and break nested routing.
  *
- * In the current standalone app, routing lives in `src/app/` (the shell).
+ * In the current standalone app, routing lives in `src/admin/` (the shell).
  * The editor itself (`src/editor/`) and core logic (`src/core/`) must be
  * completely router-agnostic.
  *
@@ -59,7 +59,7 @@ describe('Constraint #275 — react-router-dom must not be imported in editor/ o
     if (violations.length > 0) {
       const rel = violations.map((f) => f.replace(SRC_ROOT, 'src/'))
       throw new Error(
-        `[Constraint #275] react-router-dom found in editor/ — move routing to src/app/:\n` +
+        `[Constraint #275] react-router-dom found in editor/ — move routing to src/admin/:\n` +
         rel.map((f) => `  ${f}`).join('\n')
       )
     }

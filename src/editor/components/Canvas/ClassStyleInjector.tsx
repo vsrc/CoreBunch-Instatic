@@ -45,6 +45,7 @@ export function ClassStyleInjector() {
   // the classes object reference changes (Immer always creates a new ref on mutation)
   const classes = useEditorStore((s) => s.site?.classes ?? null)
   const breakpoints = useEditorStore((s) => s.site?.breakpoints ?? EMPTY_BREAKPOINTS)
+  const frameworkColors = useEditorStore((s) => s.site?.settings.framework?.colors ?? null)
 
   useEffect(() => {
     // Get or create the <style> element
@@ -57,12 +58,12 @@ export function ClassStyleInjector() {
     }
 
     if (!classes || Object.keys(classes).length === 0) {
-      styleEl.textContent = '/* no classes */'
+      styleEl.textContent = generateCanvasClassCSS({}, breakpoints, frameworkColors) || '/* no classes */'
       return
     }
 
-    styleEl.textContent = generateCanvasClassCSS(classes, breakpoints)
-  }, [classes, breakpoints])
+    styleEl.textContent = generateCanvasClassCSS(classes, breakpoints, frameworkColors)
+  }, [classes, breakpoints, frameworkColors])
 
   // Cleanup: remove the style element when the component unmounts
   useEffect(() => {

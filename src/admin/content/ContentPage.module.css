@@ -1,10 +1,3 @@
-.toolbarStatus {
-    color: var(--editor-text-muted);
-    font-size: 11px;
-    font-weight: 700;
-    white-space: nowrap;
-}
-
 .contentCanvas {
     user-select: text;
     touch-action: pan-y;
@@ -37,7 +30,10 @@
 }
 
 .titleInput {
+    display: block;
     height: auto;
+    min-height: 1.05em;
+    overflow: hidden;
     padding: 0;
     border: 0;
     border-radius: 0;
@@ -46,6 +42,10 @@
     font-size: 56px;
     font-weight: 780;
     line-height: 0.98;
+    resize: none;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .titleInput:focus {
@@ -125,6 +125,38 @@
 
 .error {
     color: var(--editor-danger);
+}
+
+.collectionFields {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.collectionFields legend {
+    margin: 0 0 2px;
+    padding: 0;
+    color: var(--editor-text-muted);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.collectionFields label {
+    display: grid;
+    grid-template-columns: 14px minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+    color: var(--editor-text);
+    font-size: 12px;
+    line-height: 1.2;
+}
+
+.collectionFields input {
+    width: 14px;
+    height: 14px;
+    accent-color: var(--editor-accent);
 }
 
 .entryTitle {

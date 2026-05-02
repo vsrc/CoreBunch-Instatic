@@ -6,7 +6,7 @@
  *
  * Changes vs. ClassesTab:
  *   - Pill cascade order badges (¹²³) — PP-7
- *   - Pill reorder buttons (↑/↓) visible on hover/focus — PP-8
+ *   - Pill right-click context menu owns reorder/rename/remove actions — PP-8
  *   - Pill × has title="Remove from this element" — PP-9
  *   - Class assignment UI lives directly under the selected element header
  *   - Uses reorderNodeClass store action (new in classSlice — Task #456)
@@ -19,7 +19,15 @@
  *   - Constraint #451: X/Twitter logo icon is prohibited (use CloseIcon for × buttons)
  */
 
-import { useState, useRef, useEffect, useCallback } from 'react'
+import {
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+  type FormEvent,
+  type KeyboardEvent,
+  type MouseEvent,
+} from 'react'
 import { createPortal } from 'react-dom'
 import { useEditorStore } from '../../../core/editor-store/store'
 import {
@@ -36,8 +44,15 @@ import { Input } from '@ui/components/Input'
 import { ChevronUpIcon } from '@ui/icons/icons/chevron-up'
 import { ChevronDownIcon } from '@ui/icons/icons/chevron-down'
 import { CloseIcon } from '@ui/icons/icons/close'
+import { EditIcon } from '@ui/icons/icons/edit'
 import { cn } from '@ui/cn'
-import { isUserVisibleClass } from '../../../core/page-tree/classUtils'
+import {
+  generatedClassKindLabel,
+  isGeneratedClassLocked,
+  isUserVisibleClass,
+} from '../../../core/page-tree/classUtils'
+import type { CSSClass } from '../../../core/page-tree/types'
+import dialogStyles from '../SiteCreateDialog/SiteCreateDialog.module.css'
 import styles from './ClassPicker.module.css'
 
 // ---------------------------------------------------------------------------
@@ -52,11 +67,25 @@ interface SuggestionsPosition {
   width: number
 }
 
+interface ClassContextMenuState {
+  x: number
+  y: number
+  classId: string
+}
+
 function toSuperscript(n: number): string {
   return String(n)
     .split('')
     .map((d) => SUPERSCRIPTS[parseInt(d)] ?? d)
     .join('')
+}
+
+function keyboardMenuPosition(element: HTMLElement) {
+  const rect = element.getBoundingClientRect()
+  return {
+    x: rect.left + Math.min(rect.width - 8, 24),
+    y: rect.top + Math.min(rect.height - 8, 24),
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -80,6 +109,7 @@ export function ClassPicker({ nodeId }: ClassPickerProps) {
   const addNodeClass = useEditorStore((s) => s.addNodeClass)
   const removeNodeClass = useEditorStore((s) => s.removeNodeClass)
   const createClass = useEditorStore((s) => s.createClass)
+  const renameClass = useEditorStore((s) => s.renameClass)
   const reorderNodeClass = useEditorStore((s) => s.reorderNodeClass)
   const setPreviewNodeClass = useEditorStore((s) => s.setPreviewNodeClass)
   const clearPreviewNodeClass = useEditorStore((s) => s.clearPreviewNodeClass)
@@ -87,6 +117,8 @@ export function ClassPicker({ nodeId }: ClassPickerProps) {
   const [query, setQuery] = useState('')
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [suggestionsPosition, setSuggestionsPosition] = useState<SuggestionsPosition | null>(null)
+  const [contextMenu, setContextMenu] = useState<ClassContextMenuState | null>(null)
+  const [renameTarget, setRenameTarget] = useState<CSSClass | null>(null)
   const [classHoverPreviewEnabled, setClassHoverPreviewEnabled] = useState(
     readClassHoverPreviewPreference,
   )
@@ -96,6 +128,8 @@ export function ClassPicker({ nodeId }: ClassPickerProps) {
   const assignedIds = node?.classIds ?? []
   const visibleAssignedIds = assignedIds.filter((id) => isUserVisibleClass(site?.classes[id]))
   const allClasses = Object.values(site?.classes ?? {}).filter(isUserVisibleClass)
+  const contextClass = contextMenu ? site?.classes[contextMenu.classId] ?? null : null
+  const contextClassIndex = contextMenu ? visibleAssignedIds.indexOf(contextMenu.classId) : -1
 
   const suggestions = allClasses.filter(
     (c) =>
@@ -195,9 +229,49 @@ export function ClassPicker({ nodeId }: ClassPickerProps) {
     setSuggestionsPosition(null)
   }, [clearPreviewNodeClass, nodeId])
 
+  const closeContextMenu = useCallback(() => {
+    setContextMenu(null)
+  }, [])
+
+  const openClassContextMenu = useCallback(
+    (classId: string, event: MouseEvent<HTMLElement>) => {
+      event.preventDefault()
+      event.stopPropagation()
+      setContextMenu({ x: event.clientX, y: event.clientY, classId })
+    },
+    [],
+  )
+
+  const openKeyboardClassContextMenu = useCallback(
+    (classId: string, event: KeyboardEvent<HTMLElement>) => {
+      if (event.key !== 'ContextMenu' && !(event.key === 'F10' && event.shiftKey)) return
+      event.preventDefault()
+      event.stopPropagation()
+      setContextMenu({ ...keyboardMenuPosition(event.currentTarget), classId })
+    },
+    [],
+  )
+
+  const handleRename = useCallback(
+    (name: string) => {
+      if (!renameTarget) return
+      renameClass(renameTarget.id, name)
+      setRenameTarget(null)
+    },
+    [renameClass, renameTarget],
+  )
+
+  const removeAssignedClass = useCallback(
+    (classId: string) => {
+      if (activeClassId === classId) setActiveClass(null)
+      removeNodeClass(nodeId, classId)
+    },
+    [activeClassId, nodeId, removeNodeClass, setActiveClass],
+  )
+
   return (
     <div className={styles.container}>
-      {/* Assigned class pills with cascade badges and reorder buttons */}
+      {/* Assigned class pills with cascade badges */}
       {visibleAssignedIds.length > 0 && (
         <div className={styles.pillsContainer}>
           {visibleAssignedIds.map((id, idx) => {
@@ -215,11 +289,14 @@ export function ClassPicker({ nodeId }: ClassPickerProps) {
                 aria-pressed={isActive}
                 aria-label={`${isActive ? 'Deselect' : 'Edit'} class ${cls.name}`}
                 tabIndex={0}
+                onContextMenu={(e) => openClassContextMenu(id, e)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault()
                     setActiveClass(isActive ? null : id)
+                    return
                   }
+                  openKeyboardClassContextMenu(id, e)
                 }}
               >
                 {/* Cascade order badge (1-based position = cascade priority) */}
@@ -228,35 +305,6 @@ export function ClassPicker({ nodeId }: ClassPickerProps) {
                 </span>
                 <span className={styles.pillName}>{cls.name}</span>
 
-                {/* Reorder buttons — visible on pill hover/focus-within (CSS).
-                    Buttons are natively focusable — tabIndex NOT suppressed (WCAG 2.1.1). */}
-                <span className={styles.reorderGroup}>
-                  <Button
-                    variant="ghost"
-                    size="micro"
-                    iconOnly
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      reorderNodeClass(nodeId, id, 'up')
-                    }}
-                    aria-label={`Move class ${cls.name} up in cascade`}
-                  >
-                    <ChevronUpIcon size={8} />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="micro"
-                    iconOnly
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      reorderNodeClass(nodeId, id, 'down')
-                    }}
-                    aria-label={`Move class ${cls.name} down in cascade`}
-                  >
-                    <ChevronDownIcon size={8} />
-                  </Button>
-                </span>
-
                 {/* Remove from this element (does NOT delete the class globally) */}
                 <Button
                   variant="ghost"
@@ -264,8 +312,7 @@ export function ClassPicker({ nodeId }: ClassPickerProps) {
                   iconOnly
                   onClick={(e) => {
                     e.stopPropagation()
-                    if (isActive) setActiveClass(null)
-                    removeNodeClass(nodeId, id)
+                    removeAssignedClass(id)
                   }}
                   aria-label={`Remove class ${cls.name}`}
                   title="Remove from this element"
@@ -278,6 +325,46 @@ export function ClassPicker({ nodeId }: ClassPickerProps) {
             )
           })}
         </div>
+      )}
+
+      {contextMenu && contextClass && createPortal(
+        <ClassPillContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          canMoveUp={contextClassIndex > 0}
+          canMoveDown={contextClassIndex >= 0 && contextClassIndex < visibleAssignedIds.length - 1}
+          locked={isGeneratedClassLocked(contextClass)}
+          onClose={closeContextMenu}
+          onEdit={() => {
+            setActiveClass(contextClass.id)
+            closeContextMenu()
+          }}
+          onRename={() => {
+            if (!isGeneratedClassLocked(contextClass)) setRenameTarget(contextClass)
+            closeContextMenu()
+          }}
+          onMoveUp={() => {
+            reorderNodeClass(nodeId, contextClass.id, 'up')
+            closeContextMenu()
+          }}
+          onMoveDown={() => {
+            reorderNodeClass(nodeId, contextClass.id, 'down')
+            closeContextMenu()
+          }}
+          onRemove={() => {
+            removeAssignedClass(contextClass.id)
+            closeContextMenu()
+          }}
+        />,
+        document.body,
+      )}
+
+      {renameTarget && (
+        <ClassRenameDialog
+          initialValue={renameTarget.name}
+          onCancel={() => setRenameTarget(null)}
+          onRename={handleRename}
+        />
       )}
 
       {/* Add class input */}
@@ -323,7 +410,10 @@ export function ClassPicker({ nodeId }: ClassPickerProps) {
                 onMouseLeave={() => clearPreviewClass(cls.id)}
                 onBlur={() => clearPreviewClass(cls.id)}
               >
-                {cls.name}
+                <span className={styles.suggestionLabel}>{cls.name}</span>
+                {generatedClassKindLabel(cls) && (
+                  <span className={styles.utilityBadge}>{generatedClassKindLabel(cls)}</span>
+                )}
               </ContextMenuItem>
             ))}
             {canCreateNew && (
@@ -346,5 +436,159 @@ export function ClassPicker({ nodeId }: ClassPickerProps) {
         )}
       </div>
     </div>
+  )
+}
+
+function ClassPillContextMenu({
+  x,
+  y,
+  canMoveUp,
+  canMoveDown,
+  onClose,
+  onEdit,
+  onRename,
+  onMoveUp,
+  onMoveDown,
+  onRemove,
+  locked,
+}: {
+  x: number
+  y: number
+  canMoveUp: boolean
+  canMoveDown: boolean
+  locked: boolean
+  onClose: () => void
+  onEdit: () => void
+  onRename: () => void
+  onMoveUp: () => void
+  onMoveDown: () => void
+  onRemove: () => void
+}) {
+  const firstItemRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    firstItemRef.current?.focus()
+  }, [])
+
+  return (
+    <ContextMenu x={x} y={y} ariaLabel="Class actions" onClose={onClose}>
+      <ContextMenuItem ref={firstItemRef} onClick={onEdit}>
+        <span aria-hidden="true"><EditIcon size={13} /></span>
+        {locked ? 'View utility' : 'Edit styles'}
+      </ContextMenuItem>
+      <ContextMenuItem disabled={locked} onClick={onRename}>
+        <span aria-hidden="true"><EditIcon size={13} /></span>
+        Rename
+      </ContextMenuItem>
+      <ContextMenuSeparator />
+      <ContextMenuItem disabled={!canMoveUp} onClick={onMoveUp}>
+        <span aria-hidden="true"><ChevronUpIcon size={13} /></span>
+        Move up
+      </ContextMenuItem>
+      <ContextMenuItem disabled={!canMoveDown} onClick={onMoveDown}>
+        <span aria-hidden="true"><ChevronDownIcon size={13} /></span>
+        Move down
+      </ContextMenuItem>
+      <ContextMenuSeparator />
+      <ContextMenuItem danger onClick={onRemove}>
+        <span aria-hidden="true"><CloseIcon size={13} /></span>
+        Remove from this element
+      </ContextMenuItem>
+    </ContextMenu>
+  )
+}
+
+function ClassRenameDialog({
+  initialValue,
+  onCancel,
+  onRename,
+}: {
+  initialValue: string
+  onCancel: () => void
+  onRename: (name: string) => void
+}) {
+  const [name, setName] = useState(initialValue)
+  const [error, setError] = useState<string | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const trimmedName = name.trim()
+
+  useEffect(() => {
+    requestAnimationFrame(() => inputRef.current?.select())
+  }, [])
+
+  useEffect(() => {
+    function onKeyDown(event: globalThis.KeyboardEvent) {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        onCancel()
+      }
+    }
+
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [onCancel])
+
+  function handleSubmit(event: FormEvent) {
+    event.preventDefault()
+    if (!trimmedName) return
+
+    try {
+      onRename(trimmedName)
+    } catch (err) {
+      setError(err instanceof Error ? err.message.replace(/^\[[^\]]+\]\s*/, '') : 'Unable to rename class')
+    }
+  }
+
+  return createPortal(
+    <div
+      className={dialogStyles.backdrop}
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onCancel()
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="class-rename-dialog-title"
+        className={dialogStyles.dialog}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className={dialogStyles.header}>
+          <h2 id="class-rename-dialog-title" className={dialogStyles.title}>
+            Rename selector
+          </h2>
+          <Button variant="ghost" size="xs" iconOnly aria-label="Close dialog" onClick={onCancel}>
+            <CloseIcon size={12} color="currentColor" aria-hidden="true" />
+          </Button>
+        </div>
+        <form className={dialogStyles.form} onSubmit={handleSubmit}>
+          <label className={dialogStyles.field}>
+            <span className={dialogStyles.label}>Name</span>
+            <Input
+              ref={inputRef}
+              fieldSize="sm"
+              value={name}
+              onChange={(event) => {
+                setName(event.target.value)
+                setError(null)
+              }}
+              aria-label="Class name"
+              autoComplete="off"
+              spellCheck={false}
+            />
+          </label>
+          {error && <p role="alert" className={dialogStyles.errorText}>{error}</p>}
+          <div className={dialogStyles.actions}>
+            <Button variant="secondary" size="sm" type="button" onClick={onCancel}>
+              Cancel
+            </Button>
+            <Button variant="primary" size="sm" type="submit" disabled={!trimmedName}>
+              Save
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>,
+    document.body,
   )
 }

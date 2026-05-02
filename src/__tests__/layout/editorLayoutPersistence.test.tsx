@@ -9,7 +9,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import React from 'react'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import EditorLayout from '../../app/EditorLayout'
+import AdminLayout from '../../admin/AdminLayout'
 import { useEditorStore } from '../../core/editor-store/store'
 import { makeNode, makePage, makeSite } from '../fixtures'
 import '../../modules/base/index'
@@ -32,6 +32,8 @@ function resetStore() {
     leftSidebarWidth: 320,
     focusedPanel: 'canvas',
     siteExplorerPanelOpen: false,
+    selectorsPanelOpen: false,
+    colorsPanelOpen: false,
     mediaExplorerPanelOpen: false,
     codeEditorPanelOpen: false,
     activeEditorFileId: null,
@@ -52,7 +54,7 @@ function renderEditorLayout({ preloadSite = true }: { preloadSite?: boolean } = 
   if (preloadSite && !useEditorStore.getState().site) {
     loadSiteWithSelectedHeading()
   }
-  render(<EditorLayout />)
+  render(<AdminLayout />)
 }
 
 function loadSiteWithSelectedHeading() {
@@ -80,7 +82,7 @@ function loadSiteWithSelectedHeading() {
 
 beforeEach(resetStore)
 
-describe('EditorLayout — CMS site hydration gate', () => {
+describe('AdminLayout — CMS site hydration gate', () => {
   it('does not render editor chrome with an empty store while the CMS site hydrates', async () => {
     const loaded = makeSite({ name: 'Hydrated Site' })
     const originalFetch = globalThis.fetch
@@ -103,7 +105,7 @@ describe('EditorLayout — CMS site hydration gate', () => {
     }
   })
 
-  it('does not overwrite an existing in-memory site when EditorLayout remounts during HMR', async () => {
+  it('does not overwrite an existing in-memory site when AdminLayout remounts during HMR', async () => {
     const existing = makeSite({ name: 'Existing HMR Site' })
     useEditorStore.setState({
       site: existing,
@@ -131,7 +133,7 @@ describe('EditorLayout — CMS site hydration gate', () => {
   })
 })
 
-describe('EditorLayout — persisted panel layout', () => {
+describe('AdminLayout — persisted panel layout', () => {
   it('restores panel visibility from localStorage on mount', async () => {
     localStorage.setItem(
       LAYOUT_STORAGE_KEY,
@@ -195,7 +197,7 @@ describe('EditorLayout — persisted panel layout', () => {
   })
 })
 
-describe('EditorLayout — permanent panel rail', () => {
+describe('AdminLayout — permanent panel rail', () => {
   it('does not render the deferred timeline shell or rail button', () => {
     renderEditorLayout()
 
@@ -231,21 +233,21 @@ describe('EditorLayout — permanent panel rail', () => {
       'panel-rail-agent',
       'panel-rail-site',
       'panel-rail-selectors',
-      'panel-rail-media',
+      'panel-rail-colors',
     ])
     expect(primaryButtons.map((button) => button.getAttribute('data-icon'))).toEqual([
       'bulletlist-2-sharp',
       'ai-settings-solid',
       'files-stack-2',
       'paint-bucket',
-      'images',
+      'colors-swatch',
     ])
     expect(primaryButtons.map((button) => button.getAttribute('data-accent'))).toEqual([
       'mint',
       'lilac',
       'sky',
       'peach',
-      'sky',
+      'peach',
     ])
   })
 
@@ -278,11 +280,22 @@ describe('EditorLayout — permanent panel rail', () => {
     expect(sidebar.getAttribute('data-active-panel')).toBe('none')
     expect(useEditorStore.getState().siteExplorerPanelOpen).toBe(false)
 
+    fireEvent.click(within(rail).getByRole('button', { name: /open colors panel/i }))
+
+    expect(sidebar.getAttribute('data-expanded')).toBe('true')
+    expect(sidebar.getAttribute('data-active-panel')).toBe('colors')
+    expect(useEditorStore.getState().colorsPanelOpen).toBe(true)
+    expect(useEditorStore.getState().siteExplorerPanelOpen).toBe(false)
+    expect(useEditorStore.getState().mediaExplorerPanelOpen).toBe(false)
+    expect(useEditorStore.getState().domTreePanel.collapsed).toBe(true)
+    expect(within(sidebar).getByTestId('colors-panel')).toBeDefined()
+
     fireEvent.click(within(rail).getByRole('button', { name: /open media panel/i }))
 
     expect(sidebar.getAttribute('data-expanded')).toBe('true')
     expect(sidebar.getAttribute('data-active-panel')).toBe('media')
     expect(useEditorStore.getState().mediaExplorerPanelOpen).toBe(true)
+    expect(useEditorStore.getState().colorsPanelOpen).toBe(false)
     expect(useEditorStore.getState().siteExplorerPanelOpen).toBe(false)
     expect(useEditorStore.getState().dependenciesPanelOpen).toBe(false)
     expect(useEditorStore.getState().domTreePanel.collapsed).toBe(true)

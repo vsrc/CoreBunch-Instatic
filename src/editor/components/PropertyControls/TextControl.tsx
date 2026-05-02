@@ -24,6 +24,7 @@ export function TextControl({ propKey, value, onChange, label, placeholder, isOv
         value={value ?? ''}
         placeholder={placeholder}
         disabled={disabled}
+        fieldSize="sm"
         onChange={(e) => onChange(propKey, e.target.value)}
       />
     </div>

@@ -1,27 +1,37 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useEditorStore } from '@core/editor-store/store'
+import { selectActivePage, useEditorStore } from '@core/editor-store/store'
+import { pagePublicPath } from '@core/page-tree/slugs'
 import { getCmsPublishStatus, publishCmsDraft } from '@core/persistence'
 import { LoaderIcon } from '@ui/icons/icons/loader'
 import { CheckIcon } from '@ui/icons/icons/check'
 import { CircleAlertIcon } from '@ui/icons/icons/circle-alert'
 import { CloudUploadIcon } from '@ui/icons/icons/cloud-upload'
-import { Button } from '@ui/components/Button'
-import styles from './Toolbar.module.css'
+import { ExternalLinkIcon } from '@ui/icons/icons/external-link'
+import { EyeIcon } from '@ui/icons/icons/eye'
+import { SaveIcon } from '@ui/icons/icons/save'
+import type { PersistenceSaveStatus } from '@editor/hooks/usePersistence'
+import { PublishActionGroup, type PublishActionMenuItem } from './PublishActionGroup'
 
 type PublishState = 'idle' | 'publishing' | 'published' | 'error'
 
 interface PublishButtonProps {
   enabled?: boolean
   onSave?: () => void | Promise<void>
+  saveStatus?: PersistenceSaveStatus
 }
 
-export function PublishButton({ enabled = true, onSave }: PublishButtonProps) {
+export function PublishButton({ enabled = true, onSave, saveStatus }: PublishButtonProps) {
   const site = useEditorStore((s) => s.site)
   const siteId = useEditorStore((s) => s.site?.id ?? null)
+  const activePage = useEditorStore(selectActivePage)
+  const openPreview = useEditorStore((s) => s.openPreview)
   const hasUnsavedChanges = useEditorStore((s) => s.hasUnsavedChanges)
   const [state, setState] = useState<PublishState>('idle')
   const [message, setMessage] = useState<string | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
   const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const isStatusSaving = saveStatus?.state === 'saving'
+  const saveError = saveStatus?.state === 'error' ? saveStatus.message ?? 'Save failed' : null
 
   useEffect(() => {
     return () => {
@@ -106,49 +116,99 @@ export function PublishButton({ enabled = true, onSave }: PublishButtonProps) {
     }
   }, [clearMessageLater, enabled, onSave, site, resetErrorLater, state])
 
+  const handleManualSave = useCallback(async () => {
+    if (!onSave || isSaving || isStatusSaving) return
+    setIsSaving(true)
+    try {
+      await onSave()
+    } catch (err) {
+      console.error('[toolbar] Manual save failed:', err)
+    } finally {
+      setIsSaving(false)
+    }
+  }, [isSaving, isStatusSaving, onSave])
+
   const isPublishing = state === 'publishing'
   const disabled = !site || !enabled || isPublishing
   const label =
     isPublishing ? 'Publishing' :
     state === 'published' ? 'Published' :
-    state === 'error' ? 'Publish failed' :
+    state === 'error' ? 'Retry publish' :
     'Publish'
 
+  const status =
+    saveError ? {
+      label: 'Draft save failed',
+      tone: 'danger' as const,
+      ariaLabel: saveError,
+    } :
+    isStatusSaving || isSaving ? {
+      label: 'Saving draft',
+      tone: 'neutral' as const,
+    } :
+    hasUnsavedChanges ? {
+      label: 'Unsaved draft',
+      tone: 'warning' as const,
+    } :
+    {
+      label: 'Draft saved',
+      tone: 'success' as const,
+    }
+
+  const PublishIcon =
+    isPublishing ? LoaderIcon :
+    state === 'published' ? CheckIcon :
+    state === 'error' ? CircleAlertIcon :
+    CloudUploadIcon
+
+  const menuItems: PublishActionMenuItem[] = [
+    {
+      id: 'save-draft',
+      label: 'Save draft',
+      icon: SaveIcon,
+      disabled: !onSave || isSaving || isStatusSaving,
+      onSelect: handleManualSave,
+      testId: 'toolbar-save-draft-action',
+    },
+    {
+      id: 'preview',
+      label: 'Preview page',
+      icon: EyeIcon,
+      disabled: !site,
+      onSelect: () => openPreview(),
+      testId: 'toolbar-preview-action',
+    },
+    {
+      id: 'open-live',
+      label: 'Open live page',
+      icon: ExternalLinkIcon,
+      disabled: !activePage,
+      onSelect: () => {
+        if (!activePage) return
+        window.open(pagePublicPath(activePage.slug), '_blank', 'noopener,noreferrer')
+      },
+      testId: 'toolbar-open-page-new-tab-action',
+    },
+  ]
+
   return (
-    <div className={styles.publishWrapper}>
-      <Button
-        variant={state === 'error' ? 'destructive' : 'primary'}
-        size="sm"
-        aria-label="Publish site"
-        aria-busy={isPublishing}
-        title="Publish site"
-        onClick={handlePublish}
-        disabled={disabled}
-        data-testid="toolbar-publish-btn"
-      >
-        {isPublishing ? (
-          <LoaderIcon size={13} className={styles.spinIcon} aria-hidden="true" />
-        ) : state === 'published' ? (
-          <CheckIcon size={13} aria-hidden="true" />
-        ) : state === 'error' ? (
-          <CircleAlertIcon size={13} aria-hidden="true" />
-        ) : (
-          <CloudUploadIcon size={13} aria-hidden="true" />
-        )}
-        <span>{label}</span>
-      </Button>
-
-      {state === 'error' && message && (
-        <div role="alert" className={styles.publishToast}>
-          {message}
-        </div>
-      )}
-
-      {state === 'published' && message && (
-        <div role="status" className={styles.publishToast}>
-          {message}
-        </div>
-      )}
-    </div>
+    <PublishActionGroup
+      statusLabel={state === 'published' ? null : status.label}
+      statusTone={status.tone}
+      statusAriaLabel={status.ariaLabel}
+      publishLabel={label}
+      publishAriaLabel={state === 'published' ? 'Published' : 'Publish site'}
+      publishTitle={state === 'published' ? 'Published' : 'Publish site'}
+      publishState={state === 'publishing' ? 'busy' : state === 'published' ? 'success' : state}
+      publishBusy={isPublishing}
+      publishDisabled={disabled || state === 'published'}
+      publishIcon={PublishIcon}
+      onPublish={handlePublish}
+      menuItems={menuItems}
+      toast={message ? {
+        tone: state === 'error' ? 'alert' : 'status',
+        message,
+      } : null}
+    />
   )
 }

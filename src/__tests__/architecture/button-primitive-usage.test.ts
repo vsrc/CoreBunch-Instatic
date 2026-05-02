@@ -1,7 +1,7 @@
 /**
  * BTN-3 — Button Primitive Usage Gate (Task #462)
  *
- * Every interactive button in src/app/ and src/editor/ MUST use the shared Button primitive
+ * Every interactive button in src/admin/ and src/editor/ MUST use the shared Button primitive
  * (src/ui/components/Button/Button.tsx).  Raw <button JSX elements are
  * banned except in the §8 allowlist below.
  *
@@ -28,10 +28,10 @@ import { readdirSync, readFileSync, statSync, existsSync } from 'fs'
 import { join, extname, relative } from 'path'
 
 const SRC_ROOT = join(import.meta.dir, '../..')
-const APP_ROOT = join(SRC_ROOT, 'app')
+const ADMIN_ROOT = join(SRC_ROOT, 'admin')
 const EDITOR_ROOT = join(SRC_ROOT, 'editor')
 const SCAN_ROOTS = [
-  { label: 'app', root: APP_ROOT },
+  { label: 'admin', root: ADMIN_ROOT },
   { label: 'editor', root: EDITOR_ROOT },
 ]
 
@@ -83,6 +83,15 @@ const ALLOWLIST = new Set([
   // not fit Button's token-driven size system.
   'editor/components/PropertyControls/ToggleControl.tsx',
   'editor/components/Settings/sections/PreferencesSection.tsx',
+
+  // ── §8.5 Content workspace structured rows and editor canvas controls ───
+  // Content explorer rows and media tiles reuse full-surface row/tile patterns
+  // that Button's inline-flex sizing would distort. RichMarkdownEditor is a
+  // custom contenteditable editing surface and is intentionally deferred from
+  // this admin shell refactor.
+  'admin/content/components/ContentExplorerPanel/ContentExplorerPanel.tsx',
+  'admin/content/components/MediaPickerDialog/MediaPickerDialog.tsx',
+  'admin/content/RichMarkdownEditor.tsx',
 ])
 
 // ---------------------------------------------------------------------------
@@ -90,7 +99,7 @@ const ALLOWLIST = new Set([
 // ---------------------------------------------------------------------------
 
 describe('BTN-3 — Button primitive usage gate', () => {
-  it('all <button elements in src/app and src/editor are either the Button primitive or an §8 exception', () => {
+  it('all <button elements in src/admin and src/editor are either the Button primitive or an §8 exception', () => {
     const files = SCAN_ROOTS.flatMap(({ root }) => collectTSXFiles(root))
     const violations: string[] = []
 

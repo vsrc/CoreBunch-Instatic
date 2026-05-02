@@ -2,12 +2,15 @@ import { describe, expect, it } from 'bun:test'
 import type { DbClient, DbResult } from '../../../server/cms/db'
 import { CMS_MIGRATIONS } from '../../../server/cms/migrations'
 import {
+  createContentCollection,
   getContentEntryRedirectByRoute,
   createContentEntry,
   getPublishedContentEntryByRoute,
   listContentCollections,
   publishContentEntry,
   saveContentEntryDraft,
+  updateContentCollection,
+  updateContentEntryCollection,
 } from '../../../server/cms/contentRepository'
 import { renderContentDocumentHtml } from '../../../server/cms/contentRenderer'
 import { handleServerRequest } from '../../../server/router'
@@ -36,6 +39,15 @@ class ContentFakeDb implements DbClient {
 
 function rowDate(value: string) {
   return new Date(value)
+}
+
+const productCollectionFields = {
+  builtIn: {
+    body: true,
+    featuredMedia: false,
+    seo: false,
+  },
+  custom: [],
 }
 
 describe('content CMS migrations', () => {
@@ -79,9 +91,192 @@ describe('content CMS repository', () => {
       routeBase: '/posts',
       singularLabel: 'Post',
       pluralLabel: 'Posts',
+      fields: {
+        builtIn: {
+          body: true,
+          featuredMedia: true,
+          seo: true,
+        },
+        custom: [],
+      },
       createdAt: '2026-05-01T10:00:00.000Z',
       updatedAt: '2026-05-01T10:00:00.000Z',
     }])
+  })
+
+  it('creates collections with persisted field settings', async () => {
+    const db = new ContentFakeDb([
+      (sql, params) => {
+        if (!sql.startsWith('insert into content_collections')) return undefined
+        expect(params).toEqual([
+          'products',
+          'Products',
+          'products',
+          '/products',
+          'Product',
+          'Products',
+          productCollectionFields,
+        ])
+        return {
+          rows: [{
+            id: 'products',
+            name: 'Products',
+            slug: 'products',
+            route_base: '/products',
+            singular_label: 'Product',
+            plural_label: 'Products',
+            fields_json: productCollectionFields,
+            created_at: rowDate('2026-05-01T10:00:00Z'),
+            updated_at: rowDate('2026-05-01T10:00:00Z'),
+          }],
+          rowCount: 1,
+        }
+      },
+    ])
+
+    await expect(createContentCollection(db, {
+      id: 'products',
+      name: 'Products',
+      slug: 'products',
+      routeBase: '/products',
+      singularLabel: 'Product',
+      pluralLabel: 'Products',
+      fields: productCollectionFields,
+    })).resolves.toMatchObject({
+      id: 'products',
+      fields: productCollectionFields,
+    })
+  })
+
+  it('updates collection identity, route, labels, and field settings', async () => {
+    const nextFields = {
+      builtIn: {
+        body: false,
+        featuredMedia: true,
+        seo: false,
+      },
+      custom: [],
+    }
+    const db = new ContentFakeDb([
+      (sql, params) => {
+        if (!sql.startsWith('update content_collections')) return undefined
+        expect(params).toEqual([
+          'products',
+          'Catalog',
+          'catalog',
+          '/catalog',
+          'Product',
+          'Products',
+          nextFields,
+        ])
+        return {
+          rows: [{
+            id: 'products',
+            name: 'Catalog',
+            slug: 'catalog',
+            route_base: '/catalog',
+            singular_label: 'Product',
+            plural_label: 'Products',
+            fields_json: nextFields,
+            created_at: rowDate('2026-05-01T10:00:00Z'),
+            updated_at: rowDate('2026-05-01T10:05:00Z'),
+          }],
+          rowCount: 1,
+        }
+      },
+    ])
+
+    await expect(updateContentCollection(db, 'products', {
+      name: 'Catalog',
+      slug: 'catalog',
+      routeBase: '/catalog',
+      singularLabel: 'Product',
+      pluralLabel: 'Products',
+      fields: nextFields,
+    })).resolves.toMatchObject({
+      id: 'products',
+      name: 'Catalog',
+      slug: 'catalog',
+      routeBase: '/catalog',
+      fields: nextFields,
+    })
+  })
+
+  it('moves an entry to another collection when its slug is available there', async () => {
+    const db = new ContentFakeDb([
+      (sql, params) => {
+        if (sql.startsWith('select id, collection_id, title, slug')) {
+          expect(params).toEqual(['entry_1'])
+          return {
+            rows: [{
+              id: 'entry_1',
+              collection_id: 'posts',
+              title: 'Hello',
+              slug: 'hello',
+              status: 'draft',
+              body_markdown: '# Hello',
+              featured_media_id: null,
+              seo_title: '',
+              seo_description: '',
+              created_at: rowDate('2026-05-01T10:00:00Z'),
+              updated_at: rowDate('2026-05-01T10:01:00Z'),
+              published_at: null,
+              deleted_at: null,
+            }],
+            rowCount: 1,
+          }
+        }
+        if (sql.startsWith('select id from content_collections')) {
+          expect(params).toEqual(['products'])
+          return { rows: [{ id: 'products' }], rowCount: 1 }
+        }
+        if (sql.startsWith('select id from content_entries')) {
+          expect(params).toEqual(['products', 'hello', 'entry_1'])
+          return { rows: [], rowCount: 0 }
+        }
+        if (sql.startsWith('update content_entries set collection_id')) {
+          expect(params).toEqual(['entry_1', 'products'])
+          return {
+            rows: [{
+              id: 'entry_1',
+              collection_id: 'products',
+              title: 'Hello',
+              slug: 'hello',
+              status: 'draft',
+              body_markdown: '# Hello',
+              featured_media_id: null,
+              seo_title: '',
+              seo_description: '',
+              created_at: rowDate('2026-05-01T10:00:00Z'),
+              updated_at: rowDate('2026-05-01T10:02:00Z'),
+              published_at: null,
+              deleted_at: null,
+            }],
+            rowCount: 1,
+          }
+        }
+        return undefined
+      },
+    ])
+
+    await expect(updateContentEntryCollection(db, 'entry_1', 'products')).resolves.toEqual({
+      ok: true,
+      entry: {
+        id: 'entry_1',
+        collectionId: 'products',
+        title: 'Hello',
+        slug: 'hello',
+        status: 'draft',
+        bodyMarkdown: '# Hello',
+        featuredMediaId: null,
+        seoTitle: '',
+        seoDescription: '',
+        createdAt: '2026-05-01T10:00:00.000Z',
+        updatedAt: '2026-05-01T10:02:00.000Z',
+        publishedAt: null,
+        deletedAt: null,
+      },
+    })
   })
 
   it('creates drafts, saves body markdown, and publishes a snapshot', async () => {
@@ -429,7 +624,7 @@ describe('content CMS rendering', () => {
 })
 
 describe('content CMS public routes', () => {
-  it('returns 404 for content routes without a published page template', async () => {
+  it('renders published custom collection entries without a page template', async () => {
     const db = new ContentFakeDb([
       (sql) => {
         if (sql.startsWith('select page_versions.snapshot_json')) {
@@ -440,13 +635,13 @@ describe('content CMS public routes', () => {
             rows: [{
               id: 'version_1',
               entry_id: 'entry_1',
-              collection_id: 'posts',
-              collection_slug: 'posts',
-              collection_route_base: '/posts',
+              collection_id: 'products',
+              collection_slug: 'products',
+              collection_route_base: '/products',
               version_number: 1,
-              title: 'Published post',
-              slug: 'published-post',
-              body_markdown: '# Published post',
+              title: 'Some product',
+              slug: 'some-product',
+              body_markdown: 'A product body.',
               featured_media_id: null,
               featured_media_path: null,
               seo_title: '',
@@ -464,8 +659,12 @@ describe('content CMS public routes', () => {
       },
     ])
 
-    const res = await handleServerRequest(new Request('http://localhost/posts/published-post'), { db })
+    const res = await handleServerRequest(new Request('http://localhost/products/some-product'), { db })
+    const html = await res.text()
 
-    expect(res.status).toBe(404)
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toContain('text/html')
+    expect(html).toContain('<h1>Some product</h1>')
+    expect(html).toContain('<p>A product body.</p>')
   })
 })

@@ -1,7 +1,7 @@
 /**
  * Architecture Gate Tests - Achromatic color policy.
  *
- * Keeps editor and app shell styling on the token-driven neutral palette by
+ * Keeps editor and admin shell styling on the token-driven neutral palette by
  * blocking hardcoded tinted Tailwind color utility classes.
  */
 
@@ -10,7 +10,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'fs'
 import { join, extname } from 'path'
 
 const SRC_ROOT = join(import.meta.dir, '../../')
-const APP_DIR = join(SRC_ROOT, 'app')
+const APP_DIR = join(SRC_ROOT, 'admin')
 const EDITOR_DIR = join(SRC_ROOT, 'editor')
 const TINTED_CLASS_RE = /\b(zinc|slate|blue|indigo|violet)-\d{2,3}\b/
 
@@ -75,7 +75,7 @@ describe('Achromatic color policy', () => {
     assertNoTintedClasses('src/editor/', EDITOR_DIR)
   })
 
-  it('does not use tinted Tailwind color classes in src/app/**', () => {
-    assertNoTintedClasses('src/app/', APP_DIR)
+  it('does not use tinted Tailwind color classes in src/admin/**', () => {
+    assertNoTintedClasses('src/admin/', APP_DIR)
   })
 })

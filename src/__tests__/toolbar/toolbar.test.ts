@@ -161,19 +161,19 @@ describe('SaveIndicator — state display', () => {
     expect(src).toContain('role="alert"')
   })
 
-  it('EditorLayout passes persistence save status into the toolbar', () => {
+  it('AdminLayout passes persistence save status into the toolbar', () => {
     const { readFileSync } = require('fs')
     const src = readFileSync(
-      new URL('../../app/EditorLayout.tsx', import.meta.url),
+      new URL('../../admin/AdminLayout.tsx', import.meta.url),
       'utf-8',
     )
     expect(src).toContain('saveStatus={persistence.saveStatus}')
   })
 
-  it('EditorLayout marks a fresh cms site as unsaved until the first save', () => {
+  it('AdminLayout marks a fresh cms site as unsaved until the first save', () => {
     const { readFileSync } = require('fs')
     const src = readFileSync(
-      new URL('../../app/EditorLayout.tsx', import.meta.url),
+      new URL('../../admin/AdminLayout.tsx', import.meta.url),
       'utf-8',
     )
     expect(src).toContain('markNewSiteUnsaved: true')
@@ -309,26 +309,26 @@ describe('PublishButton — publish state machine', () => {
   it('source emits role="alert" for error messages (Guideline #224)', () => {
     const { readFileSync } = require('fs')
     const src = readFileSync(
-      new URL('../../editor/components/Toolbar/PublishButton.tsx', import.meta.url),
+      new URL('../../editor/components/Toolbar/PublishActionGroup.tsx', import.meta.url),
       'utf-8',
     )
     // Error must be surfaced via role="alert" — not silently swallowed
-    expect(src).toContain('role="alert"')
+    expect(src).toContain("role={toast.tone === 'alert' ? 'alert' : 'status'}")
   })
 
   it('source uses aria-busy during publish', () => {
     const { readFileSync } = require('fs')
     const src = readFileSync(
-      new URL('../../editor/components/Toolbar/PublishButton.tsx', import.meta.url),
+      new URL('../../editor/components/Toolbar/PublishActionGroup.tsx', import.meta.url),
       'utf-8',
     )
-    expect(src).toContain('aria-busy={isPublishing}')
+    expect(src).toContain('aria-busy={publishBusy}')
   })
 
   it('publish button has data-testid for Playwright targeting', () => {
     const { readFileSync } = require('fs')
     const src = readFileSync(
-      new URL('../../editor/components/Toolbar/PublishButton.tsx', import.meta.url),
+      new URL('../../editor/components/Toolbar/PublishActionGroup.tsx', import.meta.url),
       'utf-8',
     )
     expect(src).toContain('data-testid="toolbar-publish-btn"')
@@ -412,7 +412,10 @@ describe('Toolbar — structural requirements', () => {
     expect(src).toContain('PublishButton')
     expect(src).not.toContain('ExportButton')
     expect(src).toContain('SettingsButton')
-    expect(src).toContain('SaveIndicator')
+    expect(src).not.toContain('SaveIndicator')
+    expect(src).not.toContain('OpenPageInNewTabButton')
+    expect(src).not.toContain('PreviewButton')
+    expect(src).toContain('saveStatus={saveStatus}')
   })
 
   it('module picker trigger has data-testid for Playwright', () => {
@@ -467,11 +470,12 @@ describe('Toolbar — structural requirements', () => {
     )
     expect(zoomSrc).toContain('data-testid="toolbar-zoom-controls"')
 
-    // SaveIndicator testid
-    const saveSrc = readFileSync(
-      new URL('../../editor/components/Toolbar/SaveIndicator.tsx', import.meta.url), 'utf-8',
+    // Publishing split-button testids
+    const publishingSrc = readFileSync(
+      new URL('../../editor/components/Toolbar/PublishActionGroup.tsx', import.meta.url), 'utf-8',
     )
-    expect(saveSrc).toContain('data-testid="save-indicator"')
+    expect(publishingSrc).toContain('data-testid="toolbar-publish-actions-trigger"')
+    expect(publishingSrc).toContain('data-testid="toolbar-publish-actions-menu"')
   })
 
   it('ModulePickerDropdown uses role="menu" + role="menuitem" (not role="listbox")', () => {
@@ -521,10 +525,56 @@ describe('Toolbar — structural requirements', () => {
     expect(src).toContain('useEffect')
   })
 
-  it('EditorLayout imports and renders Toolbar', () => {
+  it('PublishButton uses one split publishing control with explicit draft actions', () => {
     const { readFileSync } = require('fs')
     const src = readFileSync(
-      new URL('../../app/EditorLayout.tsx', import.meta.url),
+      new URL('../../editor/components/Toolbar/PublishButton.tsx', import.meta.url),
+      'utf-8',
+    )
+    expect(src).toContain('PublishActionGroup')
+    expect(src).toContain('Draft saved')
+    expect(src).toContain('Unsaved draft')
+    expect(src).toContain("state === 'published' ? 'Published'")
+    expect(src).toContain('state === \'published\' ? CheckIcon')
+    expect(src).toContain("statusLabel={state === 'published' ? null : status.label}")
+    expect(src).toContain('publishDisabled={disabled || state === \'published\'}')
+    expect(src).toContain('Save draft')
+    expect(src).toContain('Preview page')
+    expect(src).toContain('Open live page')
+    expect(src).toContain("'Retry publish'")
+    expect(src).not.toContain("label: 'Live'")
+    expect(src).not.toContain("'Publish failed'")
+  })
+
+  it('PublishActionGroup exposes a menu button for secondary publishing actions and can omit the status label', () => {
+    const { readFileSync } = require('fs')
+    const src = readFileSync(
+      new URL('../../editor/components/Toolbar/PublishActionGroup.tsx', import.meta.url),
+      'utf-8',
+    )
+    expect(src).toContain('statusLabel?: string | null')
+    expect(src).toContain('{statusLabel && (')
+    expect(src).toContain('aria-haspopup="menu"')
+    expect(src).toContain('aria-expanded={menuOpen}')
+    expect(src).toContain('<ContextMenu')
+    expect(src).toContain('<ContextMenuItem')
+  })
+
+  it('PublishActionGroup uses the shared ContextMenu portal above editor panels', () => {
+    const { readFileSync } = require('fs')
+    const src = readFileSync(
+      new URL('../../editor/components/Toolbar/PublishActionGroup.tsx', import.meta.url),
+      'utf-8',
+    )
+    expect(src).toContain('@ui/components/ContextMenu')
+    expect(src).toContain('createPortal')
+    expect(src).toContain('zIndex={10000}')
+  })
+
+  it('AdminLayout imports and renders Toolbar', () => {
+    const { readFileSync } = require('fs')
+    const src = readFileSync(
+      new URL('../../admin/AdminLayout.tsx', import.meta.url),
       'utf-8',
     )
     expect(src).toContain("import { Toolbar }")
@@ -543,6 +593,7 @@ describe('Toolbar — structural requirements', () => {
       'UndoRedoButtons.tsx',
       'ZoomControls.tsx',
       'PublishButton.tsx',
+      'PublishActionGroup.tsx',
       'SettingsButton.tsx',
     ]
     const { readFileSync, existsSync } = require('fs')

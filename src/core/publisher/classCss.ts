@@ -26,12 +26,14 @@ const ALLOWED_PROPS = new Set<string>([
   'backgroundPosition', 'backgroundRepeat', 'objectFit', 'objectPosition',
   'opacity', 'overflow', 'overflowX', 'overflowY',
   'border', 'borderTop', 'borderRight', 'borderBottom', 'borderLeft',
+  'borderColor',
   'borderRadius', 'borderTopLeftRadius', 'borderTopRightRadius',
   'borderBottomLeftRadius', 'borderBottomRightRadius',
   'outline', 'outlineOffset',
   'boxShadow', 'filter', 'backdropFilter', 'transform', 'transformOrigin',
   'transition', 'animation',
   'cursor', 'pointerEvents', 'userSelect', 'scrollBehavior',
+  'fill',
 ])
 
 /**

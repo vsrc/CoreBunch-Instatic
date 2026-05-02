@@ -53,15 +53,15 @@ describe('Self-hosted CMS pivot — static ZIP export removal', () => {
   })
 
   it('does not expose local site management routes or dashboard files', () => {
-    const router = read(join(SRC_ROOT, 'app/router.ts'))
+    const router = read(join(SRC_ROOT, 'admin/router.ts'))
     expect(router).not.toContain('Dashboard')
     expect(router).not.toContain('/editor/:projectId')
     expect(router).not.toContain('/editor/:siteId')
     expect(router).toContain("path: '/'")
     expect(router).toContain("to: '/admin/site'")
     expect(router).toContain("path: '/admin/content'")
-    expect(existsSync(join(SRC_ROOT, 'app/Dashboard.tsx'))).toBe(false)
-    expect(existsSync(join(SRC_ROOT, 'app/Dashboard.module.css'))).toBe(false)
+    expect(existsSync(join(SRC_ROOT, 'admin/Dashboard.tsx'))).toBe(false)
+    expect(existsSync(join(SRC_ROOT, 'admin/Dashboard.module.css'))).toBe(false)
   })
 
   it('does not keep a local IndexedDB persistence adapter', () => {
@@ -88,7 +88,7 @@ describe('Self-hosted CMS pivot — static ZIP export removal', () => {
 
   it('uses CMS media only, without site-vs-CMS media mode branching', () => {
     for (const path of [
-      'app/EditorLayout.tsx',
+      'admin/AdminLayout.tsx',
       'editor/components/LeftSidebar/LeftSidebar.tsx',
       'editor/components/RightSidebar/RightSidebar.tsx',
       'editor/components/MediaExplorerPanel/MediaExplorerPanel.tsx',

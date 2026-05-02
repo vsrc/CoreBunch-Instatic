@@ -43,6 +43,7 @@ export function NumberControl({
         max={max}
         step={step}
         disabled={disabled}
+        fieldSize="sm"
         onChange={(e) => {
           const v = e.target.valueAsNumber
           if (!isNaN(v)) onChange(propKey, v)

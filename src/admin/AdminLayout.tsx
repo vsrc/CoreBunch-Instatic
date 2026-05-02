@@ -1,5 +1,5 @@
 /**
- * EditorLayout — root layout for the self-hosted CMS editor.
+ * AdminLayout — root layout for the self-hosted CMS admin.
  *
  * Editor Overlay Layout (Guideline #410 — motion-editor style):
  *   ┌─────────────────────────────── Toolbar ──────────────────────────────────┐  z-60
@@ -37,10 +37,10 @@ import { cmsAdapter } from '@core/persistence'
 import { listCmsPlugins } from '@core/persistence/cmsPlugins'
 import type { PluginAdminPageRoute } from '@core/plugin-sdk'
 import { cn } from '@ui/cn'
-import { useInstalledEditorPlugins } from '../plugins/useInstalledEditorPlugins'
-import { CMS_PLUGINS_CHANGED_EVENT } from '../plugins/pluginEvents'
+import { useInstalledEditorPlugins } from './plugins/hooks/useInstalledEditorPlugins'
+import { CMS_PLUGINS_CHANGED_EVENT } from './plugins/utils/pluginEvents'
 import { AppLoadingScreen } from './AppLoadingScreen'
-import styles from './EditorLayout.module.css'
+import styles from './AdminLayout.module.css'
 import { useEffect, useState, type MouseEvent, type ReactNode } from 'react'
 import { flushSync } from 'react-dom'
 import { Link, useInRouterContext, useLocation, useNavigate } from 'react-router-dom'
@@ -48,7 +48,7 @@ import toolbarStyles from '@editor/components/Toolbar/Toolbar.module.css'
 
 export type AdminWorkspace = 'site' | 'content' | 'plugins' | 'pluginPage'
 
-interface EditorLayoutProps {
+interface AdminLayoutProps {
   workspace?: AdminWorkspace
   contentSidebar?: ReactNode
   contentLeftPanel?: ReactNode
@@ -57,14 +57,14 @@ interface EditorLayoutProps {
   toolbarRightSlot?: ReactNode
 }
 
-export default function EditorLayout({
+export default function AdminLayout({
   workspace = 'site',
   contentSidebar,
   contentLeftPanel,
   contentCanvas,
   contentRightPanel,
   toolbarRightSlot,
-}: EditorLayoutProps) {
+}: AdminLayoutProps) {
   const site = useEditorStore((s) => s.site)
   const propertiesPanelMode = useEditorStore((s) => s.propertiesPanelMode)
   const rightSidebarExpanded = useEditorStore(selectRightSidebarExpanded)

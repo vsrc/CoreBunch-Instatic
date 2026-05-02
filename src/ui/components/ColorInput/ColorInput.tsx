@@ -6,7 +6,7 @@ import {
   type InputHTMLAttributes,
 } from 'react'
 import { cn } from '@ui/cn'
-import { getColorInputValue } from './ColorInput.utils'
+import { getColorInputValue, getColorSwatchValue } from './ColorInput.utils'
 import styles from './ColorInput.module.css'
 
 type ColorInputSize = 'xs' | 'sm' | 'md'
@@ -36,7 +36,7 @@ export const ColorInput = forwardRef<HTMLInputElement, ColorInputProps>(function
   const currentValue = value === undefined
     ? uncontrolledValue
     : getColorInputValue(value)
-  const displayValue = getColorInputValue(swatchValue ?? currentValue)
+  const displayValue = getColorSwatchValue(swatchValue ?? currentValue)
   const frameStyle: ColorInputStyle = {
     ...style,
     '--color-input-value': displayValue,

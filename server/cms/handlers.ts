@@ -32,8 +32,10 @@ import {
   softDeleteContentCollection,
   softDeleteContentEntry,
   updateContentCollection,
+  updateContentEntryCollection,
   updateContentEntryStatus,
 } from './contentRepository'
+import { normalizeContentCollectionFields } from '../../src/core/content/fields'
 import {
   createMediaAsset,
   deleteMediaAsset,
@@ -683,6 +685,7 @@ export async function handleCmsRequest(
         routeBase,
         singularLabel,
         pluralLabel,
+        fields: normalizeContentCollectionFields(body.fields),
       })
       return jsonResponse({ collection }, { status: 201 })
     }
@@ -698,10 +701,39 @@ export async function handleCmsRequest(
     const collectionId = decodeURIComponent(collectionItemMatch[1])
     if (req.method === 'PATCH') {
       const body = await readJsonObject(req)
-      const routeBase = readString(body, 'routeBase')
-      if (!routeBase) return badRequest('Route base is required')
+      const update: Parameters<typeof updateContentCollection>[2] = {}
 
-      const collection = await updateContentCollection(db, collectionId, { routeBase })
+      if ('name' in body) {
+        const name = readString(body, 'name')
+        if (!name) return badRequest('Collection name is required')
+        update.name = name
+      }
+      if ('slug' in body) {
+        const slug = slugify(readString(body, 'slug'))
+        if (!slug) return badRequest('Collection slug is required')
+        update.slug = slug
+      }
+      if ('routeBase' in body) {
+        const routeBase = readString(body, 'routeBase')
+        if (!routeBase) return badRequest('Route base is required')
+        update.routeBase = routeBase
+      }
+      if ('singularLabel' in body) {
+        const singularLabel = readString(body, 'singularLabel')
+        if (!singularLabel) return badRequest('Singular label is required')
+        update.singularLabel = singularLabel
+      }
+      if ('pluralLabel' in body) {
+        const pluralLabel = readString(body, 'pluralLabel')
+        if (!pluralLabel) return badRequest('Plural label is required')
+        update.pluralLabel = pluralLabel
+      }
+      if ('fields' in body) {
+        update.fields = normalizeContentCollectionFields(body.fields)
+      }
+      if (Object.keys(update).length === 0) return badRequest('Collection update is required')
+
+      const collection = await updateContentCollection(db, collectionId, update)
       if (!collection) return jsonResponse({ error: 'Collection not found' }, { status: 404 })
       return jsonResponse({ collection })
     }
@@ -805,6 +837,28 @@ export async function handleCmsRequest(
     const entry = await updateContentEntryStatus(db, entryId, status)
     if (!entry) return jsonResponse({ error: 'Content entry not found' }, { status: 404 })
     return jsonResponse({ entry })
+  }
+
+  const contentEntryCollectionMatch = url.pathname.match(/^\/api\/cms\/content\/entries\/([^/]+)\/collection$/)
+  if (contentEntryCollectionMatch) {
+    const admin = await getAuthenticatedAdmin(req, db)
+    if (!admin) return jsonResponse({ error: 'Unauthorized' }, { status: 401 })
+    if (req.method !== 'PATCH') return methodNotAllowed()
+
+    const body = await readJsonObject(req)
+    const collectionId = readString(body, 'collectionId')
+    if (!collectionId) return badRequest('Collection is required')
+
+    const entryId = decodeURIComponent(contentEntryCollectionMatch[1])
+    const result = await updateContentEntryCollection(db, entryId, collectionId)
+    if (result.ok) return jsonResponse({ entry: result.entry })
+    if (result.reason === 'slug_conflict') {
+      return jsonResponse({ error: 'An entry with this slug already exists in the target collection' }, { status: 409 })
+    }
+    if (result.reason === 'collection_not_found') {
+      return jsonResponse({ error: 'Collection not found' }, { status: 404 })
+    }
+    return jsonResponse({ error: 'Content entry not found' }, { status: 404 })
   }
 
   if (url.pathname === '/api/cms/publish') {

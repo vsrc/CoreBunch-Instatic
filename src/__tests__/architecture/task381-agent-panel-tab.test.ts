@@ -33,7 +33,7 @@
  * @see Guideline #410 — Panel Architecture (supersedes Guideline #380)
  * @see Task #424 — Panel Decomposition (Contribution #584)
  * @see Task #426 — Shared PanelHeader + draggable panels (Contribution #601)
- * @see src/app/EditorLayout.tsx — renders LeftSidebar and independent overlays
+ * @see src/admin/AdminLayout.tsx — renders LeftSidebar and independent overlays
  */
 
 import { describe, it, expect } from 'bun:test'

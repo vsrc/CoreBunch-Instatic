@@ -6,7 +6,7 @@ const root = process.cwd()
 
 describe('admin CMS route wiring', () => {
   it('routes admin sections to the CMS entry and does not expose local site routes', () => {
-    const router = readFileSync(join(root, 'src/app/router.ts'), 'utf8')
+    const router = readFileSync(join(root, 'src/admin/router.ts'), 'utf8')
 
     expect(router).toContain("path: '/admin'")
     expect(router).toContain("to: '/admin/site'")
@@ -19,7 +19,7 @@ describe('admin CMS route wiring', () => {
   })
 
   it('uses the server CMS adapter without local site mode branching', () => {
-    const editor = readFileSync(join(root, 'src/app/EditorLayout.tsx'), 'utf8')
+    const editor = readFileSync(join(root, 'src/admin/AdminLayout.tsx'), 'utf8')
 
     expect(editor).toContain('cmsAdapter')
     expect(editor).not.toContain('localAdapter')
@@ -28,18 +28,18 @@ describe('admin CMS route wiring', () => {
   })
 
   it('gates the CMS editor behind setup and login checks', () => {
-    const admin = readFileSync(join(root, 'src/app/AdminEntry.tsx'), 'utf8')
+    const admin = readFileSync(join(root, 'src/admin/AdminEntry.tsx'), 'utf8')
 
     expect(admin).toContain('getCmsSetupStatus')
     expect(admin).toContain('probeCmsSession')
     expect(admin).toContain('setupCms')
     expect(admin).toContain('loginCms')
-    expect(admin).toContain('<EditorLayout />')
-    expect(admin).toContain('<ContentAdmin />')
+    expect(admin).toContain('<SitePage />')
+    expect(admin).toContain('<ContentPage />')
   })
 
   it('uses a submit button for setup and login forms', () => {
-    const admin = readFileSync(join(root, 'src/app/AdminEntry.tsx'), 'utf8')
+    const admin = readFileSync(join(root, 'src/admin/AdminEntry.tsx'), 'utf8')
 
     expect(admin).toContain('type="submit"')
   })

@@ -223,10 +223,85 @@
     background: var(--editor-success-green);
 }
 
-/* ── PublishButton ────────────────────────────────────────────────────────── */
-.publishWrapper {
+/* ── Publish actions ──────────────────────────────────────────────────────── */
+.publishActionGroup {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 28px;
+}
+
+.publishActionStatus {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 132px;
+    color: var(--editor-text-muted);
+    font-size: 11px;
+    font-weight: 700;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.publishActionStatus[data-tone="success"] {
+    color: var(--editor-text-secondary);
+}
+
+.publishActionStatus[data-tone="warning"] {
+    color: var(--editor-warning);
+}
+
+.publishActionStatus[data-tone="danger"] {
+    color: var(--editor-danger-light);
+}
+
+.publishActionStatusDot {
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--editor-text-muted);
+    flex-shrink: 0;
+}
+
+.publishActionStatus[data-tone="success"] .publishActionStatusDot {
+    background: var(--editor-success-green);
+}
+
+.publishActionStatus[data-tone="warning"] .publishActionStatusDot {
+    background: var(--editor-warning);
+}
+
+.publishActionStatus[data-tone="danger"] .publishActionStatusDot {
+    background: var(--editor-danger-light);
+}
+
+.publishActionWrapper {
     position: relative;
     height: 28px;
+}
+
+.publishSplitButton {
+    display: inline-flex;
+    align-items: center;
+    height: 28px;
+}
+
+.publishPrimaryButton {
+    min-width: 86px;
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+.publishPrimaryButton[data-publish-state="success"]:disabled {
+    opacity: 0.82;
+}
+
+.publishMenuTrigger {
+    width: 26px;
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+    box-shadow: inset 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 .publishToast {
@@ -242,6 +317,11 @@
     white-space: nowrap;
     z-index: 201;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.publishToastStatus {
+    border-color: rgba(52, 211, 153, 0.35);
+    color: var(--editor-success-green);
 }
 
 /* ── Spinner animation ────────────────────────────────────────────────────── */

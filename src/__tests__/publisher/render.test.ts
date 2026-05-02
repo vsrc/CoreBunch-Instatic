@@ -8,6 +8,10 @@ import {
   type RenderContext,
 } from '../../core/publisher/render'
 import type { ModuleDefinition } from '../../core/module-engine/types'
+import {
+  frameworkColorClassId,
+  generateFrameworkColorUtilityClasses,
+} from '../../core/framework/colors'
 import { makeModule, makeRegistry, makePage, makeSite } from './helpers'
 
 // ---------------------------------------------------------------------------
@@ -321,6 +325,62 @@ describe('publishPage', () => {
     expect(html).toContain(':root {')
     expect(html).toContain('--color-primary')
     expect(html).toContain('--type-base-size')
+  })
+
+  it('injects framework color variables and used generated utility CSS', () => {
+    const colors = {
+      categories: [{ id: 'brand', name: 'Brand', order: 0 }],
+      tokens: [
+        {
+          id: 'primary-token',
+          categoryId: 'brand',
+          slug: 'primary',
+          lightValue: 'hsla(238, 100%, 62%, 1)',
+          darkValue: 'hsla(238, 100%, 42%, 1)',
+          darkModeEnabled: true,
+          generateUtilities: {
+            text: true,
+            background: false,
+            border: false,
+            fill: false,
+          },
+          generateTransparent: false,
+          generateShades: { enabled: false, count: 0 },
+          generateTints: { enabled: false, count: 0 },
+          order: 0,
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ],
+    }
+    const textClassId = frameworkColorClassId('primary-token', 'base', 'text')
+    const page = makePage({
+      root: {
+        moduleId: 'base.heading',
+        props: { text: 'Hi' },
+        classIds: [textClassId],
+      },
+    })
+    const proj = makeSite({
+      pages: [page],
+      settings: {
+        ...makeSite().settings,
+        framework: { colors },
+      },
+      classes: generateFrameworkColorUtilityClasses(colors),
+    })
+
+    const { html } = publishPage(page, proj, registry)
+
+    expect(html).toContain(':root.theme-alt')
+    expect(html).toContain(':root.theme-default .theme-inverted')
+    expect(html).not.toContain('theme-dark')
+    expect(html).not.toContain('theme-light')
+    expect(html).toContain('--primary: hsla(238, 100%, 62%, 1);')
+    expect(html).toContain('--primary: hsla(238, 100%, 42%, 1);')
+    expect(html).toContain('.text-primary')
+    expect(html).toContain('color: var(--primary);')
+    expect(html).not.toContain('cf-theme')
   })
 
   it('includes font import link when fontImportUrl is set', () => {

@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'bun:test'
 import {
+  createCmsContentCollection,
   createCmsContentEntry,
+  deleteCmsContentCollection,
+  deleteCmsContentEntry,
   listCmsContentCollections,
   listCmsContentEntries,
   publishCmsContentEntry,
   saveCmsContentEntryDraft,
+  updateCmsContentEntryCollection,
   updateCmsContentCollection,
   updateCmsContentEntryStatus,
 } from '../../core/persistence/cmsContent'
@@ -39,24 +43,28 @@ describe('CMS content client', () => {
 
   it('updates collection route settings with session credentials', async () => {
     const calls: Array<{ input: RequestInfo | URL; init?: RequestInit }> = []
+    const update = {
+      name: 'Articles',
+      slug: 'articles',
+      routeBase: '/articles',
+      singularLabel: 'Article',
+      pluralLabel: 'Articles',
+    }
 
-    const collection = await updateCmsContentCollection('posts', { routeBase: '/blog' }, async (input, init) => {
+    const collection = await updateCmsContentCollection('posts', update, async (input, init) => {
       calls.push({ input, init })
       return new Response(JSON.stringify({
         collection: {
           id: 'posts',
-          name: 'Posts',
-          slug: 'posts',
-          routeBase: '/blog',
-          singularLabel: 'Post',
-          pluralLabel: 'Posts',
+          ...update,
           createdAt: '2026-05-01T10:00:00.000Z',
           updatedAt: '2026-05-01T10:02:00.000Z',
         },
       }), { status: 200 })
     })
 
-    expect(collection.routeBase).toBe('/blog')
+    expect(collection.name).toBe('Articles')
+    expect(collection.slug).toBe('articles')
     expect(calls[0]).toMatchObject({
       input: '/api/cms/content/collections/posts',
       init: {
@@ -65,7 +73,50 @@ describe('CMS content client', () => {
         headers: { 'content-type': 'application/json' },
       },
     })
-    expect(calls[0].init?.body).toBe(JSON.stringify({ routeBase: '/blog' }))
+    expect(calls[0].init?.body).toBe(JSON.stringify(update))
+  })
+
+  it('creates collections with built-in field choices', async () => {
+    const calls: Array<{ input: RequestInfo | URL; init?: RequestInit }> = []
+    const input = {
+      name: 'Products',
+      slug: 'products',
+      routeBase: '/products',
+      singularLabel: 'Product',
+      pluralLabel: 'Products',
+      fields: {
+        builtIn: {
+          body: true,
+          featuredMedia: false,
+          seo: false,
+        },
+        custom: [],
+      },
+    }
+
+    const collection = await createCmsContentCollection(input, async (requestInput, init) => {
+      calls.push({ input: requestInput, init })
+      return new Response(JSON.stringify({
+        collection: {
+          id: 'products',
+          ...input,
+          createdAt: '2026-05-01T10:00:00.000Z',
+          updatedAt: '2026-05-01T10:00:00.000Z',
+        },
+      }), { status: 201 })
+    })
+
+    expect(collection.id).toBe('products')
+    expect(collection.fields?.builtIn.featuredMedia).toBe(false)
+    expect(calls[0]).toMatchObject({
+      input: '/api/cms/content/collections',
+      init: {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+      },
+    })
+    expect(calls[0].init?.body).toBe(JSON.stringify(input))
   })
 
   it('creates and lists entries inside a collection', async () => {
@@ -193,6 +244,92 @@ describe('CMS content client', () => {
       },
     })
     expect(calls[0].init?.body).toBe(JSON.stringify({ status: 'unpublished' }))
+  })
+
+  it('moves entries between collections with session credentials', async () => {
+    const calls: Array<{ input: RequestInfo | URL; init?: RequestInit }> = []
+
+    const entry = await updateCmsContentEntryCollection('entry_1', 'products', async (input, init) => {
+      calls.push({ input, init })
+      return new Response(JSON.stringify({
+        entry: {
+          id: 'entry_1',
+          collectionId: 'products',
+          title: 'Hello',
+          slug: 'hello',
+          status: 'draft',
+          bodyMarkdown: '# Hello',
+          featuredMediaId: null,
+          seoTitle: '',
+          seoDescription: '',
+          createdAt: '2026-05-01T10:00:00.000Z',
+          updatedAt: '2026-05-01T10:03:00.000Z',
+          publishedAt: null,
+          deletedAt: null,
+        },
+      }), { status: 200 })
+    })
+
+    expect(entry.collectionId).toBe('products')
+    expect(calls[0]).toMatchObject({
+      input: '/api/cms/content/entries/entry_1/collection',
+      init: {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+      },
+    })
+    expect(calls[0].init?.body).toBe(JSON.stringify({ collectionId: 'products' }))
+  })
+
+  it('deletes collections and entries with session credentials', async () => {
+    const calls: Array<{ input: RequestInfo | URL; init?: RequestInit }> = []
+
+    await deleteCmsContentEntry('entry_1', async (input, init) => {
+      calls.push({ input, init })
+      return new Response(JSON.stringify({
+        entry: {
+          id: 'entry_1',
+          collectionId: 'posts',
+          title: 'Hello',
+          slug: 'hello',
+          status: 'draft',
+          bodyMarkdown: '',
+          featuredMediaId: null,
+          seoTitle: '',
+          seoDescription: '',
+          createdAt: '2026-05-01T10:00:00.000Z',
+          updatedAt: '2026-05-01T10:03:00.000Z',
+          publishedAt: null,
+          deletedAt: '2026-05-01T10:03:00.000Z',
+        },
+      }), { status: 200 })
+    })
+
+    await deleteCmsContentCollection('products', async (input, init) => {
+      calls.push({ input, init })
+      return new Response(JSON.stringify({
+        collection: {
+          id: 'products',
+          name: 'Products',
+          slug: 'products',
+          routeBase: '/products',
+          singularLabel: 'Product',
+          pluralLabel: 'Products',
+          createdAt: '2026-05-01T10:00:00.000Z',
+          updatedAt: '2026-05-01T10:03:00.000Z',
+        },
+      }), { status: 200 })
+    })
+
+    expect(calls[0]).toMatchObject({
+      input: '/api/cms/content/entries/entry_1',
+      init: { method: 'DELETE', credentials: 'include' },
+    })
+    expect(calls[1]).toMatchObject({
+      input: '/api/cms/content/collections/products',
+      init: { method: 'DELETE', credentials: 'include' },
+    })
   })
 
   it('surfaces API errors from the response body', async () => {

@@ -115,7 +115,7 @@ export function makeSite(overrides: Partial<SiteDocument> = {}): SiteDocument {
     pages: [],
     files: [],
     breakpoints: DEFAULT_BREAKPOINTS,
-    settings: DEFAULT_SITE_SETTINGS,
+    settings: structuredClone(DEFAULT_SITE_SETTINGS),
     classes: {},
     createdAt: 0,
     updatedAt: 0,

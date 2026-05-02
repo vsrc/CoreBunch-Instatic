@@ -43,8 +43,15 @@
     height: 18px;
 }
 
-.sectionTitle {
+.sectionTitleGroup {
     flex: 1;
+    min-width: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+}
+
+.sectionTitle {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -73,6 +80,11 @@
     background: var(--editor-accent);
     opacity: 0.75;
     flex-shrink: 0;
+}
+
+.sectionSetIndicatorDot {
+    background: var(--editor-success-green);
+    opacity: 1;
 }
 
 .sectionContent {

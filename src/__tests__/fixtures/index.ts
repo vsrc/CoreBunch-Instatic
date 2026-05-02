@@ -183,7 +183,7 @@ export function makeSite(overrides: Partial<SiteDocument> = {}): SiteDocument {
     name: overrides.name ?? 'Test SiteDocument',
     pages: overrides.pages ?? [makePage()],
     breakpoints: overrides.breakpoints ?? DEFAULT_BREAKPOINTS,
-    settings: overrides.settings ?? DEFAULT_SITE_SETTINGS,
+    settings: overrides.settings ?? structuredClone(DEFAULT_SITE_SETTINGS),
     // classes is required on SiteDocument — default to empty map.
     // Previously omitted, causing site.classes === undefined which crashes
     // collectClassCSS unless the caller uses the Bug C guard added in Task #427.

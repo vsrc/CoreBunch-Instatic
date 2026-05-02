@@ -35,14 +35,23 @@ import styles from './ClassPropertyRow.module.css'
 interface ClassPropertyRowProps {
   property: keyof CSSPropertyBag
   value: string | number | undefined
+  placeholder?: string | number
   isSet?: boolean
   onChange: (property: keyof CSSPropertyBag, value: string | number | undefined) => void
   onRemove: (property: keyof CSSPropertyBag) => void
 }
 
-export function ClassPropertyRow({ property, value, isSet = true, onChange, onRemove }: ClassPropertyRowProps) {
+export function ClassPropertyRow({
+  property,
+  value,
+  placeholder,
+  isSet = true,
+  onChange,
+  onRemove,
+}: ClassPropertyRowProps) {
   const type = getCSSPropertyControlType(property)
   const label = cssPropertyLabel(String(property))
+  const placeholderText = placeholder !== undefined ? String(placeholder) : undefined
 
   // ── Adapter: any control's onChange → CSSPropertyBag-typed value ────────
   const handleTextChange = useCallback(
@@ -70,6 +79,7 @@ export function ClassPropertyRow({ property, value, isSet = true, onChange, onRe
           key={`${String(property)}-${String(value ?? '')}`}
           propKey={String(property)}
           value={String(value ?? '')}
+          placeholder={placeholderText}
           onChange={handleTextChange}
           label={label}
         />
@@ -82,6 +92,7 @@ export function ClassPropertyRow({ property, value, isSet = true, onChange, onRe
         <SelectControl
           propKey={String(property)}
           value={String(value ?? '')}
+          placeholder={placeholderText}
           onChange={handleTextChange}
           label={label}
           options={[
@@ -99,6 +110,7 @@ export function ClassPropertyRow({ property, value, isSet = true, onChange, onRe
         <TextControl
           propKey={String(property)}
           value={String(value ?? '')}
+          placeholder={placeholderText}
           onChange={handleTextChange}
           label={label}
         />

@@ -1,46 +1,47 @@
 .backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: calc(var(--context-menu-z-index) - 1);
+    position: fixed;
+    inset: 0;
+    z-index: calc(var(--context-menu-z-index) - 1);
 }
 
 .menu {
-  position: fixed;
-  left: var(--context-menu-x);
-  top: var(--context-menu-y);
-  z-index: var(--context-menu-z-index);
-  width: min(var(--context-menu-width), calc(100vw - 16px));
-  min-width: var(--context-menu-min-width);
-  overflow: hidden;
-  padding: 4px;
-  border: 0;
-  border-radius: 10px;
-  background: rgba(30, 30, 30, 0.98);
-  box-shadow:
-    0 12px 28px rgba(0, 0, 0, 0.46),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  backdrop-filter: blur(14px);
+    position: fixed;
+    left: var(--context-menu-x);
+    top: var(--context-menu-y);
+    z-index: var(--context-menu-z-index);
+    width: min(var(--context-menu-width), calc(100vw - 16px));
+    min-width: var(--context-menu-min-width);
+    overflow: hidden;
+    padding: 4px;
+    border: 0;
+    border-radius: 10px;
+    background: var(--editor-surface-4);
+    box-shadow:
+        0 12px 28px rgba(0, 0, 0, 0.5),
+        inset 0 1px 0 rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(14px);
 }
 
 .item {
-  min-height: 28px;
-  padding: 0 9px;
-  gap: 9px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 560;
+    min-height: 28px;
+    padding: 0 9px;
+    gap: 9px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 560;
+    color: var(--editor-text);
 }
 
 .item > span[aria-hidden="true"] {
-  display: inline-flex;
-  width: 16px;
-  align-items: center;
-  justify-content: center;
-  color: currentColor;
+    display: inline-flex;
+    width: 16px;
+    align-items: center;
+    justify-content: center;
+    color: currentColor;
 }
 
 .separator {
-  width: auto;
-  margin: 4px 6px;
-  background: rgba(255, 255, 255, 0.10);
+    width: auto;
+    margin: 4px 6px;
+    background: var(--editor-surface-5);
 }

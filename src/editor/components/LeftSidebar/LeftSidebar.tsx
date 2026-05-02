@@ -2,6 +2,7 @@ import { useRef, type CSSProperties, type ReactNode } from 'react'
 import { useEditorStore } from '@core/editor-store/store'
 import type { LeftSidebarPanelId } from '@core/editor-store/slices/uiSlice'
 import { AgentPanel } from '../AgentPanel'
+import { ColorsPanel } from '../ColorsPanel'
 import { DependenciesPanel } from '../DependenciesPanel'
 import { DomPanel } from '../DomPanel'
 import { MediaExplorerPanel } from '../MediaExplorerPanel'
@@ -14,6 +15,7 @@ import styles from './LeftSidebar.module.css'
 function selectActiveLeftSidebarPanel(state: ReturnType<typeof useEditorStore.getState>): LeftSidebarPanelId | null {
   if (state.siteExplorerPanelOpen) return 'site'
   if (state.selectorsPanelOpen) return 'selectors'
+  if (state.colorsPanelOpen) return 'colors'
   if (state.mediaExplorerPanelOpen) return 'media'
   if (state.dependenciesPanelOpen) return 'dependencies'
   if (!state.domTreePanel.collapsed) return 'layers'
@@ -61,6 +63,9 @@ export function LeftSidebar({ workspace = 'site', contentPanel }: LeftSidebarPro
         </div>
         <div className={styles.panelMount} hidden={activePanel !== 'selectors'}>
           <SelectorsPanel variant="docked" />
+        </div>
+        <div className={styles.panelMount} hidden={activePanel !== 'colors'}>
+          <ColorsPanel variant="docked" />
         </div>
         <div className={styles.panelMount} hidden={activePanel !== 'media'}>
           <MediaExplorerPanel variant="docked" />

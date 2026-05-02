@@ -65,6 +65,20 @@ export const NodeRenderer = memo(function NodeRenderer({ nodeId }: NodeRendererP
   const breakpointId = useContext(CanvasBreakpointContext)
   const templateContext = useContext(CanvasTemplateContext)
 
+  const handleNodeClick = useCallback(
+    (clickedNodeId: string, e: React.MouseEvent) => {
+      onNodeClick(clickedNodeId, e, breakpointId)
+    },
+    [breakpointId, onNodeClick],
+  )
+
+  const handleNodeContextMenu = useCallback(
+    (clickedNodeId: string, e: React.MouseEvent) => {
+      onNodeContextMenu(clickedNodeId, e, breakpointId)
+    },
+    [breakpointId, onNodeContextMenu],
+  )
+
   if (!node) return null
   if (node.hidden) return null
 
@@ -98,9 +112,9 @@ export const NodeRenderer = memo(function NodeRenderer({ nodeId }: NodeRendererP
       moduleId={node.moduleId}
       isSelected={isSelected}
       isHovered={isHovered}
-      onNodeClick={onNodeClick}
+      onNodeClick={handleNodeClick}
       onNodeHover={onNodeHover}
-      onNodeContextMenu={onNodeContextMenu}
+      onNodeContextMenu={handleNodeContextMenu}
       onNodeDoubleClick={onNodeDoubleClick}
     >
       {/* mcClassName forwarded to the module component so the CSS class targets

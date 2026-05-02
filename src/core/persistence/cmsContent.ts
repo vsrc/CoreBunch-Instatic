@@ -3,9 +3,11 @@ import type {
   ContentEntry,
   ContentEntryDraftInput,
   ContentEntryStatus,
+  CreateContentCollectionInput,
   CreateContentEntryInput,
+  UpdateContentEntryCollectionInput,
   UpdateContentCollectionInput,
-} from '../../content/types'
+} from '../content/types'
 import { responseErrorMessage } from './httpErrors'
 
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
@@ -48,6 +50,25 @@ export async function listCmsContentEntries(
   return Array.isArray(body.entries) ? body.entries : []
 }
 
+export async function createCmsContentCollection(
+  input: CreateContentCollectionInput,
+  fetchImpl: FetchLike = globalThis.fetch.bind(globalThis),
+  basePath = '/api/cms',
+): Promise<ContentCollection> {
+  const res = await fetchImpl(`${basePath}/content/collections`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(input),
+  })
+  const body = await readJson<{ collection?: ContentCollection }>(
+    res,
+    `CMS content collection create failed with ${res.status}`,
+  )
+  if (!body.collection) throw new Error('CMS content collection create response was missing collection')
+  return body.collection
+}
+
 export async function updateCmsContentCollection(
   collectionId: string,
   input: UpdateContentCollectionInput,
@@ -65,6 +86,23 @@ export async function updateCmsContentCollection(
     `CMS content collection update failed with ${res.status}`,
   )
   if (!body.collection) throw new Error('CMS content collection update response was missing collection')
+  return body.collection
+}
+
+export async function deleteCmsContentCollection(
+  collectionId: string,
+  fetchImpl: FetchLike = globalThis.fetch.bind(globalThis),
+  basePath = '/api/cms',
+): Promise<ContentCollection> {
+  const res = await fetchImpl(`${basePath}/content/collections/${encodeURIComponent(collectionId)}`, {
+    method: 'DELETE',
+    credentials: 'include',
+  })
+  const body = await readJson<{ collection?: ContentCollection }>(
+    res,
+    `CMS content collection delete failed with ${res.status}`,
+  )
+  if (!body.collection) throw new Error('CMS content collection delete response was missing collection')
   return body.collection
 }
 
@@ -106,6 +144,23 @@ export async function saveCmsContentEntryDraft(
   return body.entry
 }
 
+export async function deleteCmsContentEntry(
+  entryId: string,
+  fetchImpl: FetchLike = globalThis.fetch.bind(globalThis),
+  basePath = '/api/cms',
+): Promise<ContentEntry> {
+  const res = await fetchImpl(`${basePath}/content/entries/${encodeURIComponent(entryId)}`, {
+    method: 'DELETE',
+    credentials: 'include',
+  })
+  const body = await readJson<{ entry?: ContentEntry }>(
+    res,
+    `CMS content entry delete failed with ${res.status}`,
+  )
+  if (!body.entry) throw new Error('CMS content entry delete response was missing entry')
+  return body.entry
+}
+
 export async function publishCmsContentEntry(
   entryId: string,
   fetchImpl: FetchLike = globalThis.fetch.bind(globalThis),
@@ -140,5 +195,26 @@ export async function updateCmsContentEntryStatus(
     `CMS content entry status update failed with ${res.status}`,
   )
   if (!body.entry) throw new Error('CMS content entry status response was missing entry')
+  return body.entry
+}
+
+export async function updateCmsContentEntryCollection(
+  entryId: string,
+  collectionId: string,
+  fetchImpl: FetchLike = globalThis.fetch.bind(globalThis),
+  basePath = '/api/cms',
+): Promise<ContentEntry> {
+  const input: UpdateContentEntryCollectionInput = { collectionId }
+  const res = await fetchImpl(`${basePath}/content/entries/${encodeURIComponent(entryId)}/collection`, {
+    method: 'PATCH',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(input),
+  })
+  const body = await readJson<{ entry?: ContentEntry }>(
+    res,
+    `CMS content entry collection update failed with ${res.status}`,
+  )
+  if (!body.entry) throw new Error('CMS content entry collection response was missing entry')
   return body.entry
 }

@@ -1,4 +1,4 @@
-/* ClassComposer - minimal assigned-style inspector for an active class. */
+/* ClassComposer - full class style catalog with inline filtering. */
 
 .composer {
     display: contents;
@@ -12,37 +12,74 @@
 }
 
 .toolbarRow {
-    display: grid;
-    grid-template-columns: minmax(104px, 118px) minmax(0, 1fr);
-    gap: 8px;
-}
-
-.breakpointSelectWrap {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    min-width: 0;
-    color: var(--editor-text-secondary);
-}
-
-.breakpointSelect {
-    width: 100%;
-    min-width: 0;
-}
-
-@media (max-width: 420px) {
-    .toolbarRow {
-        grid-template-columns: 1fr;
-    }
+    display: block;
 }
 
 .styleSections {
-    display: contents;
+    display: grid;
+    align-content: start;
+    min-width: 0;
+    gap: 4px;
 }
 
 .styleSectionBody {
     display: grid;
     gap: 8px;
+}
+
+.styleCatalogLayout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 32px;
+    align-items: start;
+    gap: 4px;
+    min-height: 0;
+}
+
+.categoryRail {
+    position: sticky;
+    top: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 2px;
+}
+
+.categoryRailButton.categoryRailButton {
+    color: var(--editor-text-secondary);
+}
+
+.categoryRailButton.categoryRailButton:hover,
+.categoryRailButton.categoryRailButton[aria-pressed="true"] {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--editor-text);
+}
+
+.categoryRailIconWrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+}
+
+.categoryRailSetDot {
+    position: absolute;
+    top: -2px;
+    right: -3px;
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--editor-success-green);
+    box-shadow: 0 0 0 2px var(--editor-bg);
+}
+
+.noStyleMatches {
+    padding: 12px 14px;
+    color: var(--editor-text-muted);
+    font-size: 11px;
+    line-height: 1.4;
 }
 
 .moduleStyleRow {

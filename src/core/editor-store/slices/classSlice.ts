@@ -19,7 +19,7 @@ import { nanoid } from 'nanoid'
 import type { StateCreator } from 'zustand'
 import type { EditorStore } from '../store'
 import type { CSSClass, CSSPropertyBag } from '../../page-tree/types'
-import { isUserVisibleClass } from '../../page-tree/classUtils'
+import { isGeneratedClassLocked, isUserVisibleClass } from '../../page-tree/classUtils'
 import { assertValidCssClassName } from '../../page-tree/classNames'
 
 export interface ClassPreviewAssignment {
@@ -200,6 +200,7 @@ export const createClassSlice: StateCreator<EditorStore, [], [], ClassSlice> = (
     const { site } = get()
     const cls = site?.classes[classId]
     if (!cls) return
+    if (isGeneratedClassLocked(cls)) return
     if (!hasStylePatchChanges(cls.styles, patch)) return
 
     get().pushHistory()
@@ -225,6 +226,7 @@ export const createClassSlice: StateCreator<EditorStore, [], [], ClassSlice> = (
     const { site } = get()
     const cls = site?.classes[classId]
     if (!cls) return
+    if (isGeneratedClassLocked(cls)) return
     const currentStyles = cls.breakpointStyles[breakpointId] ?? {}
     if (!hasStylePatchChanges(currentStyles, patch)) return
 
@@ -307,6 +309,7 @@ export const createClassSlice: StateCreator<EditorStore, [], [], ClassSlice> = (
     const { site } = get()
     const cls = site?.classes[classId]
     if (!cls) return
+    if (isGeneratedClassLocked(cls)) return
     assertValidCssClassName(name)
     if (Object.is(cls.name, name)) return
 
@@ -332,6 +335,7 @@ export const createClassSlice: StateCreator<EditorStore, [], [], ClassSlice> = (
     const { site } = get()
     const cls = site?.classes[classId]
     if (!site || !cls || !isUserVisibleClass(cls)) return null
+    if (isGeneratedClassLocked(cls)) return null
 
     const now = Date.now()
     const newClass: CSSClass = {
@@ -360,7 +364,9 @@ export const createClassSlice: StateCreator<EditorStore, [], [], ClassSlice> = (
 
   deleteClass(classId) {
     const { site } = get()
-    if (!site?.classes[classId]) return
+    const cls = site?.classes[classId]
+    if (!cls) return
+    if (isGeneratedClassLocked(cls)) return
 
     get().pushHistory()
     set(

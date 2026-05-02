@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import React from 'react'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { PluginsAdmin } from '../../plugins/PluginsAdmin'
+import { PluginsPage } from '../../admin/plugins/PluginsPage'
 import { useEditorStore } from '../../core/editor-store/store'
 import { makeSite } from '../fixtures'
 
@@ -93,7 +93,7 @@ afterEach(() => {
   cleanup()
 })
 
-describe('PluginsAdmin', () => {
+describe('PluginsPage', () => {
   it('lists active plugins and can disable or remove them', async () => {
     const calls: Array<{ input: RequestInfo | URL; init?: RequestInit }> = []
     globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -116,7 +116,7 @@ describe('PluginsAdmin', () => {
 
     render(
       <MemoryRouter>
-        <PluginsAdmin />
+        <PluginsPage />
       </MemoryRouter>,
     )
 
@@ -157,7 +157,7 @@ describe('PluginsAdmin', () => {
 
     render(
       <MemoryRouter>
-        <PluginsAdmin />
+        <PluginsPage />
       </MemoryRouter>,
     )
 
@@ -208,7 +208,7 @@ describe('PluginsAdmin', () => {
 
     render(
       <MemoryRouter>
-        <PluginsAdmin />
+        <PluginsPage />
       </MemoryRouter>,
     )
 
@@ -258,7 +258,7 @@ describe('PluginsAdmin', () => {
 
     render(
       <MemoryRouter>
-        <PluginsAdmin />
+        <PluginsPage />
       </MemoryRouter>,
     )
 

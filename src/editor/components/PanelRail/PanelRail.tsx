@@ -8,6 +8,7 @@ import { FilesStack2Icon } from '@ui/icons/icons/files-stack-2'
 import { ImagesIcon } from '@ui/icons/icons/images'
 import { BoxStackIcon } from '@ui/icons/icons/box-stack'
 import { PaintBucketIcon } from '@ui/icons/icons/paint-bucket'
+import { ColorsSwatchIcon } from '@ui/icons/icons/colors-swatch'
 import { Button } from '@ui/components/Button'
 import styles from './PanelRail.module.css'
 
@@ -71,6 +72,13 @@ const PRIMARY_RAIL_ITEMS: PrimaryRailItem[] = [
     accent: 'peach',
   },
   {
+    id: 'colors',
+    label: 'Colors',
+    icon: ColorsSwatchIcon,
+    iconName: 'colors-swatch',
+    accent: 'peach',
+  },
+  {
     id: 'media',
     label: 'Media',
     icon: ImagesIcon,
@@ -94,6 +102,7 @@ export function PanelRail({ workspace = 'site' }: PanelRailProps) {
   const domOpen = useEditorStore((s) => !s.domTreePanel.collapsed)
   const siteOpen = useEditorStore((s) => s.siteExplorerPanelOpen)
   const selectorsOpen = useEditorStore((s) => s.selectorsPanelOpen)
+  const colorsOpen = useEditorStore((s) => s.colorsPanelOpen)
   const mediaOpen = useEditorStore((s) => s.mediaExplorerPanelOpen)
   const dependenciesOpen = useEditorStore((s) => s.dependenciesPanelOpen)
   const agentOpen = useEditorStore((s) => s.isAgentOpen)
@@ -137,6 +146,7 @@ export function PanelRail({ workspace = 'site' }: PanelRailProps) {
     agent: agentOpen,
     site: siteOpen,
     selectors: selectorsOpen,
+    colors: colorsOpen,
     media: mediaOpen,
     dependencies: dependenciesOpen,
   } satisfies Record<LeftSidebarPanelId, boolean>

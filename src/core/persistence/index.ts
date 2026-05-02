@@ -3,11 +3,16 @@ export { getCmsPublishStatus, publishCmsDraft } from './cmsPublish'
 export { listCmsMediaAssets } from './cmsMedia'
 export type { CmsMediaAsset } from './cmsMedia'
 export {
+  createCmsContentCollection,
   createCmsContentEntry,
+  deleteCmsContentCollection,
+  deleteCmsContentEntry,
   listCmsContentCollections,
   listCmsContentEntries,
   publishCmsContentEntry,
   saveCmsContentEntryDraft,
+  updateCmsContentCollection,
+  updateCmsContentEntryCollection,
   updateCmsContentEntryStatus,
 } from './cmsContent'
 export {

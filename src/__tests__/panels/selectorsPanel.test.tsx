@@ -131,9 +131,12 @@ describe('SelectorsPanel', () => {
     )
 
     const panel = screen.getByTestId('selectors-panel')
-    expect(within(panel).getByRole('button', { name: /edit selector hero-title/i })).toBeDefined()
-    expect(within(panel).getByRole('button', { name: /edit selector cta-button/i })).toBeDefined()
-    expect(within(panel).getByRole('button', { name: /edit selector unused-card/i })).toBeDefined()
+    expect(within(panel).getByRole('button', { name: /edit selector \.hero-title/i })).toBeDefined()
+    expect(within(panel).getByRole('button', { name: /edit selector \.cta-button/i })).toBeDefined()
+    expect(within(panel).getByRole('button', { name: /edit selector \.unused-card/i })).toBeDefined()
+    expect(within(panel).getByText('.hero-title')).toBeDefined()
+    expect(within(panel).getByText('.cta-button')).toBeDefined()
+    expect(within(panel).getByText('.unused-card')).toBeDefined()
     expect(within(panel).queryByText('Text instance text-1')).toBeNull()
     expect(within(panel).getByText('Used 2 times')).toBeDefined()
     expect(within(panel).getByText('2 props · 1 breakpoint')).toBeDefined()
@@ -164,8 +167,8 @@ describe('SelectorsPanel', () => {
       target: { value: 'cta' },
     })
 
-    expect(screen.queryByRole('button', { name: /edit selector hero-title/i })).toBeNull()
-    expect(screen.getByRole('button', { name: /edit selector cta-button/i })).toBeDefined()
+    expect(screen.queryByRole('button', { name: /edit selector \.hero-title/i })).toBeNull()
+    expect(screen.getByRole('button', { name: /edit selector \.cta-button/i })).toBeDefined()
   })
 
   it('creates a reusable selector from the panel toolbar and opens it for editing', async () => {
@@ -178,8 +181,8 @@ describe('SelectorsPanel', () => {
     )
 
     fireEvent.click(screen.getByRole('button', { name: /create selector/i }))
-    fireEvent.change(screen.getByRole('textbox', { name: /selector name/i }), {
-      target: { value: 'feature-card' },
+    fireEvent.change(screen.getByRole('textbox', { name: /class name/i }), {
+      target: { value: '.feature-card' },
     })
     fireEvent.click(screen.getByRole('button', { name: /^create$/i }))
 
@@ -190,7 +193,10 @@ describe('SelectorsPanel', () => {
     expect(useEditorStore.getState().activeClassId).toBe(created!.id)
     await waitFor(() => expect(screen.getByTestId('properties-panel')).toBeDefined())
     expect(useEditorStore.getState().propertiesPanel.collapsed).toBe(false)
-    expect(within(screen.getByTestId('properties-panel')).getByText('.feature-card')).toBeDefined()
+    const propertiesPanel = screen.getByTestId('properties-panel')
+    expect(within(propertiesPanel).getByRole('heading', { name: '.feature-card' })).toBeDefined()
+    expect(within(propertiesPanel).getByRole('button', { name: /rename selector \.feature-card/i })).toBeDefined()
+    expect(within(propertiesPanel).queryByRole('region', { name: /selector feature-card/i })).toBeNull()
   })
 
   it('selecting a row opens the global class editor in the right properties panel', async () => {
@@ -203,17 +209,28 @@ describe('SelectorsPanel', () => {
     )
 
     const selectorsPanel = screen.getByTestId('selectors-panel')
-    fireEvent.click(within(selectorsPanel).getByRole('button', { name: /edit selector hero-title/i }))
+    fireEvent.click(within(selectorsPanel).getByRole('button', { name: /edit selector \.hero-title/i }))
 
     expect(within(selectorsPanel).queryByRole('searchbox', { name: /search class style properties to add/i })).toBeNull()
     await waitFor(() => expect(screen.getByTestId('properties-panel')).toBeDefined())
     const propertiesPanel = screen.getByTestId('properties-panel')
-    expect(within(propertiesPanel).getByRole('heading', { name: 'hero-title' })).toBeDefined()
-    expect(within(propertiesPanel).getByText('.hero-title')).toBeDefined()
+    expect(within(propertiesPanel).getByRole('heading', { name: '.hero-title' })).toBeDefined()
+    expect(within(propertiesPanel).queryByRole('region', { name: /selector hero-title/i })).toBeNull()
     expect(within(propertiesPanel).getByRole('searchbox', { name: /search class style properties to add/i })).toBeDefined()
     expect(screen.queryByRole('textbox', { name: /add or create a css class/i })).toBeNull()
     expect(useEditorStore.getState().activeClassId).toBe('hero-title')
     expect(useEditorStore.getState().propertiesPanel.collapsed).toBe(false)
+
+    fireEvent.click(within(propertiesPanel).getByRole('button', { name: /rename selector \.hero-title/i }))
+    const classNameInput = within(propertiesPanel).getByRole('textbox', { name: /class name/i })
+    expect((classNameInput as HTMLInputElement).value).toBe('.hero-title')
+    fireEvent.change(classNameInput, { target: { value: '.feature-heading' } })
+    fireEvent.blur(classNameInput)
+
+    await waitFor(() => {
+      expect(useEditorStore.getState().site!.classes['hero-title'].name).toBe('feature-heading')
+    })
+    expect(within(propertiesPanel).getByRole('heading', { name: '.feature-heading' })).toBeDefined()
   })
 
   it('edit from the selector context menu opens the right properties panel editor', async () => {
@@ -225,12 +242,12 @@ describe('SelectorsPanel', () => {
       </>,
     )
 
-    fireEvent.contextMenu(screen.getByRole('button', { name: /edit selector cta-button/i }))
+    fireEvent.contextMenu(screen.getByRole('button', { name: /edit selector \.cta-button/i }))
     fireEvent.click(screen.getByRole('menuitem', { name: /^edit$/i }))
 
     await waitFor(() => expect(screen.getByTestId('properties-panel')).toBeDefined())
     const propertiesPanel = screen.getByTestId('properties-panel')
-    expect(within(propertiesPanel).getByRole('heading', { name: 'cta-button' })).toBeDefined()
+    expect(within(propertiesPanel).getByRole('heading', { name: '.cta-button' })).toBeDefined()
     expect(useEditorStore.getState().activeClassId).toBe('cta-button')
   })
 
@@ -242,7 +259,7 @@ describe('SelectorsPanel', () => {
         <PropertiesPanel variant="docked" />
       </>,
     )
-    const row = screen.getByRole('button', { name: /edit selector hero-title/i })
+    const row = screen.getByRole('button', { name: /edit selector \.hero-title/i })
 
     fireEvent.contextMenu(row, { clientX: 20, clientY: 30 })
     expect(screen.getByRole('menu', { name: /selector actions/i })).toBeDefined()
@@ -262,7 +279,7 @@ describe('SelectorsPanel', () => {
       </>,
     )
 
-    fireEvent.contextMenu(screen.getByRole('button', { name: /edit selector cta-button/i }))
+    fireEvent.contextMenu(screen.getByRole('button', { name: /edit selector \.cta-button/i }))
     fireEvent.click(screen.getByRole('menuitem', { name: /duplicate/i }))
 
     const classes = useEditorStore.getState().site!.classes
@@ -271,7 +288,7 @@ describe('SelectorsPanel', () => {
     expect(copy!.styles).toEqual({ padding: '12px' })
     expect(useEditorStore.getState().site!.pages[0].nodes[buttonNodeId].classIds).toEqual(['hero-title', 'cta-button'])
     await waitFor(() => expect(screen.getByTestId('properties-panel')).toBeDefined())
-    expect(within(screen.getByTestId('properties-panel')).getByRole('heading', { name: 'cta-button-copy' })).toBeDefined()
+    expect(within(screen.getByTestId('properties-panel')).getByRole('heading', { name: '.cta-button-copy' })).toBeDefined()
   })
 
   it('applies and removes a selector from the selected element via context menu', () => {
@@ -279,11 +296,11 @@ describe('SelectorsPanel', () => {
     useEditorStore.setState({ selectedNodeId: textNodeId } as Parameters<typeof useEditorStore.setState>[0])
     render(<SelectorsPanel variant="docked" />)
 
-    fireEvent.contextMenu(screen.getByRole('button', { name: /edit selector cta-button/i }))
+    fireEvent.contextMenu(screen.getByRole('button', { name: /edit selector \.cta-button/i }))
     fireEvent.click(screen.getByRole('menuitem', { name: /apply to selected element/i }))
     expect(useEditorStore.getState().site!.pages[0].nodes[textNodeId].classIds ?? []).toContain('cta-button')
 
-    fireEvent.contextMenu(screen.getByRole('button', { name: /edit selector cta-button/i }))
+    fireEvent.contextMenu(screen.getByRole('button', { name: /edit selector \.cta-button/i }))
     fireEvent.click(screen.getByRole('menuitem', { name: /remove from selected element/i }))
     expect(useEditorStore.getState().site!.pages[0].nodes[textNodeId].classIds ?? []).not.toContain('cta-button')
   })
@@ -292,17 +309,21 @@ describe('SelectorsPanel', () => {
     loadSiteWithSelectors()
     render(<SelectorsPanel variant="docked" />)
 
-    fireEvent.contextMenu(screen.getByRole('button', { name: /edit selector unused-card/i }))
+    fireEvent.contextMenu(screen.getByRole('button', { name: /edit selector \.unused-card/i }))
     fireEvent.click(screen.getByRole('menuitem', { name: /rename/i }))
-    fireEvent.change(screen.getByRole('textbox', { name: /selector name/i }), {
-      target: { value: 'renamed-card' },
+    const dialogClassNameInput = screen.getByRole('textbox', { name: /class name/i })
+    expect((dialogClassNameInput as HTMLInputElement).value).toBe('.unused-card')
+    fireEvent.change(dialogClassNameInput, {
+      target: { value: '.renamed-card' },
     })
     fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
     expect(useEditorStore.getState().site!.classes['unused-card'].name).toBe('renamed-card')
 
-    fireEvent.contextMenu(screen.getByRole('button', { name: /edit selector renamed-card/i }))
+    fireEvent.contextMenu(screen.getByRole('button', { name: /edit selector \.renamed-card/i }))
     fireEvent.click(screen.getByRole('menuitem', { name: /delete/i }))
     const deleteDialog = screen.getByRole('dialog', { name: /delete selector/i })
+    expect(deleteDialog.textContent).toContain('Delete .renamed-card?')
+    expect(deleteDialog.textContent).not.toContain('renamed-card (')
     expect(within(deleteDialog).getByText(/this selector is unused/i)).toBeDefined()
     fireEvent.click(within(deleteDialog).getByRole('button', { name: /delete selector/i }))
     expect(useEditorStore.getState().site!.classes['unused-card']).toBeUndefined()
@@ -323,7 +344,7 @@ describe('SelectorsPanel', () => {
 
     try {
       render(<SelectorsPanel variant="docked" />)
-      fireEvent.contextMenu(screen.getByRole('button', { name: /edit selector hero-title/i }))
+      fireEvent.contextMenu(screen.getByRole('button', { name: /edit selector \.hero-title/i }))
       fireEvent.click(screen.getByRole('menuitem', { name: /copy selector/i }))
       await Promise.resolve()
       expect(copied).toBe('.hero-title')

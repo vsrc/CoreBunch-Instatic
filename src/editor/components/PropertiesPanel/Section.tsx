@@ -8,9 +8,8 @@
  *   - PropertiesPanel.tsx (Module settings)
  *   - ClassComposer.tsx (assigned class style categories)
  *
- * The optional `indicator` prop renders a small dot next to the title to
- * signal state (e.g. breakpoint overrides active) — mirrors ClassComposer's
- * bpOverrideDot style (Spec §4.1 / Architect footnote #456).
+ * The optional `indicator` prop renders a small dot to signal state (e.g.
+ * breakpoint overrides active, or category contains stored styles).
  */
 
 import { useState } from "react";
@@ -22,8 +21,9 @@ interface SectionProps {
   title: string;
   children: React.ReactNode;
   defaultOpen?: boolean;
-  /** Render a small accent dot next to the title (e.g. 'bp' = breakpoint active). */
-  indicator?: "bp" | undefined;
+  /** Render a small accent dot (e.g. 'bp' = breakpoint active, 'set' = stored styles). */
+  indicator?: "bp" | "set" | undefined;
+  indicatorTestId?: string;
   icon?: IconComponent;
   meta?: React.ReactNode;
   forceOpen?: boolean;
@@ -34,6 +34,7 @@ export function Section({
   children,
   defaultOpen = false,
   indicator,
+  indicatorTestId,
   icon: SectionIcon,
   meta,
   forceOpen = false,
@@ -55,10 +56,23 @@ export function Section({
             <SectionIcon size={13} />
           </span>
         )}
-        <span className={styles.sectionTitle}>{title}</span>
+        <span className={styles.sectionTitleGroup}>
+          <span className={styles.sectionTitle}>{title}</span>
+          {indicator === "set" && (
+            <span
+              className={cn(styles.sectionIndicatorDot, styles.sectionSetIndicatorDot)}
+              data-testid={indicatorTestId}
+              aria-hidden="true"
+            />
+          )}
+        </span>
         {meta && <span className={styles.sectionMeta}>{meta}</span>}
         {indicator === "bp" && (
-          <span className={styles.sectionIndicatorDot} aria-hidden="true" />
+          <span
+            className={styles.sectionIndicatorDot}
+            data-testid={indicatorTestId}
+            aria-hidden="true"
+          />
         )}
       </button>
       {expanded && <div className={styles.sectionContent}>{children}</div>}

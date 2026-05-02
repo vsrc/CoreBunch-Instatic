@@ -2,7 +2,7 @@ import type { StateCreator } from 'zustand'
 import type { EditorStore } from '../store'
 
 export type FocusedPanel = 'canvas' | 'domTree' | 'properties' | null
-export type LeftSidebarPanelId = 'site' | 'selectors' | 'media' | 'dependencies' | 'layers' | 'agent'
+export type LeftSidebarPanelId = 'site' | 'selectors' | 'colors' | 'media' | 'dependencies' | 'layers' | 'agent'
 export type PropertiesPanelMode = 'docked' | 'floating'
 
 export const SIDEBAR_MIN_WIDTH = 260
@@ -59,6 +59,7 @@ export interface UiSlice {
   // Site explorer — user-facing site concepts, not generated source files
   siteExplorerPanelOpen: boolean
   selectorsPanelOpen: boolean
+  colorsPanelOpen: boolean
   mediaExplorerPanelOpen: boolean
   dependenciesPanelOpen: boolean
 
@@ -92,6 +93,7 @@ export interface UiSlice {
 
   setSiteExplorerPanelOpen: (open: boolean) => void
   setSelectorsPanelOpen: (open: boolean) => void
+  setColorsPanelOpen: (open: boolean) => void
   setMediaExplorerPanelOpen: (open: boolean) => void
   setDependenciesPanelOpen: (open: boolean) => void
   setLeftSidebarPanel: (panel: LeftSidebarPanelId | null) => void
@@ -150,6 +152,7 @@ export function clampSidebarWidth(width: number) {
 function getActiveLeftSidebarPanel(state: EditorStore): LeftSidebarPanelId | null {
   if (state.siteExplorerPanelOpen) return 'site'
   if (state.selectorsPanelOpen) return 'selectors'
+  if (state.colorsPanelOpen) return 'colors'
   if (state.mediaExplorerPanelOpen) return 'media'
   if (state.dependenciesPanelOpen) return 'dependencies'
   if (!state.domTreePanel.collapsed) return 'layers'
@@ -171,6 +174,7 @@ export const createUiSlice: StateCreator<EditorStore, [], [], UiSlice> = (set, g
   insertPickerParentId: null,
   siteExplorerPanelOpen: false,
   selectorsPanelOpen: false,
+  colorsPanelOpen: false,
   mediaExplorerPanelOpen: false,
   dependenciesPanelOpen: false,
   codeEditorPanelOpen: false,
@@ -263,6 +267,8 @@ export const createUiSlice: StateCreator<EditorStore, [], [], UiSlice> = (set, g
 
   setSelectorsPanelOpen: (open) => set({ selectorsPanelOpen: open }),
 
+  setColorsPanelOpen: (open) => set({ colorsPanelOpen: open }),
+
   setMediaExplorerPanelOpen: (open) => set({ mediaExplorerPanelOpen: open }),
 
   setDependenciesPanelOpen: (open) => set({ dependenciesPanelOpen: open }),
@@ -271,6 +277,7 @@ export const createUiSlice: StateCreator<EditorStore, [], [], UiSlice> = (set, g
     set((state) => ({
       siteExplorerPanelOpen: panel === 'site',
       selectorsPanelOpen: panel === 'selectors',
+      colorsPanelOpen: panel === 'colors',
       mediaExplorerPanelOpen: panel === 'media',
       dependenciesPanelOpen: panel === 'dependencies',
       domTreePanel: {

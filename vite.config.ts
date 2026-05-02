@@ -235,7 +235,7 @@ export default defineConfig({
       '@editor': path.resolve(__dirname, 'src/editor'),
       '@modules': path.resolve(__dirname, 'src/modules'),
       '@ui': path.resolve(__dirname, 'src/ui'),
-      '@app': path.resolve(__dirname, 'src/app'),
+      '@admin': path.resolve(__dirname, 'src/admin'),
       // @motion/icons — 2,216 icon components vendored in src/ui/icons/
       // (copied from motion.page-master/packages/icons — Constraint #348)
       '@motion/icons': path.resolve(__dirname, 'src/ui/icons'),

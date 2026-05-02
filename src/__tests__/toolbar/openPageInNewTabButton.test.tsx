@@ -30,8 +30,8 @@ afterEach(() => {
   cleanup()
 })
 
-describe('OpenPageInNewTabButton', () => {
-  it('opens the active page in a new tab from the toolbar button before Preview', () => {
+describe('Toolbar publishing actions', () => {
+  it('opens the active page in a new tab from the publishing actions menu', () => {
     const originalOpen = window.open
     const openCalls: unknown[] = []
     window.open = ((...args: unknown[]) => {
@@ -43,11 +43,9 @@ describe('OpenPageInNewTabButton', () => {
       render(<Toolbar />)
 
       const toolbar = screen.getByTestId('toolbar')
-      const buttons = within(toolbar).getAllByRole('button')
-      const openButton = within(toolbar).getByRole('button', { name: /open page in new tab/i })
-      const previewButton = within(toolbar).getByRole('button', { name: /preview page/i })
-
-      expect(buttons.indexOf(openButton)).toBe(buttons.indexOf(previewButton) - 1)
+      fireEvent.click(within(toolbar).getByRole('button', { name: /more publishing actions/i }))
+      const menu = screen.getByRole('menu', { name: /publishing actions/i })
+      const openButton = within(menu).getByRole('menuitem', { name: /open live page/i })
 
       fireEvent.click(openButton)
 

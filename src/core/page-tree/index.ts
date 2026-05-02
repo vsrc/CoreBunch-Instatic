@@ -10,6 +10,12 @@ export type {
   DynamicPropBinding,
   DynamicBindingFormat,
   DynamicBindingSource,
+  FrameworkSettings,
+  FrameworkColorSettings,
+  FrameworkColorCategory,
+  FrameworkColorToken,
+  FrameworkColorUtilityType,
+  GeneratedClassMetadata,
 } from './types'
 
 export {

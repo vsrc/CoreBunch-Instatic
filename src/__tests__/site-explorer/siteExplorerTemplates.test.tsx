@@ -159,8 +159,8 @@ describe('SiteExplorerPanel templates', () => {
 
     await waitFor(() => expect(collectionRequests).toBe(1))
     fireEvent.click(collectionControl)
-    const collectionMenu = await screen.findByRole('menu', { name: 'Collection' })
-    fireEvent.click(within(collectionMenu).getByRole('menuitem', { name: 'Projects' }))
+    const collectionMenu = await screen.findByRole('listbox', { name: 'Collection' })
+    fireEvent.click(within(collectionMenu).getByRole('option', { name: 'Projects' }))
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
 
     const page = useEditorStore.getState().site?.pages.find((candidate) => candidate.id === 'page-home')

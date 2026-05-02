@@ -29,7 +29,7 @@
       "@editor/*": ["src/editor/*"],
       "@modules/*": ["src/modules/*"],
       "@ui/*": ["src/ui/*"],
-      "@app/*": ["src/app/*"],
+      "@admin/*": ["src/admin/*"],
       "@motion/icons": ["src/ui/icons/index.ts"],
       "@motion/icons/*": ["src/ui/icons/*"]
     }

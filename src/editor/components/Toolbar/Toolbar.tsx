@@ -3,7 +3,7 @@
  *
  * Layout (left → right):
  *   [Site name] [UndoRedo] [divider]
- *   [ZoomControls] [spacer→] [SaveIndicator/Save] [Open in new tab] [Preview] [Publish] [Settings]
+ *   [ZoomControls] [spacer→] [Publish actions] [Settings]
  *
  * Accessibility (WCAG 2.1 AA):
  * - role="banner" for the top-level landmark
@@ -19,15 +19,12 @@ import type { RegisteredPluginToolbarButton } from '@core/plugin-sdk'
 import { UndoRedoButtons } from './UndoRedoButtons'
 import { ZoomControls } from './ZoomControls'
 import { PublishButton } from './PublishButton'
-import { PreviewButton } from './PreviewButton'
-import { OpenPageInNewTabButton } from './OpenPageInNewTabButton'
 import { SettingsButton } from './SettingsButton'
-import { SaveIndicator } from './SaveIndicator'
 import { PreviewOverlay } from '../Preview/PreviewOverlay'
 import { Button } from '@ui/components/Button'
 import { cn } from '@ui/cn'
 import type { PersistenceSaveStatus } from '@editor/hooks/usePersistence'
-import type { AdminWorkspace } from '@app/EditorLayout'
+import type { AdminWorkspace } from '@admin/AdminLayout'
 import styles from './Toolbar.module.css'
 
 interface ToolbarProps {
@@ -192,11 +189,7 @@ export function Toolbar({
             <>
               <ZoomControls />
               <Divider />
-              <SaveIndicator onSave={onSave} saveStatus={saveStatus} />
-              <Divider />
-              <OpenPageInNewTabButton />
-              <PreviewButton />
-              <PublishButton enabled={publishEnabled} onSave={onSave} />
+              <PublishButton enabled={publishEnabled} onSave={onSave} saveStatus={saveStatus} />
               <SettingsButton />
             </>
           )}

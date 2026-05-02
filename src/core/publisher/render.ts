@@ -16,6 +16,7 @@ import { resolveProps } from '../page-tree/selectors'
 import { resolveDynamicProps, type TemplateRenderDataContext } from '../templates/dynamicBindings'
 import { classNamesForClassIds } from '../page-tree/classNames'
 import { sanitizeModuleCSS, collectClassCSS } from './cssCollector'
+import { generateFrameworkColorRootCss } from '../framework/colors'
 import { escapeHtml, isSafeUrl } from './utils'
 
 // Re-export canonical utilities so existing imports from this file keep working
@@ -240,7 +241,9 @@ function buildRootCss(site: SiteDocument): string {
     .filter(([k]) => CSS_CUSTOM_PROP_RE.test(k))
     .map(([k, v]) => `  ${k}: ${sanitizeCssTokenValue(v)};`)
     .join('\n')
-  return `:root {\n${declarations}\n}`
+  const legacyRootCss = declarations ? `:root {\n${declarations}\n}` : ''
+  const frameworkColorCss = generateFrameworkColorRootCss(site.settings.framework?.colors)
+  return [legacyRootCss, frameworkColorCss].filter(Boolean).join('\n')
 }
 
 /**
