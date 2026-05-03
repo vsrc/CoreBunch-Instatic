@@ -1,18 +1,46 @@
+import { z } from 'zod'
 import type {
   CmsPluginsPayload,
   InstalledPlugin,
   PluginManifest,
   PluginPermission,
 } from '../plugin-sdk'
+import { parseJsonResponse } from '@core/utils/jsonValidate'
 import { responseErrorMessage } from './httpErrors'
 
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
 
-async function readJson<T>(res: Response, fallback: string): Promise<T> {
+// ---------------------------------------------------------------------------
+// Envelope schemas
+//
+// Same envelope-only strategy as cmsContent.ts: validate the outer keys,
+// pass deep types through as unknown, cast at the call site. Surfaced by
+// /audit-types — replaces `await res.json() as T` with caller-supplied T.
+
+const PluginsListEnvelope = z.object({
+  plugins: z.array(z.unknown()).optional(),
+  adminPages: z.array(z.unknown()).optional(),
+}).passthrough()
+
+const PluginActionEnvelope = z.object({
+  plugin: z.unknown().optional(),
+  plugins: z.array(z.unknown()).optional(),
+  adminPages: z.array(z.unknown()).optional(),
+}).passthrough()
+
+const ManifestEnvelope = z.object({
+  manifest: z.unknown().optional(),
+}).passthrough()
+
+async function readEnvelope<T>(
+  res: Response,
+  schema: z.ZodType<T>,
+  fallback: string,
+): Promise<T> {
   if (!res.ok) {
     throw new Error(await responseErrorMessage(res, fallback))
   }
-  return await res.json() as T
+  return await parseJsonResponse(res, schema)
 }
 
 function emptyPayload(body: Partial<CmsPluginsPayload>): CmsPluginsPayload {
@@ -30,10 +58,8 @@ export async function listCmsPlugins(
     method: 'GET',
     credentials: 'include',
   })
-  return emptyPayload(await readJson<CmsPluginsPayload>(
-    res,
-    `CMS plugins failed with ${res.status}`,
-  ))
+  const body = await readEnvelope(res, PluginsListEnvelope, `CMS plugins failed with ${res.status}`)
+  return emptyPayload(body as Partial<CmsPluginsPayload>)
 }
 
 export async function installCmsPluginManifest(
@@ -64,13 +90,10 @@ export async function installCmsPluginManifest(
         : manifest,
     ),
   })
-  const body = await readJson<{ plugin?: InstalledPlugin } & Partial<CmsPluginsPayload>>(
-    res,
-    `CMS plugin install failed with ${res.status}`,
-  )
+  const body = await readEnvelope(res, PluginActionEnvelope, `CMS plugin install failed with ${res.status}`)
   return {
-    plugin: body.plugin,
-    ...emptyPayload(body),
+    plugin: body.plugin as InstalledPlugin | undefined,
+    ...emptyPayload(body as Partial<CmsPluginsPayload>),
   }
 }
 
@@ -86,12 +109,9 @@ export async function inspectCmsPluginPackage(
     credentials: 'include',
     body: formData,
   })
-  const body = await readJson<{ manifest?: PluginManifest }>(
-    res,
-    `CMS plugin package inspection failed with ${res.status}`,
-  )
+  const body = await readEnvelope(res, ManifestEnvelope, `CMS plugin package inspection failed with ${res.status}`)
   if (!body.manifest) throw new Error('CMS plugin package inspection response was missing manifest')
-  return body.manifest
+  return body.manifest as PluginManifest
 }
 
 export async function installCmsPluginPackage(
@@ -109,13 +129,10 @@ export async function installCmsPluginPackage(
     credentials: 'include',
     body: formData,
   })
-  const body = await readJson<{ plugin?: InstalledPlugin } & Partial<CmsPluginsPayload>>(
-    res,
-    `CMS plugin package install failed with ${res.status}`,
-  )
+  const body = await readEnvelope(res, PluginActionEnvelope, `CMS plugin package install failed with ${res.status}`)
   return {
-    plugin: body.plugin,
-    ...emptyPayload(body),
+    plugin: body.plugin as InstalledPlugin | undefined,
+    ...emptyPayload(body as Partial<CmsPluginsPayload>),
   }
 }
 
@@ -131,13 +148,10 @@ export async function setCmsPluginEnabled(
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ enabled }),
   })
-  const body = await readJson<{ plugin?: InstalledPlugin } & Partial<CmsPluginsPayload>>(
-    res,
-    `CMS plugin update failed with ${res.status}`,
-  )
+  const body = await readEnvelope(res, PluginActionEnvelope, `CMS plugin update failed with ${res.status}`)
   return {
-    plugin: body.plugin,
-    ...emptyPayload(body),
+    plugin: body.plugin as InstalledPlugin | undefined,
+    ...emptyPayload(body as Partial<CmsPluginsPayload>),
   }
 }
 

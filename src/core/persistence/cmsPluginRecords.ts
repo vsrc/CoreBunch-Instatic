@@ -1,4 +1,6 @@
+import { z } from 'zod'
 import type { PluginRecord, PluginResource } from '../plugin-sdk'
+import { parseJsonResponse } from '@core/utils/jsonValidate'
 import { responseErrorMessage } from './httpErrors'
 
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
@@ -8,11 +10,29 @@ interface PluginRecordsPayload {
   records?: PluginRecord[]
 }
 
-async function readJson<T>(res: Response, fallback: string): Promise<T> {
+// Envelope schemas — same strategy as cmsContent / cmsPlugins. PluginRecord
+// and PluginResource are deep types validated downstream by their domain
+// modules; here we just check that the wrapper object has the expected key.
+// Surfaced by /audit-types.
+
+const PluginRecordsEnvelope = z.object({
+  resource: z.unknown().optional(),
+  records: z.array(z.unknown()).optional(),
+}).passthrough()
+
+const RecordEnvelope = z.object({
+  record: z.unknown().optional(),
+}).passthrough()
+
+async function readEnvelope<T>(
+  res: Response,
+  schema: z.ZodType<T>,
+  fallback: string,
+): Promise<T> {
   if (!res.ok) {
     throw new Error(await responseErrorMessage(res, fallback))
   }
-  return await res.json() as T
+  return await parseJsonResponse(res, schema)
 }
 
 function recordsPath(basePath: string, pluginId: string, resourceId: string): string {
@@ -29,11 +49,9 @@ export async function listCmsPluginResourceRecords(
     method: 'GET',
     credentials: 'include',
   })
-  const body = await readJson<PluginRecordsPayload>(
-    res,
-    `CMS plugin records failed with ${res.status}`,
-  )
-  return Array.isArray(body.records) ? body.records : []
+  const body = await readEnvelope(res, PluginRecordsEnvelope, `CMS plugin records failed with ${res.status}`)
+  const cast = body as PluginRecordsPayload
+  return Array.isArray(cast.records) ? cast.records : []
 }
 
 export async function loadCmsPluginResource(
@@ -46,14 +64,12 @@ export async function loadCmsPluginResource(
     method: 'GET',
     credentials: 'include',
   })
-  const body = await readJson<PluginRecordsPayload>(
-    res,
-    `CMS plugin resource failed with ${res.status}`,
-  )
-  if (!body.resource) throw new Error('CMS plugin resource response was missing resource')
+  const body = await readEnvelope(res, PluginRecordsEnvelope, `CMS plugin resource failed with ${res.status}`)
+  const cast = body as PluginRecordsPayload
+  if (!cast.resource) throw new Error('CMS plugin resource response was missing resource')
   return {
-    resource: body.resource,
-    records: Array.isArray(body.records) ? body.records : [],
+    resource: cast.resource,
+    records: Array.isArray(cast.records) ? cast.records : [],
   }
 }
 
@@ -70,12 +86,9 @@ export async function createCmsPluginResourceRecord(
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ data }),
   })
-  const body = await readJson<{ record?: PluginRecord }>(
-    res,
-    `CMS plugin record create failed with ${res.status}`,
-  )
+  const body = await readEnvelope(res, RecordEnvelope, `CMS plugin record create failed with ${res.status}`)
   if (!body.record) throw new Error('CMS plugin record create response was missing record')
-  return body.record
+  return body.record as PluginRecord
 }
 
 export async function updateCmsPluginResourceRecord(
@@ -92,12 +105,9 @@ export async function updateCmsPluginResourceRecord(
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ data }),
   })
-  const body = await readJson<{ record?: PluginRecord }>(
-    res,
-    `CMS plugin record update failed with ${res.status}`,
-  )
+  const body = await readEnvelope(res, RecordEnvelope, `CMS plugin record update failed with ${res.status}`)
   if (!body.record) throw new Error('CMS plugin record update response was missing record')
-  return body.record
+  return body.record as PluginRecord
 }
 
 export async function deleteCmsPluginResourceRecord(
