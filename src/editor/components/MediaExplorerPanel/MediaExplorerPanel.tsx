@@ -442,7 +442,7 @@ export function MediaExplorerPanel({
                     size="xs"
                     iconOnly
                     pressed={viewMode === 'list'}
-                    title="List view"
+                    tooltip="List view"
                     aria-label="List view"
                     onClick={() => setViewMode('list')}
                   >
@@ -453,7 +453,7 @@ export function MediaExplorerPanel({
                     size="xs"
                     iconOnly
                     pressed={viewMode === 'grid'}
-                    title="Grid view"
+                    tooltip="Grid view"
                     aria-label="Grid view"
                     onClick={() => setViewMode('grid')}
                   >
