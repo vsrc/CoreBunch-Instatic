@@ -95,8 +95,17 @@ export async function saveDraftSite(db: DbClient, site: SiteDocument): Promise<v
       `
     }
 
+    // Bun.sql tagged templates do NOT auto-bind a JS array to a Postgres
+    // array literal — passing `${pageIds}` here would serialize the array
+    // as a single text value and Postgres would error with "malformed
+    // array literal: <id>". Use the positional `.unsafe()` API which
+    // forwards the JS array as a real text[] parameter, same as the
+    // original pg client did.
     const pageIds = site.pages.map((page) => page.id)
-    await tx`delete from pages where not (id = any(${pageIds}))`
+    await tx.unsafe(
+      'delete from pages where not (id = any($1::text[]))',
+      [pageIds],
+    )
   })
 }
 
