@@ -1,30 +1,26 @@
-/* eslint-disable react-refresh/only-export-components */
 /**
  * base.container — semantic wrapper.
  *
  * Emits the chosen semantic tag with no default class or default CSS.
  * Visual styling is opt-in via user classes (mcClassName / multi-class system).
  */
-import React from 'react'
-import { type ModuleDefinition, type ModuleComponentProps } from '@core/module-engine/types'
+import type { ModuleDefinition } from '@core/module-engine/types'
 import { registry } from '@core/module-engine/registry'
 import { SquareIcon } from 'pixel-art-icons/icons/square'
+import { ContainerEditor } from './ContainerEditor'
+
+type ContainerTag = 'div' | 'section' | 'article' | 'main' | 'header' | 'footer'
 
 interface ContainerProps extends Record<string, unknown> {
-  tag: 'div' | 'section' | 'article' | 'main' | 'header' | 'footer'
+  tag: ContainerTag
 }
 
-const VALID_TAGS = new Set<ContainerProps['tag']>(['div', 'section', 'article', 'main', 'header', 'footer'])
+const VALID_TAGS = new Set<ContainerTag>(['div', 'section', 'article', 'main', 'header', 'footer'])
 
-function resolveContainerTag(value: unknown): ContainerProps['tag'] {
-  return typeof value === 'string' && VALID_TAGS.has(value as ContainerProps['tag'])
-    ? value as ContainerProps['tag']
+function resolveContainerTag(value: unknown): ContainerTag {
+  return typeof value === 'string' && VALID_TAGS.has(value as ContainerTag)
+    ? (value as ContainerTag)
     : 'div'
-}
-
-const ContainerEditor: React.FC<ModuleComponentProps<ContainerProps>> = ({ props, children, mcClassName }) => {
-  const Tag = resolveContainerTag(props.tag)
-  return React.createElement(Tag, { className: mcClassName }, children)
 }
 
 export const ContainerModule: ModuleDefinition<ContainerProps> = {
@@ -66,4 +62,4 @@ export const ContainerModule: ModuleDefinition<ContainerProps> = {
   },
 }
 
-registry.register(ContainerModule)
+registry.registerOrReplace(ContainerModule)

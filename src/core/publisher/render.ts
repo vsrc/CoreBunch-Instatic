@@ -26,7 +26,7 @@ import type { PublishedPageRuntimeAssets } from '../site-runtime/schemas'
 import { hasPublishedRuntimeScripts, scriptTagsForRuntimeAssets } from '../site-runtime'
 import { sanitizeRichtext } from '../sanitize'
 import { instantiateVCAtRef, type InstantiatedVCNode } from '../visualComponents/instantiate'
-import type { VCNode } from '../visualComponents/types'
+import type { VCNode } from '../visualComponents/schemas'
 
 // Re-export canonical utilities so existing imports from this file keep working
 // (render.test.ts imports escapeHtml / isSafeUrl from here)

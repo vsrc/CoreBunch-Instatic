@@ -1,14 +1,13 @@
-/* eslint-disable react-refresh/only-export-components */
 /**
  * base.text — unified semantic text module.
  *
  * Content and semantic tag are module settings; visual typography belongs to
  * class styles. Emits a bare semantic element with no default class or CSS.
  */
-import React from 'react'
-import { type ModuleDefinition, type ModuleComponentProps } from '@core/module-engine/types'
+import type { ModuleDefinition } from '@core/module-engine/types'
 import { registry } from '@core/module-engine/registry'
 import { TextStartTIcon } from 'pixel-art-icons/icons/text-start-t'
+import { TextEditor } from './TextEditor'
 
 type TextTag =
   | 'p'
@@ -47,11 +46,6 @@ const TEXT_TAGS = new Set<TextTag>([
 function normalizeTag(tag: unknown): TextTag {
   const value = String(tag || 'p').toLowerCase() as TextTag
   return TEXT_TAGS.has(value) ? value : 'p'
-}
-
-const TextEditor: React.FC<ModuleComponentProps<TextProps>> = ({ props, mcClassName }) => {
-  const Tag = normalizeTag(props.tag) as React.ElementType
-  return React.createElement(Tag, { className: mcClassName }, props.text || 'Text')
 }
 
 export const TextModule: ModuleDefinition<TextProps> = {
@@ -101,4 +95,4 @@ export const TextModule: ModuleDefinition<TextProps> = {
   },
 }
 
-registry.register(TextModule)
+registry.registerOrReplace(TextModule)

@@ -19,7 +19,7 @@
  */
 
 import type { SiteDocument } from '../page-tree/schemas'
-import type { VCNode } from '../visualComponents/types'
+import type { VCNode } from '../visualComponents/schemas'
 import { generateClassCSS } from './classCss'
 
 /**

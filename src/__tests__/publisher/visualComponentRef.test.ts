@@ -15,7 +15,7 @@
 
 import { describe, it, expect } from 'bun:test'
 import { publishPage, renderNode, type RenderContext } from '@core/publisher/render'
-import type { VisualComponent, VCParam, VCNode } from '@core/visualComponents/types'
+import type { VisualComponent, VCParam, VCNode } from '@core/visualComponents/schemas'
 import { makeModule, makeRegistry, makePage, makeSite } from './helpers'
 import { ContainerModule } from '../../modules/base/container'
 import { TextModule } from '../../modules/base/text'

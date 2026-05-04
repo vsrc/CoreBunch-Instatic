@@ -1,4 +1,3 @@
-/* eslint-disable react-refresh/only-export-components */
 /**
  * base.button — content/behavior module.
  *
@@ -6,25 +5,17 @@
  * default class or default CSS. Visual styling is opt-in via user classes
  * (mcClassName / multi-class system).
  */
-import React from 'react'
-import { type ModuleDefinition, type ModuleComponentProps } from '@core/module-engine/types'
+import type { ModuleDefinition } from '@core/module-engine/types'
 import { registry } from '@core/module-engine/registry'
 import { CursorClickIcon } from 'pixel-art-icons/icons/cursor-click'
 import { safeUrl } from '../utils/escape'
+import { ButtonEditor } from './ButtonEditor'
 
 interface ButtonProps extends Record<string, unknown> {
   label: string
   href: string
   target: '_blank' | '_self' | '_parent'
   disabled: boolean
-}
-
-const ButtonEditor: React.FC<ModuleComponentProps<ButtonProps>> = ({ props, mcClassName }) => {
-  if (props.href) {
-    const rel = props.target === '_blank' ? 'noopener noreferrer' : undefined
-    return <a href={props.href} target={props.target} rel={rel} className={mcClassName}>{props.label || 'Button'}</a>
-  }
-  return <button type="button" className={mcClassName} disabled={props.disabled}>{props.label || 'Button'}</button>
 }
 
 export const ButtonModule: ModuleDefinition<ButtonProps> = {
@@ -74,4 +65,4 @@ export const ButtonModule: ModuleDefinition<ButtonProps> = {
   },
 }
 
-registry.register(ButtonModule)
+registry.registerOrReplace(ButtonModule)

@@ -157,12 +157,15 @@ describe('Phase 1 Gate 4 — CSS deduplication O(modules) (Guideline #307 Hot Pa
 
 describe('Phase 1 Gates 5 & 6 — base.video registered and retired layout modules absent', () => {
   it('base.video module file exists', () => {
-    const videoPath = join(SRC_ROOT, 'modules/base/video/index.tsx')
+    const videoPath = join(SRC_ROOT, 'modules/base/video/index.ts')
     expect(existsSync(videoPath)).toBe(true)
   })
 
   it('layout-only base module files are removed', () => {
     for (const retiredPath of [
+      join(SRC_ROOT, 'modules/base/columns/index.ts'),
+      join(SRC_ROOT, 'modules/base/spacer/index.ts'),
+      join(SRC_ROOT, 'modules/base/divider/index.ts'),
       join(SRC_ROOT, 'modules/base/columns/index.tsx'),
       join(SRC_ROOT, 'modules/base/spacer/index.tsx'),
       join(SRC_ROOT, 'modules/base/divider/index.tsx'),
@@ -192,7 +195,7 @@ describe('Phase 1 Gates 5 & 6 — base.video registered and retired layout modul
 
 describe('Phase 1 Gate 7 — Constraint #310: css is props-independent', () => {
   it('base.video render() css field does not interpolate props.*', () => {
-    const videoPath = join(SRC_ROOT, 'modules/base/video/index.tsx')
+    const videoPath = join(SRC_ROOT, 'modules/base/video/index.ts')
     const src = readFileSync(videoPath, 'utf-8')
     // The css field must not use template literal prop interpolation like ${props.X}
     // Find the css: field in the render() return and check it has no prop interpolation

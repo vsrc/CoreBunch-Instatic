@@ -238,6 +238,11 @@ if (USES_LOCAL_POSTGRES) {
 checkPortAvailable(CMS_PORT, 'cms')
 checkPortAvailable(VITE_PORT, 'vite')
 
+log('')
+log(`Open the editor at:  http://localhost:${VITE_PORT}`)
+log(`CMS API runs on:     http://localhost:${CMS_PORT} (you usually don't open this directly)`)
+log('')
+
 // --- spawn cms + vite -----------------------------------------------------
 
 interface DevProcess {

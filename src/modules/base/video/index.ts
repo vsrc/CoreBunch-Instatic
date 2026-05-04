@@ -1,4 +1,3 @@
-/* eslint-disable react-refresh/only-export-components */
 /**
  * base.video - responsive video embed.
  *
@@ -7,13 +6,11 @@
  * (mcClassName / multi-class system). The editor preview wraps the element
  * in chrome that is editor-only and does NOT ship to the published page.
  */
-import React from 'react'
-import { type ModuleDefinition, type ModuleComponentProps } from '@core/module-engine/types'
+import type { ModuleDefinition } from '@core/module-engine/types'
 import { registry } from '@core/module-engine/registry'
 import { VideoIcon } from 'pixel-art-icons/icons/video'
 import { safeUrl } from '../utils/escape'
-import { cn } from '@ui/cn'
-import styles from './video.module.css'
+import { VideoEditor } from './VideoEditor'
 
 interface VideoProps extends Record<string, unknown> {
   source: 'media' | 'youtube' | 'url'
@@ -29,46 +26,6 @@ function youtubeEmbedUrl(id: unknown, autoplay: unknown): string {
   const safeId = encodeURIComponent(String(id ?? '').trim())
   if (!safeId) return ''
   return `https://www.youtube.com/embed/${safeId}${autoplay ? '?autoplay=1' : ''}`
-}
-
-const VideoEditor: React.FC<ModuleComponentProps<VideoProps>> = ({ props, mcClassName }) => {
-  const isYoutube = props.source === 'youtube'
-  const sourceUrl = isYoutube
-    ? youtubeEmbedUrl(props.youtubeId, props.autoplay)
-    : props.videoUrl
-
-  if (!sourceUrl) {
-    return (
-      <div className={cn(styles.placeholder, mcClassName)}>
-        <span className={styles.playIcon}>Play</span>
-        <span>{isYoutube ? 'YouTube ID required' : 'Video URL required'}</span>
-      </div>
-    )
-  }
-
-  if (isYoutube) {
-    return (
-      <iframe
-        className={mcClassName}
-        src={sourceUrl}
-        title="YouTube video"
-        frameBorder="0"
-        allow="autoplay; encrypted-media; fullscreen"
-        allowFullScreen
-      />
-    )
-  }
-
-  return (
-    <video
-      className={mcClassName}
-      src={sourceUrl}
-      autoPlay={props.autoplay}
-      loop={props.loop}
-      muted={props.muted}
-      controls={props.controls}
-    />
-  )
 }
 
 export const VideoModule: ModuleDefinition<VideoProps> = {
@@ -144,4 +101,4 @@ export const VideoModule: ModuleDefinition<VideoProps> = {
   },
 }
 
-registry.register(VideoModule)
+registry.registerOrReplace(VideoModule)

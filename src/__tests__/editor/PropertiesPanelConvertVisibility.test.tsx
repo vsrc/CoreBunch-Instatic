@@ -23,7 +23,7 @@ import React from 'react'
 import { cleanup, render, screen } from '@testing-library/react'
 import { PropertiesPanel } from '../../editor/components/PropertiesPanel/PropertiesPanel'
 import { useEditorStore } from '@core/editor-store/store'
-import type { VisualComponent, VCNode } from '@core/visualComponents/types'
+import type { VisualComponent, VCNode } from '@core/visualComponents/schemas'
 import { makeSite, makePage, makeNode } from '../fixtures'
 
 // Register base modules so registry.get() resolves module definitions in-test

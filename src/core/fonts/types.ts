@@ -1,15 +1,11 @@
 /**
- * Re-export of font-related types from `page-tree/types`. Lets the rest of the
- * fonts subsystem `import { FontEntry, ... } from '@core/fonts/types'` without
- * threading the page-tree path through every file.
+ * Fonts — runtime-only type declarations.
+ *
+ * These types describe runtime structures that have no Zod schema equivalent
+ * (they are derived from external sources, not persisted data).
+ * Persisted font types (FontEntry, FontFile, FontSource, SiteFontsSettings)
+ * live in `./schemas` — that is the source of truth for those shapes.
  */
-
-export type {
-  FontEntry,
-  FontFile,
-  FontSource,
-  SiteFontsSettings,
-} from '@core/page-tree/schemas'
 
 /**
  * Parsed variant — `weight` is the numeric CSS font-weight; `italic` is true

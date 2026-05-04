@@ -1,4 +1,3 @@
-/* eslint-disable react-refresh/only-export-components */
 /**
  * base.slot-outlet — slot placeholder inside a Visual Component tree.
  *
@@ -11,25 +10,13 @@
  *
  * Architecture source: Contribution #619 §8
  */
-import React from 'react'
-import { type ModuleDefinition, type ModuleComponentProps } from '@core/module-engine/types'
+import type { ModuleDefinition } from '@core/module-engine/types'
 import { registry } from '@core/module-engine/registry'
 import { TargetIcon } from 'pixel-art-icons/icons/target'
-import styles from './SlotOutlet.module.css'
+import { SlotOutletEditor } from './SlotOutletEditor'
 
 interface SlotOutletProps extends Record<string, unknown> {
   slotName: string
-}
-
-const SlotOutletEditor: React.FC<ModuleComponentProps<SlotOutletProps>> = ({ props }) => {
-  const slotName = typeof props.slotName === 'string' && props.slotName ? props.slotName : 'children'
-
-  return (
-    <div className={styles.placeholder}>
-      <TargetIcon size={12} color="currentColor" aria-hidden="true" />
-      <span className={styles.label}>Slot: {slotName}</span>
-    </div>
-  )
 }
 
 export const SlotOutletModule: ModuleDefinition<SlotOutletProps> = {
@@ -66,4 +53,4 @@ export const SlotOutletModule: ModuleDefinition<SlotOutletProps> = {
   render: () => ({ html: '', css: '' }),
 }
 
-registry.register(SlotOutletModule)
+registry.registerOrReplace(SlotOutletModule)

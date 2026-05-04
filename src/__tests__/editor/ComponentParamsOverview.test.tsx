@@ -17,7 +17,7 @@ import React from 'react'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { ComponentParamsOverview } from '../../editor/components/PropertiesPanel/ComponentParamsOverview'
 import { useEditorStore } from '@core/editor-store/store'
-import type { VisualComponent, VCNode, VCParam } from '@core/visualComponents/types'
+import type { VisualComponent, VCNode, VCParam } from '@core/visualComponents/schemas'
 import { makeSite } from '../fixtures'
 
 afterEach(cleanup)

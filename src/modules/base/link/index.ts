@@ -4,30 +4,16 @@
  * Emits a bare `<a>` with no default class or default CSS.
  * Visual styling is opt-in via user classes (mcClassName / multi-class system).
  */
-import React from 'react'
-import { type ModuleDefinition, type ModuleComponentProps } from '@core/module-engine/types'
+import type { ModuleDefinition } from '@core/module-engine/types'
 import { registry } from '@core/module-engine/registry'
 import { LinkIcon } from 'pixel-art-icons/icons/link'
 import { safeUrl } from '../utils/escape'
+import { LinkEditor } from './LinkEditor'
 
 interface LinkProps extends Record<string, unknown> {
   href: string
   text: string
   target: '_blank' | '_self' | '_parent'
-}
-
-const LinkEditor: React.FC<ModuleComponentProps<LinkProps>> = ({ props, children, mcClassName }) => {
-  const rel = props.target === '_blank' ? 'noopener noreferrer' : undefined
-  return React.createElement(
-    'a',
-    {
-      href: props.href || '#',
-      target: props.target,
-      rel,
-      className: mcClassName,
-    },
-    children ?? props.text ?? 'Link text',
-  )
 }
 
 export const LinkModule: ModuleDefinition<LinkProps> = {
@@ -73,4 +59,4 @@ export const LinkModule: ModuleDefinition<LinkProps> = {
   },
 }
 
-registry.register(LinkModule)
+registry.registerOrReplace(LinkModule)

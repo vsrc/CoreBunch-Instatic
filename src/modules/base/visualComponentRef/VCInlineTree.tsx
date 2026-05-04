@@ -14,7 +14,7 @@
  */
 
 import { registry } from '@core/module-engine/registry'
-import type { VCNode } from '@core/visualComponents/types'
+import type { VCNode } from '@core/visualComponents/schemas'
 
 interface VCInlineTreeProps {
   /** Flat node map from instantiateVCAtRef */

@@ -1,12 +1,8 @@
 export type {
   CSSClass,
-  FontEntry,
-  FontFile,
-  FontSource,
   Page,
   PageNode,
   SiteDocument,
-  SiteFontsSettings,
   Breakpoint,
   SiteSettings,
   PageTemplateConfig,
@@ -16,6 +12,13 @@ export type {
   DynamicBindingFormat,
   DynamicBindingSource,
 } from './schemas'
+
+export type {
+  FontEntry,
+  FontFile,
+  FontSource,
+  SiteFontsSettings,
+} from '../fonts/schemas'
 
 export type { BaseNode } from './baseNode'
 

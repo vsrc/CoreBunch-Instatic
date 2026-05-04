@@ -5,7 +5,8 @@ import { generateFrameworkSpacingRootCss } from '@core/framework/spacing'
 import { resolveFrameworkPreferences } from '@core/framework/preferences'
 import { generateFontsCss } from '@core/fonts/css'
 import { cssClassSelector } from '@core/page-tree/classNames'
-import type { CSSClass, SiteFontsSettings } from '@core/page-tree/schemas'
+import type { CSSClass } from '@core/page-tree/schemas'
+import type { SiteFontsSettings } from '@core/fonts/schemas'
 import type {
   FrameworkColorSettings,
   FrameworkPreferencesSettings,

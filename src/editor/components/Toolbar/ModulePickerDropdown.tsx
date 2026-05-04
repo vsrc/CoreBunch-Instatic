@@ -29,7 +29,7 @@ import {
 } from 'react'
 import { useEditorStore, selectActivePage } from '@core/editor-store/store'
 import type { Page } from '@core/page-tree/schemas'
-import type { VisualComponent } from '@core/visualComponents/types'
+import type { VisualComponent } from '@core/visualComponents/schemas'
 import { registry } from '@core/module-engine/registry'
 import type { AnyModuleDefinition } from '@core/module-engine/types'
 import { PlusIcon } from 'pixel-art-icons/icons/plus'

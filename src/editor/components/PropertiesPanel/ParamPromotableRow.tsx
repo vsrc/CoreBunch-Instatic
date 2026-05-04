@@ -26,7 +26,7 @@ import { ParamRow } from './ParamRow'
 import { Button } from '@ui/components/Button'
 import { Input } from '@ui/components/Input'
 import { LinkIcon } from 'pixel-art-icons/icons/link'
-import type { VCParam } from '@core/visualComponents/types'
+import type { VCParam } from '@core/visualComponents/schemas'
 import styles from './ParamPromotableRow.module.css'
 
 // ---------------------------------------------------------------------------

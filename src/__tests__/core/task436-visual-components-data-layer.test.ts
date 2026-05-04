@@ -55,7 +55,7 @@ import type { SiteDocument } from '@core/page-tree/schemas'
 
 const ROOT = join(import.meta.dir, '../../../')
 
-const TYPES_TS         = join(ROOT, 'src/core/visualComponents/types.ts')
+const VC_SCHEMAS_TS    = join(ROOT, 'src/core/visualComponents/schemas.ts')
 const NAME_VALIDATION  = join(ROOT, 'src/core/visualComponents/nameValidation.ts')
 const RECURSION_GUARD  = join(ROOT, 'src/core/visualComponents/recursionGuard.ts')
 const VC_SLICE_TS      = join(ROOT, 'src/core/editor-store/slices/visualComponentsSlice.ts')
@@ -213,9 +213,9 @@ function rawVC(overrides: Record<string, unknown> = {}) {
 // Section 1 — File existence
 // ============================================================================
 
-describe('Gate FE-1 — types.ts exists', () => {
-  it('src/core/visualComponents/types.ts exists', () => {
-    expect(existsSync(TYPES_TS)).toBe(true)
+describe('Gate FE-1 — schemas.ts exists', () => {
+  it('src/core/visualComponents/schemas.ts exists (canonical Zod source after types.ts shim deleted)', () => {
+    expect(existsSync(VC_SCHEMAS_TS)).toBe(true)
   })
 })
 
@@ -242,10 +242,10 @@ describe('Gate FE-4 — visualComponentsSlice.ts exists', () => {
 // ============================================================================
 
 describe('Gate DD-1 — core/visualComponents has no editor/ imports', () => {
-  it('types.ts, nameValidation.ts, recursionGuard.ts do NOT import from editor/', () => {
+  it('schemas.ts, nameValidation.ts, recursionGuard.ts do NOT import from editor/', () => {
     // All files in the visualComponents directory must stay in core —
     // editor/ → core/ is allowed, core/ → editor/ is not.
-    const files = [TYPES_TS, NAME_VALIDATION, RECURSION_GUARD]
+    const files = [VC_SCHEMAS_TS, NAME_VALIDATION, RECURSION_GUARD]
     for (const file of files) {
       if (!existsSync(file)) continue  // File not yet created — will fail via FE-* gate
       const source = readFileSync(file, 'utf8')
@@ -317,20 +317,15 @@ describe('Gate TS-2 — BaseNode.propBindings optional field declared', () => {
 })
 
 describe('Gate TS-3 — VCParam shape has stable id field', () => {
-  it('types.ts (or schemas.ts) exports VCParam with id, name, type, defaultValue', () => {
-    if (!existsSync(TYPES_TS)) {
-      throw new Error('[Task #436 not implemented] types.ts does not exist yet.')
+  it('schemas.ts exports VCParam with id, name, type, defaultValue', () => {
+    if (!existsSync(VC_SCHEMAS_TS)) {
+      throw new Error('[Task #436 not implemented] schemas.ts does not exist yet.')
     }
-    // Read type definitions from schemas.ts if it exists (Zod-schema approach),
-    // otherwise fall back to types.ts (direct-interface approach)
-    const schemasTs = join(ROOT, 'src/core/visualComponents/schemas.ts')
-    const definitionSource = existsSync(schemasTs)
-      ? readFileSync(schemasTs, 'utf8')
-      : readFileSync(TYPES_TS, 'utf8')
-    const typesSource = readFileSync(TYPES_TS, 'utf8')
+    // schemas.ts is the canonical Zod source (types.ts shim has been deleted)
+    const definitionSource = readFileSync(VC_SCHEMAS_TS, 'utf8')
 
-    // VCParam must be declared either as interface or as an exported type
-    expect(typesSource + definitionSource).toMatch(/(interface VCParam|export type VCParam)/)
+    // VCParam must be declared as an exported type (via z.infer)
+    expect(definitionSource).toMatch(/(interface VCParam|export type VCParam)/)
     // id is the stable identifier that survives param renames (§2 rationale)
     expect(definitionSource).toMatch(/\bid\s*:/)
     expect(definitionSource).toMatch(/\bname\s*:/)
@@ -341,18 +336,15 @@ describe('Gate TS-3 — VCParam shape has stable id field', () => {
 })
 
 describe('Gate TS-4 — VisualComponent shape has required fields', () => {
-  it('types.ts (or schemas.ts) exports VisualComponent with id, name, rootNode, params', () => {
-    if (!existsSync(TYPES_TS)) {
-      throw new Error('[Task #436 not implemented] types.ts does not exist yet.')
+  it('schemas.ts exports VisualComponent with id, name, rootNode, params', () => {
+    if (!existsSync(VC_SCHEMAS_TS)) {
+      throw new Error('[Task #436 not implemented] schemas.ts does not exist yet.')
     }
-    const schemasTs = join(ROOT, 'src/core/visualComponents/schemas.ts')
-    const definitionSource = existsSync(schemasTs)
-      ? readFileSync(schemasTs, 'utf8')
-      : readFileSync(TYPES_TS, 'utf8')
-    const typesSource = readFileSync(TYPES_TS, 'utf8')
+    // schemas.ts is the canonical Zod source (types.ts shim has been deleted)
+    const definitionSource = readFileSync(VC_SCHEMAS_TS, 'utf8')
 
-    // VisualComponent must be declared either as interface or as an exported type
-    expect(typesSource + definitionSource).toMatch(/(interface VisualComponent|export type VisualComponent)/)
+    // VisualComponent must be declared as an exported type (via z.infer)
+    expect(definitionSource).toMatch(/(interface VisualComponent|export type VisualComponent)/)
     expect(definitionSource).toMatch(/\brootNode\s*:/)
     expect(definitionSource).toMatch(/\bparams\s*:/)
   })

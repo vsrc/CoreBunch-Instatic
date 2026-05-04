@@ -8,9 +8,38 @@ import {
 import { renderContentDocumentHtml } from './cms/contentRenderer'
 import { getLatestPublishedSiteSnapshot, getPublishedPageBySlug } from './cms/publishRepository'
 import { renderPublishedContentTemplate, renderPublishedSnapshot } from './cms/publicRenderer'
+import { getSetupStatus } from './cms/repositories'
 import { getPublishedRuntimeAsset } from './cms/runtimeAssetRepository'
 import { jsonResponse } from './http'
 import { serveAdminApp, serveStaticFile } from './static'
+
+const VITE_DEV_URL = 'http://localhost:5173'
+
+function adminUiNotBuiltResponse(pathname: string): Response {
+  const targetUrl = `${VITE_DEV_URL}${pathname}`
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Admin UI not served on this port</title>
+<style>
+  body { font-family: system-ui, sans-serif; padding: 32px; background: #000; color: #ededed; line-height: 1.5; }
+  a { color: #fff; }
+  code { background: #111; padding: 2px 6px; border-radius: 3px; }
+</style>
+</head>
+<body>
+<h1>Admin UI not served on this port</h1>
+<p>This is the CMS API server (port 3001). In development, the admin UI is served by the Vite dev server.</p>
+<p>Open <a href="${targetUrl}">${targetUrl}</a>.</p>
+<p>If Vite isn't running yet, start it with <code>bun run dev</code> from the project root.</p>
+</body>
+</html>`
+  return new Response(html, {
+    status: 404,
+    headers: { 'content-type': 'text/html; charset=utf-8' },
+  })
+}
 
 interface ServerRuntime {
   db: DbClient
@@ -74,12 +103,16 @@ export async function handleServerRequest(
     if (upload) return upload
   }
 
-  if (
-    runtime.staticDir &&
-    (url.pathname === '/admin' || url.pathname.startsWith('/admin/'))
-  ) {
-    const adminApp = await serveAdminApp(runtime.staticDir)
-    if (adminApp) return adminApp
+  const isAdminPath = url.pathname === '/admin' || url.pathname.startsWith('/admin/')
+
+  if (isAdminPath) {
+    if (runtime.staticDir) {
+      const adminApp = await serveAdminApp(runtime.staticDir)
+      if (adminApp) return adminApp
+    }
+    // Admin SPA isn't served from this port (dev mode, or production
+    // missing a build). Tell the developer where to actually find it.
+    return adminUiNotBuiltResponse(url.pathname)
   }
 
   if (req.method === 'GET') {
@@ -116,6 +149,14 @@ export async function handleServerRequest(
           headers: { location: `${redirect.targetPath}${url.search}` },
         })
       }
+    }
+
+    // Public page didn't resolve. On a fresh install (no admin user yet)
+    // bounce the visitor to /admin so they land in the setup wizard
+    // instead of seeing a confusing 404.
+    const setupStatus = await getSetupStatus(runtime.db)
+    if (setupStatus.needsSetup) {
+      return new Response(null, { status: 302, headers: { location: '/admin' } })
     }
   }
 

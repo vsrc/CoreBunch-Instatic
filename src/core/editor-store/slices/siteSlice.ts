@@ -4,7 +4,7 @@ import type { StateCreator } from 'zustand'
 import type { EditorStore } from '../types'
 import { renderCache } from '@core/engine/renderCache'
 import { registry } from '@core/module-engine/registry'
-import type { VCNode } from '@core/visualComponents/types'
+import type { VCNode } from '@core/visualComponents/schemas'
 import { VisualComponentRecursionError } from './visualComponentsSlice'
 import {
   type CSSClass,

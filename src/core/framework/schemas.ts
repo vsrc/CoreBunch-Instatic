@@ -31,7 +31,7 @@ export const GeneratedColorClassMetadataSchema = z.object({
   tokenName: z.string(),
   variantName: z.string().optional(),
   locked: z.literal(true),
-}).passthrough()
+})
 
 export type GeneratedColorClassMetadata = z.infer<typeof GeneratedColorClassMetadataSchema>
 
@@ -47,7 +47,7 @@ export const GeneratedTypographyClassMetadataSchema = z.object({
   /** Step suffix from the group's `steps` string (e.g. "xs", "m"). */
   step: z.string(),
   locked: z.literal(true),
-}).passthrough()
+})
 
 export type GeneratedTypographyClassMetadata = z.infer<typeof GeneratedTypographyClassMetadataSchema>
 
@@ -59,13 +59,13 @@ export const GeneratedSpacingClassMetadataSchema = z.object({
   tokenName: z.string(),
   step: z.string(),
   locked: z.literal(true),
-}).passthrough()
+})
 
 export type GeneratedSpacingClassMetadata = z.infer<typeof GeneratedSpacingClassMetadataSchema>
 
 /**
  * Discriminated union of all framework-generated class metadata.
- * Discriminator key: `family` — matches the GeneratedClassMetadata union in types.ts.
+ * Discriminator key: `family`.
  */
 export const GeneratedClassMetadataSchema = z.discriminatedUnion('family', [
   GeneratedColorClassMetadataSchema,
@@ -99,7 +99,7 @@ const FrameworkColorUtilitiesSchema = z.object({
 const FrameworkColorVariantOptionsSchema = z.object({
   enabled: z.boolean().catch(true),
   count: z.number().catch(4),
-}).passthrough()
+})
 
 export const FrameworkColorTokenSchema = z.object({
   id: z.string(),
@@ -122,13 +122,13 @@ export const FrameworkColorTokenSchema = z.object({
   order: z.number().catch(0),
   createdAt: z.number().catch(() => Date.now()),
   updatedAt: z.number().catch(() => Date.now()),
-}).passthrough()
+})
 
 export type FrameworkColorToken = z.infer<typeof FrameworkColorTokenSchema>
 
 export const FrameworkColorSettingsSchema = z.object({
   tokens: z.array(FrameworkColorTokenSchema).catch([]),
-}).passthrough()
+})
 
 export type FrameworkColorSettings = z.infer<typeof FrameworkColorSettingsSchema>
 
@@ -154,7 +154,7 @@ export const FrameworkScaleBreakpointConfigSchema = z.object({
   /** When true, scaleRatioInputValue overrides scaleRatio. */
   isCustomScaleRatio: z.boolean().optional(),
   scaleRatioInputValue: z.number().optional(),
-}).passthrough()
+})
 
 export type FrameworkScaleBreakpointConfig = z.infer<typeof FrameworkScaleBreakpointConfigSchema>
 
@@ -181,7 +181,7 @@ export const FrameworkScaleManualSizeSchema = z.object({
   name: z.string(),
   min: z.number(),
   max: z.number(),
-}).passthrough()
+})
 
 export type FrameworkScaleManualSize = z.infer<typeof FrameworkScaleManualSizeSchema>
 
@@ -207,7 +207,7 @@ const FrameworkScaleGroupBaseSchema = z.object({
   order: z.number().catch(0),
   createdAt: z.number().catch(() => Date.now()),
   updatedAt: z.number().catch(() => Date.now()),
-}).passthrough()
+})
 
 // ─── Typography group ─────────────────────────────────────────────────────────
 
@@ -286,7 +286,7 @@ export const FrameworkTypographyClassGeneratorSchema = z.object({
   /** ID of the typography / spacing group (FrameworkTypographyGroup.id). */
   tabId: z.string(),
   isDisabled: z.boolean().optional(),
-}).passthrough()
+})
 
 export type FrameworkTypographyClassGenerator = z.infer<typeof FrameworkTypographyClassGeneratorSchema>
 
@@ -303,7 +303,7 @@ export const FrameworkTypographySettingsSchema = z.object({
   groups: z.array(FrameworkTypographyGroupSchema).catch([]),
   classes: z.array(FrameworkTypographyClassGeneratorSchema).optional(),
   isDisabled: z.boolean().optional(),
-}).passthrough()
+})
 
 export type FrameworkTypographySettings = z.infer<typeof FrameworkTypographySettingsSchema>
 
@@ -311,7 +311,7 @@ export const FrameworkSpacingSettingsSchema = z.object({
   groups: z.array(FrameworkSpacingGroupSchema).catch([]),
   classes: z.array(FrameworkSpacingClassGeneratorSchema).optional(),
   isDisabled: z.boolean().optional(),
-}).passthrough()
+})
 
 export type FrameworkSpacingSettings = z.infer<typeof FrameworkSpacingSettingsSchema>
 
@@ -333,7 +333,7 @@ export const FrameworkPreferencesSettingsSchema = z.object({
   maxScreenWidth: z.number().catch(1400),
   /** Whether to emit clamp() values in `rem` (true) or `px` (false). */
   isRem: z.boolean().catch(true),
-}).passthrough()
+})
 
 export type FrameworkPreferencesSettings = z.infer<typeof FrameworkPreferencesSettingsSchema>
 

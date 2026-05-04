@@ -25,17 +25,19 @@ import { escapeProps } from '../core/publisher/render'
 // Import base modules (self-register into global registry on import)
 // ---------------------------------------------------------------------------
 
-// Note: text, button, image use JSX — their index files must be .tsx (fixed)
-import { TextModule } from '../modules/base/text/index.tsx'
-import { ButtonModule } from '../modules/base/button/index.tsx'
-import { ContainerModule } from '../modules/base/container/index'
-import { ImageModule } from '../modules/base/image/index.tsx'
-import { VideoModule } from '../modules/base/video/index.tsx'
-import { ListModule } from '../modules/base/list/index.tsx'
-import { LinkModule } from '../modules/base/link/index'
+// Module bootstrap files are `.ts` (no JSX) — editor components live in
+// sibling `*Editor.tsx` files so React Fast Refresh can hot-patch them
+// without re-running registry.registerOrReplace().
+import { TextModule } from '../modules/base/text'
+import { ButtonModule } from '../modules/base/button'
+import { ContainerModule } from '../modules/base/container'
+import { ImageModule } from '../modules/base/image'
+import { VideoModule } from '../modules/base/video'
+import { ListModule } from '../modules/base/list'
+import { LinkModule } from '../modules/base/link'
 import { RootModule } from '../modules/base/root'
-import { VisualComponentRefModule } from '../modules/base/visualComponentRef/index.tsx'
-import { SlotOutletModule } from '../modules/base/slotOutlet/index.tsx'
+import { VisualComponentRefModule } from '../modules/base/visualComponentRef'
+import { SlotOutletModule } from '../modules/base/slotOutlet'
 
 // ---------------------------------------------------------------------------
 // Run the full conformance suite for every canonical base module (7 total)

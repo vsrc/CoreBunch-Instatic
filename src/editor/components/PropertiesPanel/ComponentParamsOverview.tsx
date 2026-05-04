@@ -13,7 +13,7 @@
 import { useEditorStore } from '@core/editor-store/store'
 import { findParamOrigin } from '@core/visualComponents/origin'
 import { registry } from '@core/module-engine/registry'
-import type { VisualComponent, VCParam, VCNode } from '@core/visualComponents/types'
+import type { VisualComponent, VCParam, VCNode } from '@core/visualComponents/schemas'
 import { Button } from '@ui/components/Button'
 import { CloseIcon } from 'pixel-art-icons/icons/close'
 import styles from './ComponentParamsOverview.module.css'

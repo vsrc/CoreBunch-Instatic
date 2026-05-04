@@ -17,7 +17,7 @@
  */
 
 import type { SiteDocument } from '@core/page-tree/schemas'
-import type { VCNode } from '@core/visualComponents/types'
+import type { VCNode } from '@core/visualComponents/schemas'
 
 /**
  * One spot in the site where a soon-to-be-removed framework class is

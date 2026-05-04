@@ -14,7 +14,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { LayerNodeContextMenu } from '../../editor/components/DomPanel/LayerNodeContextMenu'
 import { useEditorStore } from '@core/editor-store/store'
 import { makeNode, makePage, makeSite } from '../fixtures'
-import type { VisualComponent } from '@core/visualComponents/types'
+import type { VisualComponent } from '@core/visualComponents/schemas'
 import '../../modules/base/index'
 
 afterEach(cleanup)

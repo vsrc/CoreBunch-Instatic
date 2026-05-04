@@ -1,29 +1,19 @@
-/* eslint-disable react-refresh/only-export-components */
 /**
  * base.image — image content.
  *
  * Emits a bare `<img>` with no default class or default CSS.
  * Visual styling is opt-in via user classes (mcClassName / multi-class system).
  */
-import React from 'react'
-import { type ModuleDefinition, type ModuleComponentProps } from '@core/module-engine/types'
+import type { ModuleDefinition } from '@core/module-engine/types'
 import { registry } from '@core/module-engine/registry'
 import { ImageIcon } from 'pixel-art-icons/icons/image'
 import { safeUrl } from '../utils/escape'
-import { cn } from '@ui/cn'
-import styles from './image.module.css'
+import { ImageEditor } from './ImageEditor'
 
 interface ImageProps extends Record<string, unknown> {
   src: string
   alt: string
   loading: 'lazy' | 'eager'
-}
-
-const ImageEditor: React.FC<ModuleComponentProps<ImageProps>> = ({ props, mcClassName }) => {
-  if (props.src) {
-    return <img src={props.src} alt={props.alt || ''} className={mcClassName} loading={props.loading} />
-  }
-  return <div className={cn(styles.placeholder, mcClassName)}>No image selected</div>
 }
 
 export const ImageModule: ModuleDefinition<ImageProps> = {
@@ -72,4 +62,4 @@ export const ImageModule: ModuleDefinition<ImageProps> = {
   },
 }
 
-registry.register(ImageModule)
+registry.registerOrReplace(ImageModule)

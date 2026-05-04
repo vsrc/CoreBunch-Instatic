@@ -21,6 +21,7 @@ import { SiteFileSchema } from '../files/schemas'
 import { VisualComponentSchema } from '../visualComponents/schemas'
 import { SiteRuntimeConfigSchema } from '../site-runtime/schemas'
 import { SitePackageJsonSchema } from '../site-dependencies/manifest'
+import { SiteFontsSettingsSchema } from '../fonts/schemas'
 
 // ---------------------------------------------------------------------------
 // Breakpoint
@@ -157,75 +158,6 @@ export const DEFAULT_BREAKPOINTS: Breakpoint[] = [
   { id: 'tablet',  label: 'Tablet',  width: 768,  icon: 'tablet'     },
   { id: 'desktop', label: 'Desktop', width: 1440, icon: 'monitor'    },
 ]
-
-// ---------------------------------------------------------------------------
-// Font schemas — FontSource, FontFile, FontEntry, SiteFontsSettings
-// ---------------------------------------------------------------------------
-
-export const FontSourceSchema = z.enum(['google', 'custom'])
-
-export type FontSource = z.infer<typeof FontSourceSchema>
-
-/**
- * One downloaded font file.  The `path` must be under `/uploads/fonts/`, end
- * with `.woff2`, and contain no traversal sequences — mirrors `isSafeFontPath`
- * in `validate.ts` (lines ~557–563).
- */
-export const FontFileSchema = z.object({
-  variant: z.string().min(1),
-  subset: z.string().min(1),
-  path: z.string().refine(
-    (p) =>
-      p.startsWith('/uploads/fonts/') &&
-      !p.includes('..') &&
-      !/[\s"<>\\]/.test(p) &&
-      p.endsWith('.woff2'),
-    'Font path must start with /uploads/fonts/ and end with .woff2',
-  ),
-  format: z.literal('woff2'),
-})
-
-export type FontFile = z.infer<typeof FontFileSchema>
-
-/**
- * One font installed in the site library.
- * Invalid entries are silently dropped at the SiteFontsSettings level.
- * Mirrors `validateFontEntry` in validate.ts (lines ~575–603).
- */
-export const FontEntrySchema = z.object({
-  id: z.string().min(1),
-  source: FontSourceSchema.catch('google' as const),
-  family: z.string().min(1),
-  variants: z.array(z.string().min(1)).catch([]),
-  subsets: z.array(z.string().min(1)).catch([]),
-  /** Invalid font-file entries are silently dropped. */
-  files: z.array(z.unknown()).default([]).transform((items) =>
-    items.flatMap((item) => {
-      const r = FontFileSchema.safeParse(item)
-      return r.success ? [r.data] : []
-    }),
-  ),
-  category: z.string().optional(),
-  createdAt: z.number().catch(() => Date.now()),
-  updatedAt: z.number().catch(() => Date.now()),
-})
-
-export type FontEntry = z.infer<typeof FontEntrySchema>
-
-/**
- * Library of installed fonts for a site.
- * Mirrors `validateSiteFontsSettings` in validate.ts (lines ~605–612).
- */
-export const SiteFontsSettingsSchema = z.object({
-  items: z.array(z.unknown()).default([]).transform((items) =>
-    items.flatMap((item) => {
-      const r = FontEntrySchema.safeParse(item)
-      return r.success ? [r.data] : []
-    }),
-  ),
-})
-
-export type SiteFontsSettings = z.infer<typeof SiteFontsSettingsSchema>
 
 // ---------------------------------------------------------------------------
 // CSSPropertyBagSchema — publisher-boundary narrowing type
@@ -410,7 +342,7 @@ export const CSSClassSchema = z.object({
 export type CSSClass = z.infer<typeof CSSClassSchema>
 
 // ---------------------------------------------------------------------------
-// Default design-token values (source of truth — re-exported from types.ts)
+// Default design-token values (source of truth)
 // ---------------------------------------------------------------------------
 
 export const DEFAULT_COLOR_TOKENS: Record<string, string> = {
@@ -485,15 +417,13 @@ export const DEFAULT_SITE_SETTINGS: SiteSettings = {
  *   files — invalid entries are silently dropped (mirrors validateSiteFile).
  *   visualComponents — invalid entries are silently dropped.
  *
- * Known divergences from validate.ts (to be aligned in Step 5):
- *   - Slug format / uniqueness validation (validate.ts lines 838–846) is NOT
- *     in this schema — adding it requires a `.superRefine()` that would
- *     import pageSlugError/pageSlugDuplicateError, creating an indirect
- *     cycle via slugs.ts → types.ts → schemas.ts.
- *   - SiteFile path safety (isSafePath / normalizePath) is structural, not in
- *     SiteFileSchema — Step 5 can add a `.superRefine()`.
- *   - VisualComponent name validation (validateComponentName) is deferred.
- *   - SitePackageJson name sanitisation (isSafePackageName) is deferred.
+ * Pure structural validation lives here. Cross-cutting domain rules live in
+ * `src/core/persistence/validate.ts::runDomainPostChecks`:
+ *   - Slug uniqueness and format enforcement (validate.ts lines 838–846).
+ *   - SiteFile path safety (isSafePath / normalizePath).
+ *   - VisualComponent name validation (validateComponentName).
+ *   - SitePackageJson and runtime config normalisation (normalizeSitePackageJson,
+ *     normalizeSiteRuntimeConfig).
  */
 export const SiteDocumentSchema = z.object({
   id: z.string(),
@@ -540,7 +470,8 @@ export const SiteDocumentSchema = z.object({
   ),
   /**
    * Package manifest — fully resilient (normalizeSitePackageJson always
-   * succeeds).  Name sanitisation deferred to Step 5.
+   * succeeds).  Name sanitisation happens in validate.ts::runDomainPostChecks
+   * post-parse via normalizeSitePackageJson.
    * .default() handles absent key (Zod v4); .catch() in SitePackageJsonSchema
    * handles invalid values.
    */

@@ -1,15 +1,13 @@
-/* eslint-disable react-refresh/only-export-components */
 /**
  * base.list — ordered or unordered list.
  *
  * Emits a bare `<ul>` / `<ol>` with no default class or default CSS.
  * Visual styling is opt-in via user classes (mcClassName / multi-class system).
  */
-import React from 'react'
-import { type ModuleDefinition, type ModuleComponentProps } from '@core/module-engine/types'
+import type { ModuleDefinition } from '@core/module-engine/types'
 import { registry } from '@core/module-engine/registry'
 import { ListBoxIcon } from 'pixel-art-icons/icons/list-box'
-import styles from './list.module.css'
+import { ListEditor } from './ListEditor'
 
 interface ListProps extends Record<string, unknown> {
   items: string
@@ -21,18 +19,6 @@ function parseItems(raw: string): string[] {
     .split('\n')
     .map((s) => s.trim())
     .filter((s) => s.length > 0)
-}
-
-const ListEditor: React.FC<ModuleComponentProps<ListProps>> = ({ props, mcClassName }) => {
-  const items = parseItems(props.items || '')
-  const Tag = props.listType === 'ordered' ? 'ol' : 'ul'
-  return React.createElement(
-    Tag,
-    { className: mcClassName },
-    items.length > 0
-      ? items.map((item, i) => React.createElement('li', { key: i }, item))
-      : React.createElement('li', { className: styles.placeholder }, 'List item 1'),
-  )
 }
 
 export const ListModule: ModuleDefinition<ListProps> = {
@@ -79,4 +65,4 @@ export const ListModule: ModuleDefinition<ListProps> = {
   },
 }
 
-registry.register(ListModule)
+registry.registerOrReplace(ListModule)

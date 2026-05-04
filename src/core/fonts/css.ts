@@ -12,7 +12,7 @@
  * `/uploads/fonts/...` that are written to disk at install time.
  */
 
-import type { FontEntry, SiteFontsSettings } from './types'
+import type { FontEntry, SiteFontsSettings } from './schemas'
 import { parseVariant } from './variants'
 
 /**

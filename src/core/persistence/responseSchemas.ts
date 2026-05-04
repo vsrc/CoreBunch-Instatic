@@ -140,7 +140,7 @@ export const CmsGoogleFontsEnvelopeSchema = z.object({
   families: z.array(GoogleFontFamilySchema),
 })
 
-// FontEntry mirrors @core/page-tree's FontEntry. We schema the envelope
+// FontEntry mirrors @core/fonts/schemas FontEntry. We schema the envelope
 // shallowly here — full structural validation runs server-side via
 // validateSite when the next save happens, so the install response is
 // consumed as `unknown` and immediately committed via the addFont action

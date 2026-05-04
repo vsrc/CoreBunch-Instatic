@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import type { VisualComponent } from '@core/visualComponents/types'
+import type { VisualComponent } from '@core/visualComponents/schemas'
 import { useEditorStore } from '@core/editor-store/store'
 
 const EMPTY_VCS: VisualComponent[] = []

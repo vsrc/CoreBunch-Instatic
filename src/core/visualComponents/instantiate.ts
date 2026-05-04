@@ -21,7 +21,7 @@
  */
 
 import { z } from 'zod'
-import type { VisualComponent, VCNode } from './types'
+import type { VisualComponent, VCNode } from './schemas'
 import { VCNodeSchema } from './schemas'
 
 // ---------------------------------------------------------------------------
