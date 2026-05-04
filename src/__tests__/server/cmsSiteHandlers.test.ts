@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test'
 import type { SiteDocument } from '@core/page-tree/schemas'
 import { SESSION_COOKIE_NAME, hashSessionToken } from '../../../server/cms/auth'
-import type { DbClient, DbResult } from '../../../server/cms/db'
+import type { DbArrayParameter, DbClient, DbResult } from '../../../server/cms/db'
 import { handleCmsRequest } from '../../../server/cms/handlers'
 
 function makeFakeDb() {
@@ -79,6 +79,22 @@ function makeFakeDb() {
 
   handle.transaction = async <T>(cb: (tx: DbClient) => Promise<T>): Promise<T> =>
     cb(handle as unknown as DbClient)
+
+  // Test fake: `array()` is a no-op pass-through. Production Bun.sql needs
+  // the real wrapper for PG array-literal binding; tests don't exercise
+  // the wire format, so just return the JS array as-is.
+  handle.array = (values: unknown[], _typeName: string): DbArrayParameter =>
+    values as unknown as DbArrayParameter
+
+  // Test fake: `unsafe()` forwards directly to the SQL handler. The same
+  // pattern-matching logic as the tagged-template entry path.
+  handle.unsafe = async <Row extends Record<string, unknown> = Record<string, unknown>>(
+    sql: string,
+    params?: unknown[],
+  ): Promise<DbResult<Row>> => {
+    const fakeStrings = [sql] as unknown as TemplateStringsArray
+    return handle<Row>(fakeStrings, ...(params ?? []))
+  }
 
   return Object.assign(handle as DbClient, {
     get site() { return siteRow },
