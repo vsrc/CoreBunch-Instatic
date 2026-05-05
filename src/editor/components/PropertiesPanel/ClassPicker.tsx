@@ -337,13 +337,36 @@ function ClassPickerInner({ nodeId, trailingAction }: ClassPickerProps, ref) {
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               e.preventDefault()
-              if (canCreateNew) handleCreateAndAdd()
-              else if (suggestions[0]) handleAddExisting(suggestions[0].id)
+              submitQuery()
             }
             if (e.key === 'Escape') closeSuggestions()
           }}
           placeholder="Add or create class…"
           aria-label="Add or create a CSS class"
+          trailingSlot={
+            <Button
+              variant="ghost"
+              size="micro"
+              iconOnly
+              disabled={!hasSubmittableQuery}
+              tooltip={
+                canCreateNew
+                  ? `Create class “${query.trim()}”`
+                  : suggestions[0]
+                    ? `Add class “${suggestions[0].name}”`
+                    : 'Type a class name to add or create'
+              }
+              aria-label="Submit class"
+              onMouseDown={(e) => {
+                // Keep focus on the input so the suggestions dropdown stays
+                // open across the click and the user can keep typing.
+                e.preventDefault()
+              }}
+              onClick={submitQuery}
+            >
+              <CornerDownLeftIcon size={11} color="currentColor" aria-hidden="true" />
+            </Button>
+          }
         />
 
         {trailingAction}
@@ -359,6 +382,10 @@ function ClassPickerInner({ nodeId, trailingAction }: ClassPickerProps, ref) {
             offset={6}
             width={inputRowRef.current?.getBoundingClientRect().width ?? 240}
             minWidth={inputRowRef.current?.getBoundingClientRect().width ?? 240}
+            // Cap the suggestions list height so long utility lists (e.g. the
+            // generated `text-primary-*` / `bg-primary-*` scales) scroll
+            // inside the dropdown instead of overflowing the viewport.
+            maxHeight={320}
             zIndex={10000}
             ariaLabel="Class suggestions"
             onClose={closeSuggestions}
