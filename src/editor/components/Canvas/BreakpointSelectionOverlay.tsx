@@ -127,9 +127,15 @@ export function BreakpointSelectionOverlay({
  * mounted — happens transiently during page swaps, breakpoint changes, or
  * when the selection points into a hidden subtree.
  *
- * Coordinates are computed via getBoundingClientRect and made viewport-local
- * by subtracting the viewport's own rect — naturally handles zoom/pan because
- * the viewport itself is transformed with the canvas.
+ * Coordinates are computed via getBoundingClientRect (which returns visual
+ * post-transform pixels) and then made viewport-local AND unscaled. The
+ * unscaling matters because the viewport sits inside CanvasTransformLayer,
+ * which applies `scale(zoom)` to all its descendants — including the ring.
+ * If we wrote screen-space pixels to the ring, the parent scale would scale
+ * them a second time and the ring would land in the wrong place at any zoom
+ * other than 1. Deriving the scale from the viewport itself
+ * (clientRect.width / offsetWidth) means we don't need to subscribe to the
+ * zoom store and we automatically track pan/zoom in flight.
  */
 function positionRing(
   ring: HTMLDivElement | null,
@@ -167,16 +173,29 @@ function positionRing(
   }
 
   const viewportRect = viewport.getBoundingClientRect()
-  const x = rect.left - viewportRect.left
-  const y = rect.top - viewportRect.top
+
+  // Recover the canvas zoom factor: the viewport's CSS layout width
+  // (offsetWidth) is the breakpoint width in unscaled pixels, while
+  // getBoundingClientRect().width is that same width times the parent's
+  // `scale(zoom)`. Their ratio is the effective scale. Fallback to 1 when the
+  // viewport has no layout (offsetWidth === 0), which can happen transiently
+  // during mount.
+  const scale = viewport.offsetWidth > 0 ? viewportRect.width / viewport.offsetWidth : 1
+
+  // Viewport-local, unscaled coordinates — what the ring's CSS pixels need to
+  // be in, since the ring is itself a descendant of the scaled transform layer.
+  const x = (rect.left - viewportRect.left) / scale
+  const y = (rect.top - viewportRect.top) / scale
+  const width = rect.width / scale
+  const height = rect.height / scale
 
   // transform/width/height instead of top/left/width/height so the browser
   // can promote the ring to its own compositing layer (smooth follow without
   // layout thrash on the rest of the canvas).
   ring.style.display = ''
   ring.style.transform = `translate(${x}px, ${y}px)`
-  ring.style.width = `${rect.width}px`
-  ring.style.height = `${rect.height}px`
+  ring.style.width = `${width}px`
+  ring.style.height = `${height}px`
 }
 
 /**
