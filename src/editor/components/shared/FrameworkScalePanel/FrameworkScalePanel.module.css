@@ -334,13 +334,17 @@
     box-shadow: 0 0 6px var(--chart-series-max-glow);
 }
 
+.segment[data-fill="partial"] {
+    --seg-fill: 0%;
+}
+
 .segment[data-fill="partial"]::after {
     content: "";
     position: absolute;
     top: 0;
     left: 0;
     bottom: 0;
-    width: var(--seg-fill, 0%);
+    width: var(--seg-fill);
     border-radius: 999px;
 }
 
@@ -422,7 +426,8 @@
 
 .streamChartXAxis {
     display: grid;
-    grid-template-columns: repeat(var(--axis-step-count, 1), minmax(0, 1fr));
+    --axis-step-count: 1;
+    grid-template-columns: repeat(var(--axis-step-count), minmax(0, 1fr));
     color: var(--editor-text-muted);
     font-size: 9px;
     font-variant-numeric: tabular-nums;

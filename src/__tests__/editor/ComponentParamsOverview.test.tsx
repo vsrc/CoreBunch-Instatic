@@ -57,7 +57,6 @@ function makeVCNode(overrides: {
   children?: string[]
   classIds?: string[]
   propBindings?: Record<string, { paramId: string }>
-  childNodes?: VCNode[]
   label?: string
 }): VCNode {
   return {
@@ -68,7 +67,6 @@ function makeVCNode(overrides: {
     children: overrides.children ?? [],
     classIds: overrides.classIds ?? [],
     ...(overrides.propBindings !== undefined && { propBindings: overrides.propBindings }),
-    ...(overrides.childNodes !== undefined && { childNodes: overrides.childNodes }),
     ...(overrides.label !== undefined && { label: overrides.label }),
   }
 }
@@ -95,18 +93,22 @@ function makeVC(overrides: {
   id?: string
   name?: string
   params?: VCParam[]
-  rootNode?: VCNode
+  /** All nodes in the flat tree. First node is the root if rootId is not specified. */
+  nodes?: VCNode[]
+  rootId?: string
 }): VisualComponent {
+  const defaultRoot = makeVCNode({ id: 'vc-root' })
+  const nodes = overrides.nodes ?? [defaultRoot]
+  const rootId = overrides.rootId ?? nodes[0]?.id ?? 'vc-root'
+  const nodesMap: Record<string, VCNode> = {}
+  for (const n of nodes) nodesMap[n.id] = n
   return {
     id: overrides.id ?? 'vc-test',
     name: overrides.name ?? 'TestComponent',
-    rootNode: overrides.rootNode ?? makeVCNode({ id: 'vc-root' }),
+    tree: { nodes: nodesMap, rootNodeId: rootId },
     params: overrides.params ?? [],
     breakpoints: [],
     classIds: [],
-    filePath: 'src/components/TestComponent.tsx',
-    generated: true,
-    ejected: false,
     createdAt: Date.now(),
   }
 }
@@ -183,10 +185,10 @@ describe('CPO-3 — clicking a bound param row calls selectNode(origin.nodeId)',
     const rootNode = makeVCNode({
       id: 'vc-root',
       children: ['n1'],
-      childNodes: [innerNode],
     })
     const vc = makeVC({
-      rootNode,
+      nodes: [rootNode, innerNode],
+      rootId: 'vc-root',
       params: [makeVCParam({ id: 'p-title', name: 'title', type: 'string' })],
     })
 
@@ -216,10 +218,10 @@ describe('CPO-4 — slot param row selects the base.slot-outlet node', () => {
     const rootNode = makeVCNode({
       id: 'vc-root',
       children: ['slot-outlet-1'],
-      childNodes: [slotOutlet],
     })
     const vc = makeVC({
-      rootNode,
+      nodes: [rootNode, slotOutlet],
+      rootId: 'vc-root',
       params: [makeVCParam({ id: 'p-children', name: 'children', type: 'slot' })],
     })
 

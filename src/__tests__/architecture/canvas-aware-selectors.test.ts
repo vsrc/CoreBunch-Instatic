@@ -185,7 +185,7 @@ describe('Canvas-aware selector gate — no raw pages.find in VC-aware panel dir
     if (violations.length > 0) {
       throw new Error(
         '[canvas-aware-selectors] Raw pages.find pattern in a VC-aware panel directory.\n' +
-        'site.pages only contains page-tree nodes.  VC nodes live in vc.rootNode and\n' +
+        'site.pages only contains page-tree nodes.  VC nodes live in vc.tree.nodes and\n' +
         'are not present in site.pages at all.  This pattern silently returns null\n' +
         'for any node selected inside a VC, breaking the Properties/DOM/Selectors panels.\n' +
         'Required: use selectActiveCanvasPage(s)?.nodes[nodeId] for node lookups.\n' +

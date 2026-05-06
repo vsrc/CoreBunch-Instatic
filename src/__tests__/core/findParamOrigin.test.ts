@@ -28,7 +28,6 @@ function makeVCNode(
   opts: {
     props?: Record<string, unknown>
     propBindings?: Record<string, { paramId: string }>
-    childNodes?: VCNode[]
     children?: string[]
   } = {},
 ): VCNode {
@@ -40,7 +39,6 @@ function makeVCNode(
     children: opts.children ?? [],
     classIds: [],
     propBindings: opts.propBindings,
-    childNodes: opts.childNodes,
   }
 }
 
@@ -58,14 +56,18 @@ function makeParam(
   }
 }
 
+/** Build a flat-tree VisualComponent from an array of VCNodes. */
 function makeVC(
-  rootNode: VCNode,
+  rootId: string,
+  nodes: VCNode[],
   params: VCParam[],
 ): VisualComponent {
+  const nodesMap: Record<string, VCNode> = {}
+  for (const n of nodes) nodesMap[n.id] = n
   return {
     id: 'vc-test',
     name: 'TestVC',
-    rootNode,
+    tree: { nodes: nodesMap, rootNodeId: rootId },
     params,
     breakpoints: [],
     classIds: [],
@@ -87,10 +89,9 @@ describe('Gate FPO-1 — finds propBindings origin for regular param', () => {
     })
     const rootNode = makeVCNode('root', 'base.container', {
       children: ['child-1', 'child-2'],
-      childNodes: [child1, child2],
     })
 
-    const vc = makeVC(rootNode, [param])
+    const vc = makeVC('root', [rootNode, child1, child2], [param])
     const result = findParamOrigin(vc, 'p1')
 
     expect(result).not.toBeNull()
@@ -112,10 +113,9 @@ describe('Gate FPO-2 — finds slot-outlet node for a slot param', () => {
     })
     const rootNode = makeVCNode('root', 'base.container', {
       children: ['slot-outlet-node'],
-      childNodes: [slotOutlet],
     })
 
-    const vc = makeVC(rootNode, [slotParam])
+    const vc = makeVC('root', [rootNode, slotOutlet], [slotParam])
     const result = findParamOrigin(vc, 'p-slot')
 
     expect(result).not.toBeNull()
@@ -136,10 +136,9 @@ describe('Gate FPO-3 — returns null for orphan paramId', () => {
     const child = makeVCNode('child-a', 'base.text')
     const rootNode = makeVCNode('root', 'base.container', {
       children: ['child-a'],
-      childNodes: [child],
     })
 
-    const vc = makeVC(rootNode, [orphanParam])
+    const vc = makeVC('root', [rootNode, child], [orphanParam])
     const result = findParamOrigin(vc, 'p-orphan')
 
     expect(result).toBeNull()
@@ -158,7 +157,7 @@ describe('Gate FPO-4 — finds binding on the rootNode itself', () => {
       propBindings: { text: { paramId: 'p-root' } },
     })
 
-    const vc = makeVC(rootNode, [param])
+    const vc = makeVC('root', [rootNode], [param])
     const result = findParamOrigin(vc, 'p-root')
 
     expect(result).not.toBeNull()
@@ -179,7 +178,7 @@ describe('Gate FPO-5 — returns null when paramId not in vc.params', () => {
       propBindings: { text: { paramId: 'p-real' } },
     })
 
-    const vc = makeVC(rootNode, [param])
+    const vc = makeVC('root', [rootNode], [param])
     const result = findParamOrigin(vc, 'p-nonexistent')
 
     expect(result).toBeNull()
@@ -191,7 +190,7 @@ describe('Gate FPO-5 — returns null when paramId not in vc.params', () => {
       propBindings: { label: { paramId: 'p1' } },
     })
 
-    const vc = makeVC(rootNode, [param])
+    const vc = makeVC('root', [rootNode], [param])
     const result = findParamOrigin(vc, '')
 
     expect(result).toBeNull()

@@ -65,7 +65,11 @@ describe('development workflow', () => {
   it('Docker Postgres uses a non-default host port for local dev', () => {
     const compose = readSiteFile('docker-compose.yml')
 
+    // docker-compose.yml is dev-only and only exposes the Postgres container
+    // on a non-default host port (5433) to avoid clashing with a local
+    // Postgres install. The DATABASE_URL the app uses to reach the container
+    // lives in compose.prod.yml — not in the dev-only compose file.
     expect(compose).toContain('"5433:5432"')
-    expect(compose).toContain('postgres://page_builder:page_builder@postgres:5432/page_builder')
+    expect(compose).toContain('image: postgres:16')
   })
 })

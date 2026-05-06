@@ -10,8 +10,10 @@
 .panel {
   position: fixed;
   /* Position driven by --panel-x / --panel-y CSS vars (useDraggablePanel) */
-  left: var(--panel-x, calc(50vw - 400px));
-  top: var(--panel-y, 80px);
+  --panel-x: calc(50vw - 400px);
+  --panel-y: 80px;
+  left: var(--panel-x);
+  top: var(--panel-y);
   z-index: 80;
   width: 800px;
   height: 500px;
@@ -118,7 +120,8 @@
 }
 
 .loadingLine {
-  width: var(--skeleton-line-width, 100%);
+  --skeleton-line-width: 100%;
+  width: var(--skeleton-line-width);
   height: 8px;
   border-radius: var(--editor-radius-sm);
   background: linear-gradient(

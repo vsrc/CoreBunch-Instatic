@@ -22,6 +22,9 @@ export type {
 
 export type { BaseNode } from './baseNode'
 
+export type { NodeTree, NodeTreeShape } from './treeSchema'
+export { NodeTreeSchema } from './treeSchema'
+
 export type {
   FrameworkSettings,
   FrameworkColorSettings,
@@ -68,6 +71,7 @@ export {
   deletePage,
   renamePage,
   reorderPages,
+  duplicatePage,
 } from './mutations'
 
 export { getParent } from './selectors'

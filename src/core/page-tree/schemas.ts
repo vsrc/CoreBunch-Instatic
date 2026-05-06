@@ -13,7 +13,8 @@
  */
 
 import { Type, Value, type Static, withFallback } from '@core/utils/typeboxHelpers'
-import { BaseNodeSchema, type BaseNode, parsePropBindings } from './baseNode'
+import { BaseNodeSchema, parsePropBindings } from './baseNode'
+import { NodeTreeSchema } from './treeSchema'
 import {
   FrameworkSettingsSchema,
   GeneratedClassMetadataSchema,
@@ -115,55 +116,58 @@ export type PageTemplateConfig = Static<typeof PageTemplateConfigSchema>
 
 // ---------------------------------------------------------------------------
 // PageNode — extends BaseNode with CMS-template-only fields
-//
-// Type.Recursive handles the self-reference previously served by z.lazy().
 // ---------------------------------------------------------------------------
 
-export const PageNodeSchema = Type.Recursive((Self) =>
-  Type.Object({
-    ...BaseNodeSchema.properties,
-    /**
-     * Template-only prop bindings.
-     * Static props remain stored as fallback values; dynamicBindings overlay them
-     * at render time when a page is used as a CMS content template.
-     * Silently dropped if invalid — handled in parsePageNode.
-     */
-    dynamicBindings: Type.Optional(Type.Record(Type.String(), DynamicPropBindingSchema)),
-    /**
-     * VC-tree only: nested child PageNode objects for tree traversal.
-     * Only populated on nodes inside a VisualComponent.rootNode tree.
-     * Page nodes use the flat `nodes: Record<string, PageNode>` map instead.
-     * Silently dropped if invalid — handled in parsePageNode.
-     */
-    childNodes: Type.Optional(Type.Array(Self)),
-  }),
-)
+/**
+ * PageNode is BaseNode plus an optional `dynamicBindings` map for CMS template
+ * pages. Pages use a flat `nodes: Record<string, PageNode>` map (same as
+ * `NodeTreeSchema.nodes`) — nodes are stored in a flat ID-keyed map.
+ *
+ * The `dynamicBindings` overlay is applied at render time when the page is used
+ * as a CMS content template. Static props remain stored as fallback values.
+ */
+export const PageNodeSchema = Type.Object({
+  ...BaseNodeSchema.properties,
+  /**
+   * Template-only prop bindings.
+   * Static props remain stored as fallback values; dynamicBindings overlay them
+   * at render time when a page is used as a CMS content template.
+   * Silently dropped if invalid — handled in parsePageNode.
+   */
+  dynamicBindings: Type.Optional(Type.Record(Type.String(), DynamicPropBindingSchema)),
+})
 
-export type PageNode = BaseNode & {
-  dynamicBindings?: Record<string, DynamicPropBinding>
-  childNodes?: PageNode[]
-}
+export type PageNode = Static<typeof PageNodeSchema>
 
 // ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
+/**
+ * Page IS a NodeTree (flat `nodes` + `rootNodeId`) plus page-level metadata
+ * (id, slug, title, optional template config). The structural shape matches
+ * `NodeTreeSchema`; the only refinement is that the page's nodes carry the
+ * richer `PageNode` type (BaseNode + optional `dynamicBindings` for template
+ * data binding), and `rootNodeId` always points at a `base.body` node.
+ *
+ * The shared `NodeTreeSchema.properties` are spread in so that `Page` and
+ * `NodeTreeSchema` cannot drift out of sync. The `nodes` field is overridden
+ * with the page-specific `PageNodeSchema` here (vs. the BaseNode-typed version
+ * in `NodeTreeSchema`) — `PageNode` is structurally a superset of `BaseNode`,
+ * so anything that consumes the page as a generic `NodeTree<BaseNode>` still
+ * works.
+ *
+ * Architecture source: docs/superpowers/plans/2026-05-06-tree-unification.md
+ */
 export const PageSchema = Type.Object({
+  ...NodeTreeSchema.properties,
+  /** Override the BaseNode-typed `nodes` with the page-specific PageNode type. */
+  nodes: Type.Record(Type.String(), PageNodeSchema),
   id: Type.String(),
   /** URL-safe slug — used as the public URL path when published */
   slug: Type.String(),
   /** Display title e.g. "Home", "About Us" */
   title: Type.String(),
-  /**
-   * FLAT MAP of all nodes on this page.
-   * All mutations go through page-tree/mutations.ts.
-   */
-  nodes: Type.Record(Type.String(), PageNodeSchema),
-  /**
-   * ID of the root container node — always "base.body".
-   * Entry point for all tree traversal and the publisher.
-   */
-  rootNodeId: Type.String(),
   /**
    * Optional CMS template configuration.
    * Missing means a normal static page.
@@ -255,13 +259,15 @@ export const CSSPropertyBagSchema = Type.Object({
   aspectRatio: Type.Optional(Type.String()),
   boxSizing: Type.Optional(Type.Union([Type.Literal('border-box'), Type.Literal('content-box')])),
 
-  // Spacing
-  margin: Type.Optional(Type.String()),
+  // Spacing — per-side ONLY. The visual editor stores per-side values as the
+  // canonical shape; the publisher's `bagToCSS` collapses 4 sides into the
+  // CSS shorthand (`padding: 20px 0;`) at emission time. There is no
+  // `padding` / `margin` shorthand in storage — that ambiguity was removed
+  // pre-release so there's exactly one valid shape.
   marginTop: Type.Optional(Type.String()),
   marginRight: Type.Optional(Type.String()),
   marginBottom: Type.Optional(Type.String()),
   marginLeft: Type.Optional(Type.String()),
-  padding: Type.Optional(Type.String()),
   paddingTop: Type.Optional(Type.String()),
   paddingRight: Type.Optional(Type.String()),
   paddingBottom: Type.Optional(Type.String()),
@@ -550,6 +556,9 @@ function parsePageTemplate(raw: unknown): PageTemplateConfig | null {
  * Replicates the Zod .catch() fallback behaviour for withFallback() fields
  * (props, breakpointOverrides, classIds) so nodes missing these fields are still
  * accepted with sensible defaults rather than rejected.
+ *
+ * PageNode is a flat node (no recursive nesting). Pages use a flat
+ * `nodes: Record<string, PageNode>` map, iterated directly in parsePage.
  */
 function parsePageNode(raw: unknown, nodePath: string): PageNode {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
@@ -589,16 +598,6 @@ function parsePageNode(raw: unknown, nodePath: string): PageNode {
     if (Object.keys(result).length > 0) dynamicBindings = result
   }
 
-  // Parse childNodes recursively (PageNode.childNodes is used in VC-context tree walking)
-  let childNodes: PageNode[] | undefined = undefined
-  if (Array.isArray(r.childNodes)) {
-    const parsed = r.childNodes.flatMap((child, i) => {
-      const node = parsePageNode(child, `${nodePath}.childNodes[${i}]`)
-      return [node]
-    })
-    if (parsed.length > 0) childNodes = parsed
-  }
-
   return {
     id: r.id,
     moduleId: r.moduleId,
@@ -611,7 +610,6 @@ function parsePageNode(raw: unknown, nodePath: string): PageNode {
     ...(typeof r.hidden === 'boolean' ? { hidden: r.hidden } : {}),
     ...(propBindings !== undefined ? { propBindings } : {}),
     ...(dynamicBindings !== undefined ? { dynamicBindings } : {}),
-    ...(childNodes !== undefined ? { childNodes } : {}),
   }
 }
 

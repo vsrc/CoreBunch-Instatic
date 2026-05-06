@@ -30,6 +30,11 @@ export const BodyModule: ModuleDefinition<BodyProps> = {
 
   component: BodyEditor,
 
+  // The body node represents the page's <body> element at publish time, even
+  // though render() emits children directly (the publisher wraps them in
+  // `<body>` separately). Surfacing the tag here keeps the layers panel honest.
+  htmlTag: 'body',
+
   // No wrapper element — children render directly into <body>. Body-level
   // user classes are applied to <body> by publishPage(), not here.
   render: (_props, renderedChildren) => ({

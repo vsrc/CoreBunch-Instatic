@@ -180,19 +180,29 @@ export async function buildSiteRuntimeScripts(
     // builds; if the timeout fires first the build promise still settles
     // later but we have already abandoned its result and torn down the
     // workspace via the outer finally.
+    //
+    // For `bundleTimeoutMs <= 0` we short-circuit: don't wait at all, just
+    // throw the timeout error synchronously. A `setTimeout(0)` race against a
+    // microtask-scheduled promise is non-deterministic (esbuild on a fast host
+    // can resolve before the next macrotask boundary fires the timer), and a
+    // non-positive timeout is always meant to mean "abort immediately".
     const bundleTimeoutMs = input.bundleTimeoutMs ?? DEFAULT_BUNDLE_TIMEOUT_MS
-    let timeoutHandle: ReturnType<typeof setTimeout> | undefined
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      timeoutHandle = setTimeout(
-        () => reject(new Error(`runtime bundle timed out after ${bundleTimeoutMs}ms`)),
-        bundleTimeoutMs,
-      )
-    })
     let build: Awaited<typeof buildPromise>
-    try {
-      build = await Promise.race([buildPromise, timeoutPromise])
-    } finally {
-      if (timeoutHandle) clearTimeout(timeoutHandle)
+    if (bundleTimeoutMs <= 0) {
+      throw new Error(`runtime bundle timed out after ${bundleTimeoutMs}ms`)
+    } else {
+      let timeoutHandle: ReturnType<typeof setTimeout> | undefined
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutHandle = setTimeout(
+          () => reject(new Error(`runtime bundle timed out after ${bundleTimeoutMs}ms`)),
+          bundleTimeoutMs,
+        )
+      })
+      try {
+        build = await Promise.race([buildPromise, timeoutPromise])
+      } finally {
+        if (timeoutHandle) clearTimeout(timeoutHandle)
+      }
     }
 
     const files = build.outputFiles.map((file) => {

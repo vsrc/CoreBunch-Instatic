@@ -1,8 +1,16 @@
 /**
- * nodeDisplayName — pure helper that resolves the user-facing label of a
+ * nodeDisplayName — pure helpers that resolve display-only metadata of a
  * PageNode for the DOM tree, breadcrumbs, drag previews, and rename prompts.
  *
- * Resolution order (first non-empty wins):
+ * Three pieces of info live here so every consumer of the layers panel
+ * (`TreeNode`, `useDomPanelDnd`, `CanvasRoot` rename flow) sees the same
+ * resolution rules:
+ *
+ *   - getNodeDisplayName  → the user-facing label
+ *   - getNodeHtmlTag       → the underlying HTML tag (or null)
+ *   - getNodeClassNames    → the assigned CSS class names
+ *
+ * Display name resolution order (first non-empty wins):
  *   1. node.label                — explicit user-set label
  *   2. VC name (when node.moduleId === 'base.visual-component-ref' AND
  *      props.componentId resolves to a Visual Component in the site)
@@ -17,11 +25,12 @@
 
 import type { PageNode } from './schemas'
 import type { VisualComponent } from '@core/visualComponents/schemas'
-import type { ModuleDefinition } from '@core/module-engine/types'
+import type { AnyModuleDefinition } from '@core/module-engine/types'
+import { classNamesForClassIds, type ClassRegistry } from './classNames'
 
 export function getNodeDisplayName(
   node: Pick<PageNode, 'label' | 'moduleId' | 'props'>,
-  definition: ModuleDefinition | undefined,
+  definition: AnyModuleDefinition | undefined,
   visualComponents: ReadonlyArray<VisualComponent> | undefined,
 ): string {
   if (node.label && node.label.length > 0) return node.label
@@ -34,5 +43,48 @@ export function getNodeDisplayName(
     }
   }
 
+  // slot-instance: show "Slot: <slotName>" so the DOM tree panel clearly identifies
+  // which named slot this placeholder fills (e.g. "Slot: children", "Slot: actions").
+  if (node.moduleId === 'base.slot-instance') {
+    const props = node.props as Record<string, unknown> | undefined
+    const slotName = typeof props?.slotName === 'string' && props.slotName ? props.slotName : 'children'
+    return `Slot: ${slotName}`
+  }
+
   return definition?.name ?? node.moduleId
+}
+
+/**
+ * Resolve the HTML tag a module renders for the given props.
+ *
+ * Returns null when the module did not declare an `htmlTag` hint — that's the
+ * signal to the layers panel to omit the `<tag>` badge for nodes that don't
+ * emit a single deterministic root element (visual-component-ref, slot-outlet,
+ * loop, etc.). Lowercased so display is consistent regardless of how a module
+ * stores its tag prop.
+ */
+export function getNodeHtmlTag(
+  node: Pick<PageNode, 'props'>,
+  definition: AnyModuleDefinition | undefined,
+): string | null {
+  const hint = definition?.htmlTag
+  if (hint === undefined) return null
+
+  const props = (node.props ?? {}) as Record<string, unknown>
+  const raw = typeof hint === 'function' ? hint(props) : hint
+  if (typeof raw !== 'string') return null
+  const trimmed = raw.trim()
+  return trimmed.length > 0 ? trimmed.toLowerCase() : null
+}
+
+/**
+ * Resolve the CSS class names assigned to a node, in declared order. Returns
+ * an empty array when the node has no classIds or the registry can't resolve
+ * any of them.
+ */
+export function getNodeClassNames(
+  node: Pick<PageNode, 'classIds'>,
+  classes: ClassRegistry,
+): string[] {
+  return classNamesForClassIds(classes, node.classIds)
 }

@@ -40,12 +40,19 @@ import { useEditorStore, selectActiveCanvasPage } from '@core/editor-store/store
 import { flattenSubtree } from '@core/page-tree/selectors'
 import { getAncestorIds } from '../../hooks/useTreeWalkOrder'
 import { registry } from '@core/module-engine/registry'
+import {
+  getNodeDisplayName,
+  getNodeHtmlTag,
+  getNodeClassNames,
+} from '@core/page-tree/nodeDisplayName'
 import { TreeNode } from './TreeNode'
 import { useDomTree } from './DomTreeContext'
 import { DomTreeProvider } from './DomTreeProvider'
 import { DomPanelDndContext } from './DomPanelDndContext'
 import { useDomPanelDnd } from './useDomPanelDnd'
-import { TreeContainer, TreeIconSlot, TreeLabel, TreeRow } from '../../ui/Tree'
+import { TreeContainer, TreeIconSlot, TreeLabel, TreeMeta, TreeRow } from '../../ui/Tree'
+import { pillAccent } from '../../ui/pillAccent'
+import { useEditorPreference } from '@editor/preferences/editorPreferences'
 import { SearchBar } from '@ui/components/SearchBar'
 import { PanelHeader } from '../shared/PanelHeader'
 import { useDraggablePanel } from '../../hooks/useDraggablePanel'
@@ -71,14 +78,18 @@ interface SearchRow {
   nodeId: string
   displayName: string
   moduleId: string
+  htmlTag: string | null
+  classChip: string | null
 }
 
 interface SearchResultsProps {
   rows: SearchRow[]
+  showTag: boolean
+  showClasses: boolean
   onSelect: (nodeId: string) => void
 }
 
-function SearchResults({ rows, onSelect }: SearchResultsProps) {
+function SearchResults({ rows, showTag, showClasses, onSelect }: SearchResultsProps) {
   if (rows.length === 0) {
     return (
       <div className={styles.noMatchMsg}>
@@ -88,7 +99,7 @@ function SearchResults({ rows, onSelect }: SearchResultsProps) {
   }
   return (
     <>
-      {rows.map(({ nodeId, displayName, moduleId }) => (
+      {rows.map(({ nodeId, displayName, moduleId, htmlTag, classChip }) => (
         <TreeRow
           key={nodeId}
           depth={0}
@@ -104,9 +115,25 @@ function SearchResults({ rows, onSelect }: SearchResultsProps) {
           }}
         >
           <TreeIconSlot icon={getModuleIcon(moduleId)} iconSize={11} />
-          <TreeLabel>
-            {displayName}
-          </TreeLabel>
+          {showTag && htmlTag && (
+            <TreeMeta
+              aria-hidden="true"
+              data-accent={pillAccent(htmlTag)}
+              className={styles.searchTagPill}
+            >
+              {htmlTag}
+            </TreeMeta>
+          )}
+          <TreeLabel>{displayName}</TreeLabel>
+          {showClasses && classChip && (
+            <TreeMeta
+              aria-hidden="true"
+              title={classChip}
+              className={styles.searchClassChip}
+            >
+              {classChip}
+            </TreeMeta>
+          )}
         </TreeRow>
       ))}
     </>
@@ -124,6 +151,22 @@ function DomPanelInner({ variant = 'floating' }: { variant?: PanelVariant }) {
   const focusedPanel = useEditorStore((s) => s.focusedPanel)
   // Per-node selector — only this ref updates when selection changes (Guideline #318)
   const selectedNodeId = useEditorStore((s) => s.selectedNodeId)
+  // Subscribe to the class registry + visualComponents so search results stay
+  // accurate when classes are renamed or VCs are renamed (those affect the
+  // searchable haystack and the chip text shown in results).
+  const classes = useEditorStore((s) => s.site?.classes)
+  const visualComponents = useEditorStore((s) => s.site?.visualComponents)
+
+  // Tag / class display preferences. The SEARCH FILTER itself always considers
+  // tag and class names regardless of these prefs — toggling visibility of
+  // the chips should not silently change which rows match. The chips are
+  // hidden in the results list when their pref is off so the search view
+  // mirrors the live tree.
+  const showTag = useEditorPreference('layersShowTag')
+  const showClasses = useEditorPreference('layersShowClasses')
+  // Behavioural prefs for the tree's reaction to canvas selection.
+  const autoExpandSelected = useEditorPreference('layersAutoExpandSelected')
+  const smoothScroll = useEditorPreference('layersSmoothScroll')
 
   const focusRef = useRef<HTMLDivElement>(null)
   const treeRef = useRef<HTMLDivElement>(null)
@@ -175,22 +218,33 @@ function DomPanelInner({ variant = 'floating' }: { variant?: PanelVariant }) {
   useEffect(() => {
     if (!page || !selectedNodeId) return
 
-    // Auto-expand all ancestors of the selected node so it is visible in the tree
-    const ancestorIds = getAncestorIds(page.nodes, page.rootNodeId, selectedNodeId)
-    for (const ancestorId of ancestorIds) {
-      expandNode(ancestorId)
+    // Auto-expand all ancestors of the selected node so it is visible in the
+    // tree. Skipped when the user opts out via `layersAutoExpandSelected` —
+    // the row remains hidden under collapsed parents until the user expands
+    // them manually.
+    if (autoExpandSelected) {
+      const ancestorIds = getAncestorIds(page.nodes, page.rootNodeId, selectedNodeId)
+      for (const ancestorId of ancestorIds) {
+        expandNode(ancestorId)
+      }
     }
 
-    // Scroll the selected row into view after the expand animation settles
+    // Scroll the selected row into view after the expand animation settles.
+    // The `smooth` vs `auto` choice is user-controllable via the
+    // `layersSmoothScroll` preference (some users find smooth scrolling
+    // distracting when bouncing between many nodes quickly).
     requestAnimationFrame(() => {
       const row = treeRef.current?.querySelector(`[data-node-id="${selectedNodeId}"]`)
       if (row) {
-        row.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+        row.scrollIntoView({
+          behavior: smoothScroll ? 'smooth' : 'auto',
+          block: 'nearest',
+        })
       }
     })
   // expandNode is a stable useCallback — safe to include
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedNodeId, page])
+  }, [selectedNodeId, page, autoExpandSelected, smoothScroll])
 
   // ─── Focus management: F6 moves focus into panel ──────────────────────────
   useEffect(() => {
@@ -233,8 +287,9 @@ function DomPanelInner({ variant = 'floating' }: { variant?: PanelVariant }) {
       if (!target) return
 
       // TODO(Phase-N): wire DnD reordering inside VC mode.
-      // moveNode operates on page.nodes; VC nodes live in vc.rootNode and require
-      // a dedicated moveNodeInVc store action that mutates the nested VCNode tree.
+      // moveNode → mutateActiveTree routes to vc.tree (flat map) in VC mode, so
+      // the mutation itself would work — but canvas DnD feedback for VC trees hasn't
+      // been validated yet. Early-return until the regression tests cover it.
       if (page?.id.startsWith('vc-virtual:')) return
 
       try {
@@ -247,22 +302,53 @@ function DomPanelInner({ variant = 'floating' }: { variant?: PanelVariant }) {
   )
 
   // ─── Search: flat filtered list of matching nodes ─────────────────────────
+  // Matches against the node's display name, its HTML tag (with optional `<>`
+  // brackets the user might type), and any assigned class names (with optional
+  // `.` prefix). Examples:
+  //   "header"      → containers tagged <header> + nodes with class "header"
+  //   "<div>"       → div containers and text/divs
+  //   ".container"  → nodes with class "container" specifically
+  //   "padding-m"   → nodes with class "padding-m"
   const searchRows = useMemo<SearchRow[]>(() => {
-    const query = searchQuery.trim().toLowerCase()
-    if (!query || !page) return []
+    const rawQuery = searchQuery.trim().toLowerCase()
+    if (!rawQuery || !page) return []
+
+    // Normalize the query: strip a leading `<` / trailing `>` so users can
+    // type "<div>" and still match the haystack which stores the bare tag.
+    // Strip a leading `.` so ".container" matches "container" in class names.
+    const query = rawQuery
+      .replace(/^[<.]/, '')
+      .replace(/>$/, '')
+
     return flattenSubtree(page, page.rootNodeId)
-      .map((nodeId) => {
+      .flatMap((nodeId) => {
         const node = page.nodes[nodeId]
-        if (!node) return null
+        if (!node) return []
         const def = registry.get(node.moduleId)
-        const displayName = node.label ?? def?.name ?? node.moduleId
-        return { nodeId, displayName, moduleId: node.moduleId }
+        const displayName = getNodeDisplayName(node, def, visualComponents)
+        const htmlTag = getNodeHtmlTag(node, def)
+        const classNames = getNodeClassNames(node, classes)
+        const classChip = classNames.length > 0 ? `.${classNames.join('.')}` : null
+
+        // Build the searchable haystack from every visible piece of metadata.
+        // Joined with spaces so substring matching works across fields without
+        // accidentally matching across boundaries (e.g. "headerfooter").
+        const haystackParts: string[] = [displayName.toLowerCase()]
+        if (htmlTag) haystackParts.push(htmlTag)
+        for (const name of classNames) haystackParts.push(name.toLowerCase())
+        const haystack = haystackParts.join(' ')
+
+        if (!haystack.includes(query)) return []
+
+        return [{
+          nodeId,
+          displayName,
+          moduleId: node.moduleId,
+          htmlTag,
+          classChip,
+        } satisfies SearchRow]
       })
-      .filter((row): row is SearchRow => {
-        if (!row) return false
-        return row.displayName.toLowerCase().includes(query)
-      })
-  }, [searchQuery, page])
+  }, [searchQuery, page, classes, visualComponents])
 
   const collapsed = panelState.collapsed
   const width = panelState.width || DEFAULT_WIDTH
@@ -342,6 +428,8 @@ function DomPanelInner({ variant = 'floating' }: { variant?: PanelVariant }) {
             >
               <SearchResults
                 rows={searchRows}
+                showTag={showTag}
+                showClasses={showClasses}
                 onSelect={(nodeId) => useEditorStore.getState().selectNode(nodeId)}
               />
             </TreeContainer>

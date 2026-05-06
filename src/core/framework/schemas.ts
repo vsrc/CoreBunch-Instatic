@@ -354,8 +354,11 @@ export type FrameworkSpacingSettings = Static<typeof FrameworkSpacingSettingsSch
 // ---------------------------------------------------------------------------
 
 /**
- * Shared fluid-scale preferences applied to both typography and spacing.
- * Defaults match Core Framework: rootFontSize=10, minScreen=320, maxScreen=1400, isRem=true.
+ * Shared framework preferences applied to generated framework output.
+ * Fluid-scale defaults match Core Framework: rootFontSize=10, minScreen=320,
+ * maxScreen=1400, isRem=true. Generated utility tree-shaking defaults on so
+ * framework.css only carries utilities assigned in the page / VC trees unless
+ * the site opts into the full generated framework utility set.
  * validate.ts: validateFrameworkPreferencesSettings(), lines ~358–376.
  */
 export const FrameworkPreferencesSettingsSchema = Type.Object({
@@ -367,6 +370,8 @@ export const FrameworkPreferencesSettingsSchema = Type.Object({
   maxScreenWidth: withFallback(Type.Number(), 1400),
   /** Whether to emit clamp() values in `rem` (true) or `px` (false). */
   isRem: withFallback(Type.Boolean(), true),
+  /** Whether generated framework utility CSS is tree-shaken to used class IDs. */
+  treeShakeGeneratedFrameworkUtilities: withFallback(Type.Boolean(), true),
 })
 
 export type FrameworkPreferencesSettings = Static<typeof FrameworkPreferencesSettingsSchema>

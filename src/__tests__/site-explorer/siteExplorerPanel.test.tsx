@@ -35,22 +35,26 @@ function resetStore() {
 }
 
 function makeVisualComponent(name: string): VisualComponent {
+  const rootId = `root-${name}`
   return {
     id: `vc-${name}`,
     name,
-    rootNode: {
-      id: `root-${name}`,
-      moduleId: 'base.body',
-      props: {},
-      children: [],
-      breakpointOverrides: {},
+    tree: {
+      rootNodeId: rootId,
+      nodes: {
+        [rootId]: {
+          id: rootId,
+          moduleId: 'base.body',
+          props: {},
+          children: [],
+          breakpointOverrides: {},
+          classIds: [],
+        },
+      },
     },
     params: [],
     breakpoints: [],
     classIds: [],
-    filePath: `src/components/${name}.tsx`,
-    generated: true,
-    ejected: false,
     createdAt: 1_700_000_000_000,
   }
 }

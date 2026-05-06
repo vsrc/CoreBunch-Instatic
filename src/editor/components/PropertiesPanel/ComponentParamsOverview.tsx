@@ -13,7 +13,7 @@
 import { useEditorStore } from '@core/editor-store/store'
 import { findParamOrigin } from '@core/visualComponents/origin'
 import { registry } from '@core/module-engine/registry'
-import type { VisualComponent, VCParam, VCNode } from '@core/visualComponents/schemas'
+import type { VisualComponent, VCParam } from '@core/visualComponents/schemas'
 import { Button } from '@ui/components/Button'
 import { EmptyState } from '@ui/components/EmptyState'
 import { CloseIcon } from 'pixel-art-icons/icons/close'
@@ -30,21 +30,6 @@ interface ComponentParamsOverviewProps {
 // ---------------------------------------------------------------------------
 // Pure helpers
 // ---------------------------------------------------------------------------
-
-/**
- * DFS over a VCNode nested tree to find a node by ID.
- * Returns null if not found.
- */
-function findVCNodeById(root: VCNode, id: string): VCNode | null {
-  if (root.id === id) return root
-  if (root.childNodes) {
-    for (const child of root.childNodes) {
-      const found = findVCNodeById(child, id)
-      if (found) return found
-    }
-  }
-  return null
-}
 
 /**
  * Summarize a param's default value into a short display string.
@@ -116,7 +101,7 @@ export function ComponentParamsOverview({ vc }: ComponentParamsOverviewProps) {
         <ul className={styles.paramList} aria-label="Component params">
           {vc.params.map((param) => {
             const origin = findParamOrigin(vc, param.id)
-            const originNode = origin ? findVCNodeById(vc.rootNode, origin.nodeId) : null
+            const originNode = origin ? vc.tree.nodes[origin.nodeId] ?? null : null
             const moduleName = originNode
               ? (originNode.label || registry.get(originNode.moduleId)?.name || originNode.moduleId)
               : null

@@ -7,7 +7,13 @@
  * the VC's own canvas for editing.
  * The publisher emits a comment marker; full emit is Phase 5.
  *
- * Architecture source: Contribution #619 §8
+ * Slot content (user-authored content that fills the VC's slot outlets) lives
+ * as `base.slot-instance` child nodes of this ref node in the page tree.
+ * One slot-instance is auto-materialized per slot param the VC declares, in
+ * param order, locked. The `slotContent` prop is gone — slot fills are
+ * ordinary children of the slot-instance nodes.
+ *
+ * Architecture source: Contribution #619 §8 / Task 4 Tree Unification.
  */
 import type { ModuleDefinition } from '@core/module-engine/types'
 import { registry } from '@core/module-engine/registry'
@@ -18,7 +24,6 @@ interface VisualComponentRefProps extends Record<string, unknown> {
   componentId: string
   /** Per-param value overrides — keyed by VCParam.id (stable across renames) */
   propOverrides: Record<string, unknown>
-  slotContent: Record<string, unknown[]>
 }
 
 export const VisualComponentRefModule: ModuleDefinition<VisualComponentRefProps> = {
@@ -29,7 +34,7 @@ export const VisualComponentRefModule: ModuleDefinition<VisualComponentRefProps>
   version: '1.0.0',
   icon: BracesIcon,
   trusted: true,
-  canHaveChildren: false,
+  canHaveChildren: true,
 
   // Props are not panel-edited — PropertiesPanel branches on moduleId and
   // renders ComponentRefView instead (Contribution #619 §8.5).
@@ -38,7 +43,6 @@ export const VisualComponentRefModule: ModuleDefinition<VisualComponentRefProps>
   defaults: {
     componentId: '',
     propOverrides: {},
-    slotContent: {},
   },
 
   component: VisualComponentRefEditor,
@@ -47,9 +51,11 @@ export const VisualComponentRefModule: ModuleDefinition<VisualComponentRefProps>
    * Defense-in-depth fallback: the publisher walker intercepts
    * base.visual-component-ref nodes via renderVisualComponentRef() in
    * render.ts before this method is ever called. This implementation is
-   * intentionally unreachable under normal operation.
+   * intentionally unreachable under normal operation. When called, it
+   * concatenates children (slot-instance content already extracted by the walker)
+   * so the conformance contract `render() embeds children` is satisfied.
    */
-  render: () => ({ html: '', css: '' }),
+  render: (_props, children) => ({ html: children.join('') }),
 }
 
 registry.registerOrReplace(VisualComponentRefModule)

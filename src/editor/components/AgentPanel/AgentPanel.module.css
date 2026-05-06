@@ -4,8 +4,10 @@
 .floatPanel {
   position: absolute;
   /* Position driven by --panel-x / --panel-y CSS vars (useDraggablePanel) */
-  left: var(--panel-x, calc(100% - 336px));
-  top: var(--panel-y, 200px);
+  --panel-x: calc(100% - 336px);
+  --panel-y: 200px;
+  left: var(--panel-x);
+  top: var(--panel-y);
   z-index: 50;
   width: 320px;
   height: 480px;
@@ -289,7 +291,7 @@
 }
 
 .toolCallType {
-  font-family: var(--font-mono, monospace);
+  font-family: var(--font-mono);
   font-size: 9px;
   opacity: 0.70;
 }

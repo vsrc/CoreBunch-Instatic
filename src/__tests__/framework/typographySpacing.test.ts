@@ -19,6 +19,7 @@ import {
   generateFrameworkSpacingUtilityClasses,
   generateFrameworkSpacingVariables,
 } from '@core/framework/spacing'
+import { generateClassCSS } from '@core/publisher/classCss'
 import { DEFAULT_FRAMEWORK_PREFERENCES } from '@core/framework/scale'
 import { resolveFrameworkPreferences } from '@core/framework/preferences'
 import {
@@ -78,8 +79,16 @@ function fixedSpacingSettings(): FrameworkSpacingSettings {
       },
     ],
     classes: [
-      { id: 'gen-pad',  name: 'padding-*', property: ['padding'],   tabId: 'group-space' },
-      { id: 'gen-gap',  name: 'gap-*',     property: ['gap'],       tabId: 'group-space' },
+      // `padding-*` expands to all four sides — the shorthand `padding` key
+      // does not exist in CSSPropertyBag (the publisher collapses sides at
+      // emission time).
+      {
+        id: 'gen-pad',
+        name: 'padding-*',
+        property: ['padding-top', 'padding-right', 'padding-bottom', 'padding-left'],
+        tabId: 'group-space',
+      },
+      { id: 'gen-gap', name: 'gap-*', property: ['gap'], tabId: 'group-space' },
     ],
   }
 }
@@ -211,15 +220,50 @@ describe('framework/spacing', () => {
     const names = Object.values(classes).map((c) => c.name)
     expect(names.filter((n) => n.startsWith('padding-')).length).toBe(11)
     expect(names.filter((n) => n.startsWith('gap-')).length).toBe(11)
-    // Sanity: padding-* applies the padding property; gap-* applies gap.
+    // Sanity: padding-* writes the four per-side keys (the schema doesn't
+    // store a `padding` shorthand — that's collapsed at the publisher); gap-*
+    // writes the `gap` key directly.
     for (const cls of Object.values(classes)) {
       if (cls.name.startsWith('padding-')) {
-        expect(cls.styles.padding).toBeDefined()
+        expect(cls.styles.paddingTop).toBeDefined()
+        expect(cls.styles.paddingRight).toBeDefined()
+        expect(cls.styles.paddingBottom).toBeDefined()
+        expect(cls.styles.paddingLeft).toBeDefined()
       }
       if (cls.name.startsWith('gap-')) {
         expect(cls.styles.gap).toBeDefined()
       }
     }
+  })
+
+  it('expands shorthand padding and margin generators into publishable per-side styles', () => {
+    const settings = fixedSpacingSettings()
+    settings.classes = [
+      { id: 'gen-pad', name: 'padding-*', property: ['padding'], tabId: 'group-space' },
+      { id: 'gen-margin', name: 'margin-*', property: ['margin'], tabId: 'group-space' },
+    ]
+
+    const classes = generateFrameworkSpacingUtilityClasses(settings)
+    const padM = Object.values(classes).find((c) => c.name === 'padding-m')!
+    const marginM = Object.values(classes).find((c) => c.name === 'margin-m')!
+    const css = generateClassCSS({ [padM.id]: padM, [marginM.id]: marginM }, [])
+
+    expect(padM.styles).toMatchObject({
+      paddingTop: 'var(--space-m)',
+      paddingRight: 'var(--space-m)',
+      paddingBottom: 'var(--space-m)',
+      paddingLeft: 'var(--space-m)',
+    })
+    expect(marginM.styles).toMatchObject({
+      marginTop: 'var(--space-m)',
+      marginRight: 'var(--space-m)',
+      marginBottom: 'var(--space-m)',
+      marginLeft: 'var(--space-m)',
+    })
+    expect(css).toContain('.padding-m {')
+    expect(css).toContain('padding: var(--space-m);')
+    expect(css).toContain('.margin-m {')
+    expect(css).toContain('margin: var(--space-m);')
   })
 
   it('emits CSS for the published page even when no class generators are configured', () => {

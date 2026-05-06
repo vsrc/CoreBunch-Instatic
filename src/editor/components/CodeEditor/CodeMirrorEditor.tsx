@@ -51,7 +51,7 @@ const achromatic = EditorView.theme({
     color: 'var(--editor-text)',
     height: '100%',
     fontSize: '12px',
-    fontFamily: 'var(--font-mono, "Geist Mono", "JetBrains Mono", monospace)',
+    fontFamily: 'var(--font-mono)',
   },
   '&.cm-focused': {
     outline: 'none',

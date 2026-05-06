@@ -5,8 +5,8 @@
  * be injected at render time. Visually distinct (dashed outline) so the
  * VC author knows it is a slot, not a regular container.
  *
- * The `slotName` identifies which slotContent key this outlet consumes.
- * The publisher substitutes the matching PageNode[] array here (Phase 5).
+ * The `slotName` matches the `slotName` prop on the consumer's `base.slot-instance`
+ * child in the page tree. The publisher substitutes the slot-instance's children here.
  *
  * Architecture source: Contribution #619 §8
  */

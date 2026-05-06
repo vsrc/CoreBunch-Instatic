@@ -34,6 +34,8 @@ export const ContentModule: ModuleDefinition<ContentProps> = {
 
   component: ContentEditor,
 
+  htmlTag: 'article',
+
   render: (props) => {
     const html = typeof props.html === 'string' ? props.html : ''
     if (!html) return { html: '' }

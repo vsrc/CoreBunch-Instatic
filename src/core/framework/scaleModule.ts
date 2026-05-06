@@ -31,6 +31,7 @@ import {
   getVariableName,
   manualSizeVariableName,
 } from './scale'
+import { formatCssVariableBlock } from './cssVariables'
 
 // ---------------------------------------------------------------------------
 // Public types — shared between typography and spacing
@@ -49,6 +50,8 @@ export interface FrameworkScaleVariable {
   /** Manual sizes have an arbitrary CSS-safe name instead of a step. */
   manualName?: string
 }
+
+type FrameworkStyleTarget = keyof CSSPropertyBag | readonly (keyof CSSPropertyBag)[]
 
 // ---------------------------------------------------------------------------
 // Generic shape of a framework scale group / settings — what the factory
@@ -103,7 +106,7 @@ interface FrameworkScaleModuleConfig<TGroup extends FrameworkScaleGroupCommon> {
     scaleRatioInputValue?: number
   }
   /** Maps CSS property tokens (`font-size`, `padding`, …) to `CSSPropertyBag` keys. */
-  propertyKeymap: Record<string, keyof CSSPropertyBag>
+  propertyKeymap: Record<string, FrameworkStyleTarget>
   /** Tags applied to every generated `CSSClass` — e.g. `['framework', 'utility', 'spacing']`. */
   classTags: string[]
 }
@@ -227,11 +230,7 @@ export function createFrameworkScaleModule<
     preferences: FrameworkPreferences,
   ): string {
     const variables = generateVariables(settings, preferences)
-    if (variables.length === 0) return ''
-    const body = variables
-      .map((variable) => `  ${variable.name}: ${sanitizeCssTokenValue(variable.value)};`)
-      .join('\n')
-    return `:root {\n${body}\n}`
+    return formatCssVariableBlock(':root', variables)
   }
 
   function generateUtilityClasses(
@@ -320,23 +319,22 @@ function expandClassPattern(pattern: string, step: string): string {
 }
 
 function buildUtilityStyles(
-  keymap: Record<string, keyof CSSPropertyBag>,
+  keymap: Record<string, FrameworkStyleTarget>,
   properties: string[],
   value: string,
 ): Partial<CSSPropertyBag> {
   const styles: Partial<CSSPropertyBag> = {}
   for (const property of properties) {
-    const camelKey = keymap[property] ?? toCamelCase(property)
-    if (!camelKey) continue
-    ;(styles as Record<string, string>)[camelKey] = value
+    const target = keymap[property] ?? toCamelCase(property)
+    const keys = Array.isArray(target) ? target : [target]
+    for (const key of keys) {
+      if (!key) continue
+      ;(styles as Record<string, string>)[key] = value
+    }
   }
   return styles
 }
 
 function toCamelCase(value: string): string {
   return value.replace(/-([a-z])/g, (_, letter: string) => letter.toUpperCase())
-}
-
-function sanitizeCssTokenValue(value: string): string {
-  return value.replace(/<\/style\s*>/gi, '').replace(/[{}]/g, '')
 }

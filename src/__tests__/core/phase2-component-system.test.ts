@@ -77,10 +77,9 @@ function getVC(vcId: string) {
       id: string
       name: string
       params: Array<{ id: string; name: string; type: string; defaultValue: unknown; required: boolean; description?: string; enumOptions?: string[] }>
-      rootNode: {
-        id: string
-        propBindings?: Record<string, { paramId: string }>
-        childNodes?: Array<{
+      tree: {
+        rootNodeId: string
+        nodes: Record<string, {
           id: string
           propBindings?: Record<string, { paramId: string }>
         }>
@@ -107,7 +106,7 @@ describe('Gate PB-1 — setNodePropBinding in VC mode', () => {
     const vcId = createVC('Card')
     const paramId = addParam(vcId, 'title', 'string')
     const vc = getVC(vcId)!
-    const rootNodeId = vc.rootNode.id
+    const rootNodeId = vc.tree.rootNodeId
 
     // Set active document to VC mode
     useEditorStore.setState({ activeDocument: { kind: 'visualComponent', vcId } } as Parameters<typeof useEditorStore.setState>[0])
@@ -115,7 +114,7 @@ describe('Gate PB-1 — setNodePropBinding in VC mode', () => {
     callAction<void>('setNodePropBinding', rootNodeId, 'text', paramId)
 
     const updated = getVC(vcId)!
-    expect(updated.rootNode.propBindings?.text?.paramId).toBe(paramId)
+    expect(updated.tree.nodes[updated.tree.rootNodeId]?.propBindings?.text?.paramId).toBe(paramId)
   })
 })
 
@@ -173,7 +172,7 @@ describe('Gate PB-3 — clearNodePropBinding GCs orphan param', () => {
     const vcId = createVC('Widget')
     const paramId = addParam(vcId, 'label', 'string')
     const vc = getVC(vcId)!
-    const rootNodeId = vc.rootNode.id
+    const rootNodeId = vc.tree.rootNodeId
 
     useEditorStore.setState({ activeDocument: { kind: 'visualComponent', vcId } } as Parameters<typeof useEditorStore.setState>[0])
 
@@ -185,7 +184,8 @@ describe('Gate PB-3 — clearNodePropBinding GCs orphan param', () => {
     callAction<void>('clearNodePropBinding', rootNodeId, 'text')
 
     // The binding should be gone
-    expect(getVC(vcId)!.rootNode.propBindings?.text).toBeUndefined()
+    const afterClear = getVC(vcId)!
+    expect(afterClear.tree.nodes[afterClear.tree.rootNodeId]?.propBindings?.text).toBeUndefined()
     // The orphan param should be GC'd
     expect(getVC(vcId)!.params).toHaveLength(0)
   })
@@ -202,7 +202,7 @@ describe('Gate PB-4 — clearNodePropBinding does NOT GC when still referenced',
     const vcId = createVC('Banner')
     const paramId = addParam(vcId, 'headline', 'string')
     const vc = getVC(vcId)!
-    const rootNodeId = vc.rootNode.id
+    const rootNodeId = vc.tree.rootNodeId
 
     useEditorStore.setState({ activeDocument: { kind: 'visualComponent', vcId } } as Parameters<typeof useEditorStore.setState>[0])
 
@@ -225,7 +225,8 @@ describe('Gate PB-4 — clearNodePropBinding does NOT GC when still referenced',
     callAction<void>('clearNodePropBinding', rootNodeId, 'text')
 
     // Root binding gone, child binding still there
-    expect(getVC(vcId)!.rootNode.propBindings?.text).toBeUndefined()
+    const afterClear = getVC(vcId)!
+    expect(afterClear.tree.nodes[afterClear.tree.rootNodeId]?.propBindings?.text).toBeUndefined()
     // Param NOT GC'd because child still references it
     expect(getVC(vcId)!.params).toHaveLength(1)
     expect(getVC(vcId)!.params[0].id).toBe(paramId)

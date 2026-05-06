@@ -169,7 +169,7 @@
 /* ── Add package form ────────────────────────────────────────────────────── */
 .addForm {
     padding: 5px 8px 7px;
-    border-top: 1px solid var(--panel-border, var(--editor-border));
+    border-top: 1px solid var(--panel-border);
     flex-shrink: 0;
 }
 

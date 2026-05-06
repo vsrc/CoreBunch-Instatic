@@ -54,6 +54,8 @@ export const ContainerModule: ModuleDefinition<ContainerProps> = {
 
   component: ContainerEditor,
 
+  htmlTag: (props) => resolveContainerTag(props.tag),
+
   render: (props, renderedChildren) => {
     const tag = resolveContainerTag(props.tag)
     return {

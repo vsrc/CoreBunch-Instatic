@@ -37,6 +37,8 @@ import { CanvasBreakpointSelector } from './CanvasBreakpointSelector'
 import { CanvasSelectionContext } from './CanvasContexts'
 import { ClassStyleInjector } from './ClassStyleInjector'
 import { LayerNodeContextMenu } from '../DomPanel/LayerNodeContextMenu'
+import { useConfirmDelete } from '../shared/ConfirmDeleteDialog'
+import { useEditorPreference } from '@editor/preferences/editorPreferences'
 import { useTemplatePreviewContext } from '../../hooks/useTemplatePreviewContext'
 import styles from './CanvasRoot.module.css'
 
@@ -100,7 +102,39 @@ export function CanvasRoot() {
   const setActiveDocument = useEditorStore((s) => s.setActiveDocument)
   const activeDocument = useEditorStore((s) => s.activeDocument)
   const templatePreviewContext = useTemplatePreviewContext(canvasPage)
-  const focusActiveBreakpoint = Boolean(selectedNodeId && rightSidebarExpanded)
+  // Auto-dim non-active breakpoints when a layer is selected and the
+  // properties panel is open — gated by the `dimInactiveBreakpoints` user
+  // preference so designers comparing breakpoints side-by-side can keep
+  // them all bright.
+  const dimInactiveBreakpointsPref = useEditorPreference('dimInactiveBreakpoints')
+  const focusActiveBreakpoint =
+    dimInactiveBreakpointsPref && Boolean(selectedNodeId && rightSidebarExpanded)
+
+  // Routes destructive actions through the editor's central confirm dialog.
+  // When the `confirmBeforeDelete` preference is off, the commit callback
+  // runs synchronously — same behaviour as before this preference existed.
+  const confirmDelete = useConfirmDelete()
+  const requestDeleteNode = useCallback(
+    (nodeId: string) => {
+      const page = canvasPage
+      if (!page) return
+      const node = page.nodes[nodeId]
+      const definition = node ? registry.get(node.moduleId) : undefined
+      const label = node
+        ? getNodeDisplayName(node, definition, useEditorStore.getState().site?.visualComponents)
+        : 'this layer'
+      confirmDelete({
+        title: 'Delete layer?',
+        description: `${label} and any of its children will be removed. This can be undone with Ctrl/Cmd+Z.`,
+        confirmLabel: 'Delete',
+        commit: () => {
+          deleteNode(nodeId)
+          if (nodeId === useEditorStore.getState().selectedNodeId) clearSelection()
+        },
+      })
+    },
+    [canvasPage, clearSelection, confirmDelete, deleteNode],
+  )
 
   // Canvas gesture hook (pan/zoom). Disabled in preview mode — preview owns
   // its own surface (CanvasPreviewSurface) and pan/zoom is meaningless on a
@@ -200,7 +234,7 @@ export function CanvasRoot() {
 
       if (!selectedNodeId) return
 
-      // Delete / Backspace → delete selected node
+      // Delete / Backspace → delete selected node (gated by confirmBeforeDelete pref)
       if (e.key === 'Delete' || e.key === 'Backspace') {
         // Don't intercept backspace in inputs
         const target = e.target as HTMLElement
@@ -210,8 +244,7 @@ export function CanvasRoot() {
           target.isContentEditable
         ) return
         e.preventDefault()
-        deleteNode(selectedNodeId)
-        clearSelection()
+        requestDeleteNode(selectedNodeId)
       }
 
       // Ctrl/Cmd+D → duplicate
@@ -246,8 +279,7 @@ export function CanvasRoot() {
     [
       selectedNodeId,
       canvasKeyDown,
-      deleteNode,
-      clearSelection,
+      requestDeleteNode,
       duplicateNode,
       activeDocument,
       setActiveDocument,
@@ -379,8 +411,9 @@ export function CanvasRoot() {
             nodeId={contextMenu.nodeId}
             onClose={closeContextMenu}
             onDelete={() => {
-              deleteNode(contextMenu.nodeId)
+              const id = contextMenu.nodeId
               closeContextMenu()
+              requestDeleteNode(id)
             }}
             onDuplicate={() => {
               duplicateNode(contextMenu.nodeId)

@@ -57,16 +57,25 @@ function makeVCNode(overrides: Partial<VCNode> & { id: string; moduleId: string 
   }
 }
 
-function makeVC(overrides: Partial<VisualComponent> & { id: string; name: string; rootNode: VCNode }): VisualComponent {
+/** Build a VisualComponent with a flat tree from an array of all nodes + root ID. */
+function makeVC(overrides: {
+  id: string
+  name: string
+  nodes: VCNode[]
+  rootId: string
+  params?: VCParam[]
+  classIds?: string[]
+}): VisualComponent {
+  const nodesMap: Record<string, VCNode> = {}
+  for (const n of overrides.nodes) nodesMap[n.id] = n
   return {
-    params: [],
+    params: overrides.params ?? [],
     breakpoints: [],
-    classIds: [],
-    filePath: '',
-    generated: true,
-    ejected: false,
+    classIds: overrides.classIds ?? [],
     createdAt: 0,
-    ...overrides,
+    id: overrides.id,
+    name: overrides.name,
+    tree: { nodes: nodesMap, rootNodeId: overrides.rootId },
   }
 }
 
@@ -86,12 +95,12 @@ describe('VC inlining — prop override substitution', () => {
     id: 'vc-root',
     moduleId: 'base.container',
     children: ['vc-text'],
-    childNodes: [textNode],
   })
   const vc = makeVC({
     id: 'vc-card',
     name: 'Card',
-    rootNode: containerNode,
+    nodes: [containerNode, textNode],
+    rootId: 'vc-root',
     params: [makeParam({ id: 'param-title', name: 'title', type: 'string', defaultValue: 'Default Title' })],
   })
 
@@ -102,7 +111,6 @@ describe('VC inlining — prop override substitution', () => {
         props: {
           componentId: 'vc-card',
           propOverrides: { 'param-title': 'Override Title' },
-          slotContent: {},
         },
       },
     })
@@ -119,7 +127,6 @@ describe('VC inlining — prop override substitution', () => {
         props: {
           componentId: 'vc-card',
           propOverrides: {},
-          slotContent: {},
         },
       },
     })
@@ -162,7 +169,6 @@ describe('VC inlining — slot expansion', () => {
     id: 'vc-slot-root',
     moduleId: 'base.container',
     children: ['vc-slot-outlet'],
-    childNodes: [slotOutletNode],
   })
 
   // Default slot content for when no instance content is provided
@@ -175,7 +181,8 @@ describe('VC inlining — slot expansion', () => {
   const vcWithSlot = makeVC({
     id: 'vc-slot',
     name: 'SlotComponent',
-    rootNode: slotContainerNode,
+    nodes: [slotContainerNode, slotOutletNode],
+    rootId: 'vc-slot-root',
     params: [makeParam({
       id: 'param-children',
       name: 'children',
@@ -184,21 +191,28 @@ describe('VC inlining — slot expansion', () => {
     })],
   })
 
-  it('expands slot with provided slotContent', () => {
-    // Instance slot content: a text node
-    const slotTextNode = makeVCNode({
-      id: 'slot-content-text',
-      moduleId: 'base.text',
-      props: { text: 'Instance slot content', tag: 'p' },
-    })
+  it('expands slot with provided slot-instance content (Task 4 Tree Unification)', () => {
+    // Instance slot content: a slot-instance child of the VC ref + content node.
+    // The VC ref node's children include a base.slot-instance node (locked, slotName='children')
+    // whose children are the user-authored content nodes.
     const page = makePage({
       root: {
         moduleId: 'base.visual-component-ref',
         props: {
           componentId: 'vc-slot',
           propOverrides: {},
-          slotContent: { children: [slotTextNode] },
         },
+        children: ['slot-inst-children'],
+      },
+      'slot-inst-children': {
+        moduleId: 'base.slot-instance',
+        props: { slotName: 'children' },
+        children: ['slot-content-text'],
+        locked: true,
+      },
+      'slot-content-text': {
+        moduleId: 'base.text',
+        props: { text: 'Instance slot content', tag: 'p' },
       },
     })
     const site = makeSite({ visualComponents: [vcWithSlot], pages: [page] })
@@ -214,7 +228,6 @@ describe('VC inlining — slot expansion', () => {
         props: {
           componentId: 'vc-slot',
           propOverrides: {},
-          slotContent: {},
         },
       },
     })
@@ -228,7 +241,8 @@ describe('VC inlining — slot expansion', () => {
     const vcNoDefault = makeVC({
       id: 'vc-no-default',
       name: 'NoDefault',
-      rootNode: slotContainerNode,
+      nodes: [slotContainerNode, slotOutletNode],
+      rootId: 'vc-slot-root',
       params: [makeParam({
         id: 'param-empty',
         name: 'children',
@@ -242,7 +256,6 @@ describe('VC inlining — slot expansion', () => {
         props: {
           componentId: 'vc-no-default',
           propOverrides: {},
-          slotContent: {},
         },
       },
     })
@@ -274,14 +287,13 @@ describe('VC inlining — class CSS collection', () => {
       id: 'vc-cls-root',
       moduleId: 'base.container',
       children: ['vc-cls-text'],
-      childNodes: [textNode],
     })
-    const vc = makeVC({ id: 'vc-cls', name: 'Cls', rootNode })
+    const vc = makeVC({ id: 'vc-cls', name: 'Cls', nodes: [rootNode, textNode], rootId: 'vc-cls-root' })
 
     const page = makePage({
       root: {
         moduleId: 'base.visual-component-ref',
-        props: { componentId: 'vc-cls', propOverrides: {}, slotContent: {} },
+        props: { componentId: 'vc-cls', propOverrides: {} },
       },
     })
     const site = makeSite({
@@ -325,13 +337,12 @@ describe('VC inlining — class CSS collection', () => {
       moduleId: 'test.styled',
       props: { text: 'Styled' },
     })
-    const rootNode = makeVCNode({
+    const dedupRoot = makeVCNode({
       id: 'vc-dedup-root',
       moduleId: 'base.container',
       children: ['vc-dedup-styled'],
-      childNodes: [styledNode],
     })
-    const vc = makeVC({ id: 'vc-dedup', name: 'Dedup', rootNode })
+    const vc = makeVC({ id: 'vc-dedup', name: 'Dedup', nodes: [dedupRoot, styledNode], rootId: 'vc-dedup-root' })
 
     // Two ref nodes pointing at the same VC
     const page = makePage({
@@ -342,11 +353,11 @@ describe('VC inlining — class CSS collection', () => {
       },
       ref1: {
         moduleId: 'base.visual-component-ref',
-        props: { componentId: 'vc-dedup', propOverrides: {}, slotContent: {} },
+        props: { componentId: 'vc-dedup', propOverrides: {} },
       },
       ref2: {
         moduleId: 'base.visual-component-ref',
-        props: { componentId: 'vc-dedup', propOverrides: {}, slotContent: {} },
+        props: { componentId: 'vc-dedup', propOverrides: {} },
       },
     })
     const site = makeSite({ visualComponents: [vc], pages: [page] })
@@ -373,7 +384,7 @@ describe('VC inlining — unknown componentId', () => {
     const page = makePage({
       root: {
         moduleId: 'base.visual-component-ref',
-        props: { componentId: 'nonexistent-vc', propOverrides: {}, slotContent: {} },
+        props: { componentId: 'nonexistent-vc', propOverrides: {} },
       },
     })
     const site = makeSite({ visualComponents: [], pages: [page] })
@@ -388,7 +399,7 @@ describe('VC inlining — unknown componentId', () => {
     const page = makePage({
       root: {
         moduleId: 'base.visual-component-ref',
-        props: { componentId: '', propOverrides: {}, slotContent: {} },
+        props: { componentId: '', propOverrides: {} },
       },
     })
     const site = makeSite({ visualComponents: [], pages: [page] })
@@ -401,7 +412,7 @@ describe('VC inlining — unknown componentId', () => {
     const page = makePage({
       root: {
         moduleId: 'base.visual-component-ref',
-        props: { componentId: '<script>evil</script>', propOverrides: {}, slotContent: {} },
+        props: { componentId: '<script>evil</script>', propOverrides: {} },
       },
     })
     const site = makeSite({ visualComponents: [], pages: [page] })
@@ -428,12 +439,12 @@ describe('VC inlining — richtext prop sanitization', () => {
     id: 'vc-content-root',
     moduleId: 'base.container',
     children: ['vc-content-node'],
-    childNodes: [contentNode],
   })
   const vcContent = makeVC({
     id: 'vc-richtext',
     name: 'RichTextVC',
-    rootNode: contentRootNode,
+    nodes: [contentRootNode, contentNode],
+    rootId: 'vc-content-root',
     params: [makeParam({ id: 'param-html', name: 'html', type: 'richText', defaultValue: '' })],
   })
 
@@ -444,7 +455,6 @@ describe('VC inlining — richtext prop sanitization', () => {
         props: {
           componentId: 'vc-richtext',
           propOverrides: { 'param-html': '<p>ok</p><script>bad()</script>' },
-          slotContent: {},
         },
       },
     })
@@ -463,7 +473,6 @@ describe('VC inlining — richtext prop sanitization', () => {
         props: {
           componentId: 'vc-richtext',
           propOverrides: { 'param-html': '<p>text</p><script>x()</script>' },
-          slotContent: {},
         },
       },
     })
@@ -490,32 +499,33 @@ describe('VC inlining — nested VC refs', () => {
     const innerVC = makeVC({
       id: 'vc-inner',
       name: 'InnerCard',
-      rootNode: innerTextNode,
+      nodes: [innerTextNode],
+      rootId: 'inner-text',
     })
 
     // Outer VC: <div>[ref to inner VC]</div>
     const refNode = makeVCNode({
       id: 'outer-ref',
       moduleId: 'base.visual-component-ref',
-      props: { componentId: 'vc-inner', propOverrides: {}, slotContent: {} },
+      props: { componentId: 'vc-inner', propOverrides: {} },
     })
     const outerRootNode = makeVCNode({
       id: 'outer-root',
       moduleId: 'base.container',
       children: ['outer-ref'],
-      childNodes: [refNode],
     })
     const outerVC = makeVC({
       id: 'vc-outer',
       name: 'OuterCard',
-      rootNode: outerRootNode,
+      nodes: [outerRootNode, refNode],
+      rootId: 'outer-root',
     })
 
     // Page ref points to the outer VC
     const page = makePage({
       root: {
         moduleId: 'base.visual-component-ref',
-        props: { componentId: 'vc-outer', propOverrides: {}, slotContent: {} },
+        props: { componentId: 'vc-outer', propOverrides: {} },
       },
     })
     const site = makeSite({ visualComponents: [innerVC, outerVC], pages: [page] })

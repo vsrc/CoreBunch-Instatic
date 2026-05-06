@@ -28,7 +28,7 @@
 
 .btn:focus-visible {
     outline: none;
-    box-shadow: var(--btn-focus-ring, 0 0 0 1px rgba(255, 255, 255, 0.25));
+    box-shadow: var(--editor-focus-ring);
 }
 
 .btn:disabled {

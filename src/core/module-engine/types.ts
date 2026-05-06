@@ -241,6 +241,21 @@ export interface ModuleDefinition<
    */
   render: (props: TProps, renderedChildren: string[]) => RenderOutput
 
+  /**
+   * Display-only hint for which HTML tag this module emits as its root element
+   * for the given props. Surfaced in the DOM/Layers panel as a `<tag>` badge
+   * next to each row so authors can see the underlying semantics at a glance
+   * (e.g. a Container with `tag: 'header'` displays `<header>`; a Button with
+   * a non-empty `href` displays `<a>`).
+   *
+   * Return `null` for modules that don't emit a single deterministic root tag
+   * (visual-component-ref, slot-outlet, loop, etc.). The badge is hidden in
+   * that case.
+   *
+   * NOT consumed by the publisher — `render()` remains the source of truth for
+   * emitted HTML. This is a pure metadata function for editor display.
+   */
+  htmlTag?: string | ((props: TProps) => string | null)
 }
 
 // ---------------------------------------------------------------------------

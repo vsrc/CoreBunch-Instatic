@@ -1,0 +1,78 @@
+/**
+ * ConfirmDeleteProvider — single-instance dialog host for destructive
+ * editor actions (delete layer, delete page, etc.).
+ *
+ * Reads the `confirmBeforeDelete` editor preference. When enabled, calling
+ * `confirmDelete(request)` mounts <ConfirmDeleteDialog/> and runs
+ * `request.commit` only after the user confirms. When disabled, `commit`
+ * runs synchronously — preserving the previous one-key delete flow for
+ * users who opt out of confirmations.
+ *
+ * One provider mounted at the editor root replaces N inline confirm states
+ * across panels and the canvas.
+ *
+ * The hook + types + context object live next door in `confirmDeleteHook.ts`
+ * so this file remains a pure component module (Fast Refresh requires
+ * component files to export only components).
+ */
+
+import {
+  useCallback,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react'
+import { useEditorPreference } from '@editor/preferences/editorPreferences'
+import { ConfirmDeleteDialog } from './ConfirmDeleteDialog'
+import {
+  ConfirmDeleteContext,
+  type ConfirmDeleteContextValue,
+  type ConfirmDeleteRequest,
+  type PendingConfirmState,
+} from './confirmDeleteHook'
+
+export function ConfirmDeleteProvider({ children }: { children: ReactNode }) {
+  const confirmBeforeDelete = useEditorPreference('confirmBeforeDelete')
+  const [pending, setPending] = useState<PendingConfirmState | null>(null)
+
+  const confirmDelete = useCallback(
+    (request: ConfirmDeleteRequest) => {
+      if (!confirmBeforeDelete) {
+        request.commit()
+        return
+      }
+      setPending({ request })
+    },
+    [confirmBeforeDelete],
+  )
+
+  const value = useMemo<ConfirmDeleteContextValue>(
+    () => ({ confirmDelete }),
+    [confirmDelete],
+  )
+
+  const handleCancel = useCallback(() => {
+    setPending(null)
+  }, [])
+
+  const handleConfirm = useCallback(() => {
+    if (!pending) return
+    pending.request.commit()
+    setPending(null)
+  }, [pending])
+
+  return (
+    <ConfirmDeleteContext.Provider value={value}>
+      {children}
+      {pending && (
+        <ConfirmDeleteDialog
+          title={pending.request.title}
+          description={pending.request.description}
+          confirmLabel={pending.request.confirmLabel}
+          onCancel={handleCancel}
+          onConfirm={handleConfirm}
+        />
+      )}
+    </ConfirmDeleteContext.Provider>
+  )
+}

@@ -2,14 +2,15 @@ import { nanoid } from 'nanoid'
 import type { EditorStoreSliceCreator } from '../types'
 import { renderCache } from '@core/engine/renderCache'
 import { registry } from '@core/module-engine/registry'
-import type { VCNode } from '@core/visualComponents/schemas'
-import { VisualComponentRecursionError } from './visualComponentsSlice'
+import { wouldCreateCycle } from '@core/visualComponents/recursionGuard'
 import {
   type CSSClass,
   type FontEntry,
   type SiteDocument,
   type Page,
   type PageNode,
+  type NodeTree,
+  type BaseNode,
   type Breakpoint,
   type SiteSettings,
   type PageTemplateConfig,
@@ -30,6 +31,7 @@ import {
   deletePage,
   renamePage,
   reorderPages,
+  duplicatePage,
   insertNode,
   deleteNode,
   updateNodeProps,
@@ -42,6 +44,7 @@ import {
   duplicateNode,
   wrapNode,
 } from '@core/page-tree'
+import { syncSlotInstances, applySlotSyncResult } from '@core/visualComponents/slotSync'
 import {
   clonePackageJson,
   DEFAULT_SITE_PACKAGE_JSON,
@@ -52,11 +55,10 @@ import {
 } from '@core/site-runtime'
 import {
   generateDefaultDarkColor,
-  generateFrameworkColorUtilityClasses,
   normalizeFrameworkColorSlug,
 } from '@core/framework/colors'
-import { generateFrameworkTypographyUtilityClasses } from '@core/framework/typography'
-import { generateFrameworkSpacingUtilityClasses } from '@core/framework/spacing'
+import { generateFrameworkUtilityClasses } from '@core/framework/generate'
+import { DEFAULT_FRAMEWORK_PREFERENCES } from '@core/framework/preferences'
 import {
   previewFrameworkClassRemovals,
   type FrameworkChangeImpact,
@@ -86,6 +88,7 @@ export interface SiteSlice {
   addPage: (title: string, slug?: string) => Page
   deletePage: (pageId: string) => void
   renamePage: (pageId: string, title: string, slug?: string) => void
+  duplicatePage: (sourcePageId: string, title: string, slug?: string) => Page
   reorderPages: (fromIndex: number, toIndex: number) => void
   convertPageToTemplate: (pageId: string, config: PageTemplateConfig) => void
   convertTemplateToPage: (pageId: string) => void
@@ -96,9 +99,10 @@ export interface SiteSlice {
   /**
    * Insert a `base.visual-component-ref` node into the active document.
    *
-   * - In VC mode: delegates to `addNodeToVc`. Returns `null` (instead of throwing)
-   *   if the insertion would create a cycle.
-   * - In page mode: delegates to `insertNode`. Returns `null` if `componentId` is empty.
+   * - In VC mode: inserts via `mutateActiveTree` and guards against cyclic references.
+   *   Returns `null` if the insertion would create a cycle.
+   * - In page mode: inserts via `insertNode`. Returns `null` if `componentId` is empty.
+   * - Auto-materializes `base.slot-instance` children after insertion via `syncSlotInstances`.
    * - Returns the new node's id on success, or `null` on no-op / cycle prevented.
    */
   insertComponentRef: (parentId: string, componentId: string) => string | null
@@ -470,15 +474,15 @@ function reorderFrameworkColorTokenInGroup(
 // `padding-md`, etc.) keyed by stable framework IDs of the form
 // `framework:<family>:<...>`.
 //
-// Reconciliation rules — same for every family:
+// Reconciliation rules:
 //   1. CLAIM — any non-framework class whose name collides with a framework
-//      class of this family is replaced by the framework version. Existing
+//      class is replaced by the framework version. Existing
 //      assignments are remapped to the framework ID and the colliding class
 //      is deleted. This keeps the lock invariant: a framework name is always
 //      backed by the framework class, never by a leftover class with the
 //      same name (which would silently lose the locked state and badge).
-//   2. PRUNE — every class whose ID lives in this framework family's
-//      namespace but is not in the desired set is deleted and stripped
+//   2. PRUNE — every class whose ID lives in the framework namespace but is
+//      not in the desired set is deleted and stripped
 //      from every assignment list. Detection is by ID prefix, not by
 //      `generated` metadata, so orphans whose metadata was somehow lost
 //      in a prior round-trip are still cleaned up — no leftover "ghost"
@@ -488,18 +492,12 @@ function reorderFrameworkColorTokenInGroup(
 //      existed (so timestamps don't churn on every reconcile).
 // ---------------------------------------------------------------------------
 
-type FrameworkFamily = 'color' | 'typography' | 'spacing'
-
 const FRAMEWORK_ID_PREFIX = 'framework:'
-
-function frameworkFamilyIdPrefix(family: FrameworkFamily): string {
-  return `${FRAMEWORK_ID_PREFIX}${family}:`
-}
 
 /**
  * Visit every node-like value in the site that holds a `classIds: string[]`
  * list and let `mutator` produce a new list. Covers Page nodes, the
- * VisualComponent itself, and every VCNode in the rootNode tree.
+ * VisualComponent itself, and every VCNode in the VC's flat tree.nodes map.
  */
 function mutateAllClassIdLists(
   site: SiteDocument,
@@ -516,14 +514,8 @@ function mutateAllClassIdLists(
 
   for (const vc of site.visualComponents) {
     apply(vc as { classIds?: string[] })
-    walkVCNodeTree(vc.rootNode, apply)
+    for (const node of Object.values(vc.tree.nodes)) apply(node)
   }
-}
-
-function walkVCNodeTree(node: VCNode, fn: (node: VCNode) => void): void {
-  fn(node)
-  if (!node.childNodes) return
-  for (const child of node.childNodes) walkVCNodeTree(child, fn)
 }
 
 function pruneClassIdFromSite(site: SiteDocument, classId: string): void {
@@ -551,20 +543,22 @@ function remapClassIdInSite(
   })
 }
 
-function reconcileFrameworkClassFamily(
+function reconcileFrameworkClasses(site: SiteDocument): void {
+  reconcileFrameworkClassRegistry(site, generateFrameworkUtilityClasses(site.settings.framework))
+}
+
+function reconcileFrameworkClassRegistry(
   site: SiteDocument,
-  family: FrameworkFamily,
   nextClasses: Record<string, CSSClass>,
 ): void {
   const nextClassIds = new Set(Object.keys(nextClasses))
-  const familyPrefix = frameworkFamilyIdPrefix(family)
   const frameworkIdByName = new Map<string, string>()
   for (const [classId, cls] of Object.entries(nextClasses)) {
     frameworkIdByName.set(cls.name, classId)
   }
 
   // 1. CLAIM — replace non-framework classes whose name collides with a
-  //    framework class of this family. Node-scoped classes (module-style
+  //    framework class. Node-scoped classes (module-style
   //    instance layers) are off-limits; their names live in a different
   //    namespace.
   for (const [classId, cls] of Object.entries(site.classes)) {
@@ -576,13 +570,13 @@ function reconcileFrameworkClassFamily(
     delete site.classes[classId]
   }
 
-  // 2. PRUNE — delete every class whose ID lives in this family's
-  //    namespace but isn't in the desired set. Recognising by ID prefix
+  // 2. PRUNE — delete every class whose ID lives in the framework namespace
+  //    but isn't in the desired set. Recognising by ID prefix
   //    means orphans whose `generated` metadata was lost (e.g. through a
   //    prior persistence round-trip) are still cleaned up rather than
   //    silently downgraded into editable user classes.
   for (const classId of Object.keys(site.classes)) {
-    if (!classId.startsWith(familyPrefix)) continue
+    if (!classId.startsWith(FRAMEWORK_ID_PREFIX)) continue
     if (nextClassIds.has(classId)) continue
     delete site.classes[classId]
     pruneClassIdFromSite(site, classId)
@@ -596,11 +590,6 @@ function reconcileFrameworkClassFamily(
       createdAt: existing?.createdAt ?? nextClass.createdAt,
     }
   }
-}
-
-function reconcileFrameworkColorClasses(site: SiteDocument): void {
-  const colors = ensureFrameworkColors(site)
-  reconcileFrameworkClassFamily(site, 'color', generateFrameworkColorUtilityClasses(colors))
 }
 
 function ensureFrameworkTypography(
@@ -667,22 +656,6 @@ function applyFrameworkSpacingGroupPatch(
   group.updatedAt = Date.now()
 }
 
-function reconcileFrameworkTypographyClasses(site: SiteDocument): void {
-  const typography = ensureFrameworkTypography(site)
-  reconcileFrameworkClassFamily(site, 'typography', generateFrameworkTypographyUtilityClasses(typography))
-}
-
-function reconcileFrameworkSpacingClasses(site: SiteDocument): void {
-  const spacing = ensureFrameworkSpacing(site)
-  reconcileFrameworkClassFamily(site, 'spacing', generateFrameworkSpacingUtilityClasses(spacing))
-}
-
-function clearDynamicBindingsFromNode(node: PageNode): void {
-  delete node.dynamicBindings
-  for (const child of node.childNodes ?? []) {
-    clearDynamicBindingsFromNode(child)
-  }
-}
 
 // Contribute this slice's fields to the combined `EditorStore` type via TS
 // module augmentation. See `../types.ts` for why we use this pattern.
@@ -723,6 +696,88 @@ export const createSiteSlice: EditorStoreSliceCreator<SiteSlice> = (set, get) =>
       state.site.updatedAt = Date.now()
       state.hasUnsavedChanges = true
     })
+  }
+
+  /**
+   * Mutate the active node tree — auto-snapshots history first.
+   *
+   * Routes to the correct tree based on `activeDocument`:
+   *   - Page mode (null or kind === 'page'): passes the active Page directly —
+   *     Page IS NodeTree<PageNode> so no conversion needed.
+   *   - VC mode (kind === 'visualComponent'): passes vc.tree directly —
+   *     VCNode (= BaseNode) is structurally compatible with PageNode (which only
+   *     adds optional `dynamicBindings`), so the cast is safe for all tree
+   *     mutations that operate on BaseNode-level fields.
+   *     After the mutation, propagates any change in the VC's slot-outlet set
+   *     to every consumer VC ref across all pages via `syncSlotInstances`.
+   *     This is what makes adding a `base.slot-outlet` to a VC automatically
+   *     materialize a `base.slot-instance` child on every consumer.
+   */
+  function mutateActiveTree(fn: (tree: NodeTree<PageNode>) => void): void {
+    pushHistory()
+    set((state) => {
+      if (!state.site) return
+      const { activeDocument } = state
+
+      if (activeDocument?.kind === 'visualComponent') {
+        const vc = state.site.visualComponents.find((v) => v.id === activeDocument.vcId)
+        if (!vc) return
+        // VCNode is structurally compatible with PageNode (dynamicBindings is optional).
+        // All tree mutations operate on BaseNode-level fields, so the cast is safe.
+        fn(vc.tree as NodeTree<PageNode>)
+        state.site.updatedAt = Date.now()
+        state.hasUnsavedChanges = true
+
+        // Propagate slot-outlet changes to every consumer VC ref. Idempotent
+        // when the slot-outlet set is unchanged. Cheap: O(pages × refs × tree
+        // size); for non-trivial sites still well below a frame budget.
+        reconcileVCRefsForVc(state, vc.id)
+        return
+      }
+
+      // Page mode (activeDocument is null or kind === 'page').
+      // Page IS NodeTree<PageNode> — pass directly, no conversion needed.
+      const pageId = activeDocument?.kind === 'page' ? activeDocument.pageId : state.activePageId
+      const page = state.site.pages.find((p) => p.id === pageId)
+      if (!page) return
+      fn(page)
+      state.site.updatedAt = Date.now()
+      state.hasUnsavedChanges = true
+    })
+  }
+
+  /**
+   * Walk every page's tree, find every `base.visual-component-ref` that points
+   * at the given vcId, and run `syncSlotInstances` on each so its slot-instance
+   * children match the VC's current set of slot-outlets.
+   *
+   * MUST be called inside an Immer producer (operates on draft state).
+   */
+  function reconcileVCRefsForVc(
+    state: { site: SiteDocument | null },
+    vcId: string,
+  ): void {
+    if (!state.site) return
+    const vc = state.site.visualComponents.find((v) => v.id === vcId)
+    if (!vc) return
+
+    for (const page of state.site.pages) {
+      const treeNodes = page.nodes as Record<string, BaseNode>
+      // Snapshot ids first — applySlotSyncResult mutates the map.
+      const refIds = Object.keys(treeNodes).filter((id) => {
+        const n = treeNodes[id]
+        return (
+          n?.moduleId === 'base.visual-component-ref' &&
+          (n.props as Record<string, unknown>).componentId === vcId
+        )
+      })
+      for (const refId of refIds) {
+        const refNode = treeNodes[refId]
+        if (!refNode) continue
+        const syncResult = syncSlotInstances(refNode, vc, treeNodes)
+        applySlotSyncResult(treeNodes, syncResult, refId)
+      }
+    }
   }
 
   /** Mutate the site — auto-snapshots history first. */
@@ -800,6 +855,10 @@ export const createSiteSlice: EditorStoreSliceCreator<SiteSlice> = (set, get) =>
         packageJson: clonePackageJson(site.packageJson),
         siteRuntime,
         activePageId: site.pages[0].id,
+        // Reset activeDocument — any previously-open VC reference belongs to
+        // the prior site and would cause `mutateActiveTree` to silently no-op
+        // (early-return) when the VC id is not present in the new site.
+        activeDocument: null,
         _historyPast: [],
         _historyFuture: [],
         canUndo: false,
@@ -814,15 +873,7 @@ export const createSiteSlice: EditorStoreSliceCreator<SiteSlice> = (set, get) =>
       // site cannot bleed into the canvas after switching projects.
       // (Guideline #307 / Architect message #1216 — critical integration note)
       renderCache.clear()
-      if (site.settings.framework?.colors) {
-        reconcileFrameworkColorClasses(site)
-      }
-      if (site.settings.framework?.typography) {
-        reconcileFrameworkTypographyClasses(site)
-      }
-      if (site.settings.framework?.spacing) {
-        reconcileFrameworkSpacingClasses(site)
-      }
+      reconcileFrameworkClasses(site)
       const packageJson = clonePackageJson(site.packageJson)
       const siteRuntime = cloneSiteRuntimeConfig(site.runtime)
       set({
@@ -830,6 +881,8 @@ export const createSiteSlice: EditorStoreSliceCreator<SiteSlice> = (set, get) =>
         packageJson,
         siteRuntime,
         activePageId: site.pages[0]?.id ?? null,
+        // Reset activeDocument — see createSite for rationale.
+        activeDocument: null,
         _historyPast: [],
         _historyFuture: [],
         canUndo: false,
@@ -844,6 +897,8 @@ export const createSiteSlice: EditorStoreSliceCreator<SiteSlice> = (set, get) =>
         packageJson: clonePackageJson(DEFAULT_SITE_PACKAGE_JSON),
         siteRuntime: cloneSiteRuntimeConfig(DEFAULT_SITE_RUNTIME),
         activePageId: null,
+        // Reset activeDocument — without a site there can be no active doc.
+        activeDocument: null,
         selectedNodeId: null,
         _historyPast: [],
         _historyFuture: [],
@@ -878,6 +933,14 @@ export const createSiteSlice: EditorStoreSliceCreator<SiteSlice> = (set, get) =>
       mutateSite((p) => renamePage(p, pageId, title, slug))
     },
 
+    duplicatePage: (sourcePageId, title, slug) => {
+      let newPage!: Page
+      mutateSite((p) => {
+        newPage = duplicatePage(p, sourcePageId, title, slug)
+      })
+      return newPage
+    },
+
     reorderPages: (fromIndex, toIndex) => {
       mutateSite((p) => reorderPages(p, fromIndex, toIndex))
     },
@@ -896,7 +959,7 @@ export const createSiteSlice: EditorStoreSliceCreator<SiteSlice> = (set, get) =>
         if (!page) return
         delete page.template
         for (const node of Object.values(page.nodes)) {
-          clearDynamicBindingsFromNode(node)
+          delete node.dynamicBindings
         }
       })
     },
@@ -906,84 +969,101 @@ export const createSiteSlice: EditorStoreSliceCreator<SiteSlice> = (set, get) =>
       const mod = registry.get(moduleId)
       const resolvedDefaults = { ...(mod?.defaults ?? {}), ...defaults }
       const newNode = createNode(moduleId, resolvedDefaults)
-      mutatePage((page) => insertNode(page, newNode, parentId, index))
+      mutateActiveTree((tree) => insertNode(tree, newNode, parentId, index))
       return newNode.id
     },
 
     insertComponentRef: (parentId, componentId) => {
-      const { activeDocument } = get()
+      if (!componentId) return null
 
-      if (activeDocument?.kind === 'visualComponent') {
-        // Defensive: empty componentId is a no-op (can't insert an unresolved ref)
-        if (!componentId) return null
+      const { activeDocument, site } = get()
 
-        const vcId = activeDocument.vcId
-        const newNode: VCNode = {
-          id: nanoid(),
-          moduleId: 'base.visual-component-ref',
-          props: { componentId, propOverrides: {}, slotContent: {} },
-          children: [],
-          breakpointOverrides: {},
-          classIds: [],
-        }
-
-        try {
-          get().addNodeToVc(vcId, parentId, newNode)
-          return newNode.id
-        } catch (err) {
-          if (err instanceof VisualComponentRecursionError) {
-            console.warn('[component-system] cycle prevented by recursion guard:', err)
-            return null
-          }
-          throw err
+      // In VC mode, guard against cyclic component references before insertion.
+      if (activeDocument?.kind === 'visualComponent' && site) {
+        if (wouldCreateCycle(site.visualComponents, activeDocument.vcId, componentId)) {
+          console.warn('[component-system] cycle prevented by recursion guard')
+          return null
         }
       }
 
-      // Page mode (activeDocument is null or kind === 'page')
-      if (!componentId) return null
-      return get().insertNode(
+      // Insert the VC ref node (no props beyond componentId + propOverrides).
+      const refNodeId = get().insertNode(
         'base.visual-component-ref',
-        { componentId, propOverrides: {}, slotContent: {} },
+        { componentId, propOverrides: {} },
         parentId,
       )
+
+      // Immediately materialize slot-instance children for each slot param the VC declares.
+      // `insertNode` → `mutateActiveTree` already pushed history; we mutate inside another
+      // set() call here to keep the slot-instance insertion as part of the same logical action.
+      const currentSite = get().site
+      const vc = currentSite?.visualComponents.find((v) => v.id === componentId)
+      if (vc) {
+        set((state) => {
+          if (!state.site) return
+          const { activeDocument: ad } = state
+
+          type NodeMap = Record<string, import('@core/page-tree/baseNode').BaseNode>
+          const treeNodes: NodeMap | null = (() => {
+            if (ad?.kind === 'visualComponent') {
+              const activeVc = state.site!.visualComponents.find((v) => v.id === ad.vcId)
+              return activeVc ? (activeVc.tree.nodes as NodeMap) : null
+            }
+            const pageId = ad?.kind === 'page' ? ad.pageId : state.activePageId
+            const page = state.site!.pages.find((p) => p.id === pageId)
+            return page ? (page.nodes as NodeMap) : null
+          })()
+
+          if (!treeNodes) return
+
+          const vcRefNode = treeNodes[refNodeId]
+          if (!vcRefNode) return
+
+          const syncResult = syncSlotInstances(vcRefNode, vc, treeNodes)
+          applySlotSyncResult(treeNodes, syncResult, refNodeId)
+          state.site.updatedAt = Date.now()
+        })
+      }
+
+      return refNodeId
     },
 
     deleteNode: (nodeId) => {
-      mutatePage((page) => deleteNode(page, nodeId))
+      mutateActiveTree((tree) => deleteNode(tree, nodeId))
       if (get().selectedNodeId === nodeId) set({ selectedNodeId: null })
     },
 
     updateNodeProps: (nodeId, patch) => {
-      mutatePage((page) => updateNodeProps(page, nodeId, patch))
+      mutateActiveTree((tree) => updateNodeProps(tree, nodeId, patch))
     },
 
     setBreakpointOverride: (nodeId, breakpointId, patch) => {
-      mutatePage((page) => setBreakpointOverride(page, nodeId, breakpointId, patch))
+      mutateActiveTree((tree) => setBreakpointOverride(tree, nodeId, breakpointId, patch))
     },
 
     clearBreakpointOverride: (nodeId, breakpointId) => {
-      mutatePage((page) => clearBreakpointOverride(page, nodeId, breakpointId))
+      mutateActiveTree((tree) => clearBreakpointOverride(tree, nodeId, breakpointId))
     },
 
     renameNode: (nodeId, label) => {
-      mutatePage((page) => renameNode(page, nodeId, label))
+      mutateActiveTree((tree) => renameNode(tree, nodeId, label))
     },
 
     toggleNodeLocked: (nodeId) => {
-      mutatePage((page) => toggleNodeLocked(page, nodeId))
+      mutateActiveTree((tree) => toggleNodeLocked(tree, nodeId))
     },
 
     toggleNodeHidden: (nodeId) => {
-      mutatePage((page) => toggleNodeHidden(page, nodeId))
+      mutateActiveTree((tree) => toggleNodeHidden(tree, nodeId))
     },
 
     moveNode: (nodeId, newParentId, newIndex) => {
-      mutatePage((page) => moveNode(page, nodeId, newParentId, newIndex))
+      mutateActiveTree((tree) => moveNode(tree, nodeId, newParentId, newIndex))
     },
 
     duplicateNode: (nodeId) => {
       let newId = ''
-      mutatePage((page) => { newId = duplicateNode(page, nodeId) })
+      mutateActiveTree((tree) => { newId = duplicateNode(tree, nodeId) })
       return newId
     },
 
@@ -994,7 +1074,7 @@ export const createSiteSlice: EditorStoreSliceCreator<SiteSlice> = (set, get) =>
       const mod = registry.get(containerModuleId)
       const resolvedDefaults = { ...(mod?.defaults ?? {}), ...defaults }
       let wrapperId = ''
-      mutatePage((page) => { wrapperId = wrapNode(page, nodeId, containerModuleId, resolvedDefaults) })
+      mutateActiveTree((tree) => { wrapperId = wrapNode(tree, nodeId, containerModuleId, resolvedDefaults) })
       return wrapperId
     },
 
@@ -1070,7 +1150,7 @@ export const createSiteSlice: EditorStoreSliceCreator<SiteSlice> = (set, get) =>
       mutateSite((draftSite) => {
         const draftColors = ensureFrameworkColors(draftSite)
         draftColors.tokens.push(token)
-        reconcileFrameworkColorClasses(draftSite)
+        reconcileFrameworkClasses(draftSite)
       })
 
       return token
@@ -1082,7 +1162,7 @@ export const createSiteSlice: EditorStoreSliceCreator<SiteSlice> = (set, get) =>
         const token = colors.tokens.find((candidate) => candidate.id === tokenId)
         if (!token) return
         applyFrameworkColorTokenPatch(token, patch, colors)
-        reconcileFrameworkColorClasses(site)
+        reconcileFrameworkClasses(site)
       })
     },
 
@@ -1100,7 +1180,7 @@ export const createSiteSlice: EditorStoreSliceCreator<SiteSlice> = (set, get) =>
       mutateSite((draftSite) => {
         const draftColors = ensureFrameworkColors(draftSite)
         draftColors.tokens.push(copy)
-        reconcileFrameworkColorClasses(draftSite)
+        reconcileFrameworkClasses(draftSite)
       })
 
       return copy
@@ -1110,7 +1190,7 @@ export const createSiteSlice: EditorStoreSliceCreator<SiteSlice> = (set, get) =>
       mutateSite((site) => {
         const colors = ensureFrameworkColors(site)
         reorderFrameworkColorTokenInGroup(colors, tokenId, direction)
-        reconcileFrameworkColorClasses(site)
+        reconcileFrameworkClasses(site)
       })
     },
 
@@ -1118,7 +1198,7 @@ export const createSiteSlice: EditorStoreSliceCreator<SiteSlice> = (set, get) =>
       mutateSite((site) => {
         const colors = ensureFrameworkColors(site)
         colors.tokens = colors.tokens.filter((token) => token.id !== tokenId)
-        reconcileFrameworkColorClasses(site)
+        reconcileFrameworkClasses(site)
       })
     },
 
@@ -1127,9 +1207,7 @@ export const createSiteSlice: EditorStoreSliceCreator<SiteSlice> = (set, get) =>
       if (!site) return null
       const draft = structuredClone(site)
       applyChange(draft)
-      reconcileFrameworkColorClasses(draft)
-      reconcileFrameworkTypographyClasses(draft)
-      reconcileFrameworkSpacingClasses(draft)
+      reconcileFrameworkClasses(draft)
       return previewFrameworkClassRemovals(site, draft)
     },
 
@@ -1139,12 +1217,7 @@ export const createSiteSlice: EditorStoreSliceCreator<SiteSlice> = (set, get) =>
         if (!site.settings.framework) {
           site.settings.framework = { colors: { tokens: [] } }
         }
-        const current = site.settings.framework.preferences ?? {
-          rootFontSize: 10,
-          minScreenWidth: 320,
-          maxScreenWidth: 1400,
-          isRem: true,
-        }
+        const current = site.settings.framework.preferences ?? DEFAULT_FRAMEWORK_PREFERENCES
         site.settings.framework.preferences = { ...current, ...patch }
       })
     },
@@ -1154,7 +1227,7 @@ export const createSiteSlice: EditorStoreSliceCreator<SiteSlice> = (set, get) =>
       mutateSite((site) => {
         const typography = ensureFrameworkTypography(site)
         typography.isDisabled = !typography.isDisabled
-        reconcileFrameworkTypographyClasses(site)
+        reconcileFrameworkClasses(site)
       })
     },
 
@@ -1172,7 +1245,7 @@ export const createSiteSlice: EditorStoreSliceCreator<SiteSlice> = (set, get) =>
       mutateSite((draftSite) => {
         const draftTypography = ensureFrameworkTypography(draftSite)
         draftTypography.groups.push(group)
-        reconcileFrameworkTypographyClasses(draftSite)
+        reconcileFrameworkClasses(draftSite)
       })
       return group
     },
@@ -1183,7 +1256,7 @@ export const createSiteSlice: EditorStoreSliceCreator<SiteSlice> = (set, get) =>
         const group = typography.groups.find((g) => g.id === groupId)
         if (!group) return
         applyFrameworkTypographyGroupPatch(group, patch)
-        reconcileFrameworkTypographyClasses(site)
+        reconcileFrameworkClasses(site)
       })
     },
 
@@ -1217,7 +1290,7 @@ export const createSiteSlice: EditorStoreSliceCreator<SiteSlice> = (set, get) =>
       mutateSite((draftSite) => {
         const draftTypography = ensureFrameworkTypography(draftSite)
         draftTypography.groups.push(copy)
-        reconcileFrameworkTypographyClasses(draftSite)
+        reconcileFrameworkClasses(draftSite)
       })
       return copy
     },
@@ -1229,7 +1302,7 @@ export const createSiteSlice: EditorStoreSliceCreator<SiteSlice> = (set, get) =>
         if (idx < 0) return
         const order = typography.groups[idx].order
         typography.groups[idx] = { ...buildDefaultTypographyGroup(order), id: groupId }
-        reconcileFrameworkTypographyClasses(site)
+        reconcileFrameworkClasses(site)
       })
     },
 
@@ -1238,7 +1311,7 @@ export const createSiteSlice: EditorStoreSliceCreator<SiteSlice> = (set, get) =>
         const typography = ensureFrameworkTypography(site)
         typography.groups = typography.groups.filter((g) => g.id !== groupId)
         typography.classes = typography.classes?.filter((c) => c.tabId !== groupId) ?? []
-        reconcileFrameworkTypographyClasses(site)
+        reconcileFrameworkClasses(site)
       })
     },
 
@@ -1261,7 +1334,7 @@ export const createSiteSlice: EditorStoreSliceCreator<SiteSlice> = (set, get) =>
           group.manualSizes[idx] = { ...group.manualSizes[idx], ...patch }
         }
         group.updatedAt = Date.now()
-        reconcileFrameworkTypographyClasses(site)
+        reconcileFrameworkClasses(site)
       })
     },
 
@@ -1269,7 +1342,7 @@ export const createSiteSlice: EditorStoreSliceCreator<SiteSlice> = (set, get) =>
       mutateSite((site) => {
         const typography = ensureFrameworkTypography(site)
         typography.classes = classes
-        reconcileFrameworkTypographyClasses(site)
+        reconcileFrameworkClasses(site)
       })
     },
 
@@ -1304,7 +1377,7 @@ export const createSiteSlice: EditorStoreSliceCreator<SiteSlice> = (set, get) =>
       mutateSite((site) => {
         const spacing = ensureFrameworkSpacing(site)
         spacing.isDisabled = !spacing.isDisabled
-        reconcileFrameworkSpacingClasses(site)
+        reconcileFrameworkClasses(site)
       })
     },
 
@@ -1322,7 +1395,7 @@ export const createSiteSlice: EditorStoreSliceCreator<SiteSlice> = (set, get) =>
       mutateSite((draftSite) => {
         const draftSpacing = ensureFrameworkSpacing(draftSite)
         draftSpacing.groups.push(group)
-        reconcileFrameworkSpacingClasses(draftSite)
+        reconcileFrameworkClasses(draftSite)
       })
       return group
     },
@@ -1333,7 +1406,7 @@ export const createSiteSlice: EditorStoreSliceCreator<SiteSlice> = (set, get) =>
         const group = spacing.groups.find((g) => g.id === groupId)
         if (!group) return
         applyFrameworkSpacingGroupPatch(group, patch)
-        reconcileFrameworkSpacingClasses(site)
+        reconcileFrameworkClasses(site)
       })
     },
 
@@ -1367,7 +1440,7 @@ export const createSiteSlice: EditorStoreSliceCreator<SiteSlice> = (set, get) =>
       mutateSite((draftSite) => {
         const draftSpacing = ensureFrameworkSpacing(draftSite)
         draftSpacing.groups.push(copy)
-        reconcileFrameworkSpacingClasses(draftSite)
+        reconcileFrameworkClasses(draftSite)
       })
       return copy
     },
@@ -1379,7 +1452,7 @@ export const createSiteSlice: EditorStoreSliceCreator<SiteSlice> = (set, get) =>
         if (idx < 0) return
         const order = spacing.groups[idx].order
         spacing.groups[idx] = { ...buildDefaultSpacingGroup(order), id: groupId }
-        reconcileFrameworkSpacingClasses(site)
+        reconcileFrameworkClasses(site)
       })
     },
 
@@ -1388,7 +1461,7 @@ export const createSiteSlice: EditorStoreSliceCreator<SiteSlice> = (set, get) =>
         const spacing = ensureFrameworkSpacing(site)
         spacing.groups = spacing.groups.filter((g) => g.id !== groupId)
         spacing.classes = spacing.classes?.filter((c) => c.tabId !== groupId) ?? []
-        reconcileFrameworkSpacingClasses(site)
+        reconcileFrameworkClasses(site)
       })
     },
 
@@ -1411,7 +1484,7 @@ export const createSiteSlice: EditorStoreSliceCreator<SiteSlice> = (set, get) =>
           group.manualSizes[idx] = { ...group.manualSizes[idx], ...patch }
         }
         group.updatedAt = Date.now()
-        reconcileFrameworkSpacingClasses(site)
+        reconcileFrameworkClasses(site)
       })
     },
 
@@ -1419,7 +1492,7 @@ export const createSiteSlice: EditorStoreSliceCreator<SiteSlice> = (set, get) =>
       mutateSite((site) => {
         const spacing = ensureFrameworkSpacing(site)
         spacing.classes = classes
-        reconcileFrameworkSpacingClasses(site)
+        reconcileFrameworkClasses(site)
       })
     },
   }

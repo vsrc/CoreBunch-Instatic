@@ -22,11 +22,12 @@ export const PropBindingSchema = Type.Object({ paramId: Type.String() })
 // ---------------------------------------------------------------------------
 // BaseNodeSchema — shared structural schema for PageNode and VCNode
 //
-// `PageNodeSchema` (in `./schemas`) extends this with `dynamicBindings` and
-// a recursive `childNodes?: PageNode[]`.
+// `PageNodeSchema` (in `./schemas`) extends this with an optional
+// `dynamicBindings` field for template data-binding on page-level nodes.
 //
-// `VCNodeSchema` (in `src/core/visualComponents/schemas.ts`) extends this
-// with a recursive `childNodes?: VCNode[]` — no dynamic-bindings surface.
+// `VCNodeSchema` (in `src/core/visualComponents/schemas.ts`) is a direct
+// re-export of this schema — VCNode === BaseNode. VC trees use the same flat
+// `children: string[]` flat-ID map as Page trees.
 //
 // The shared base eliminates `as unknown as PageNode` / `as unknown as VCNode`
 // casts when tree-walking functions need to operate on nodes from either context.

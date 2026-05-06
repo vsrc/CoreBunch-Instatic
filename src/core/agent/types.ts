@@ -419,11 +419,25 @@ export interface AgentRenderSnapshotContext {
   layout: AgentLayoutReportContext
 }
 
+export interface AgentPageSummary {
+  id: string
+  title: string
+  slug: string
+  /** True when this is the active page in the editor. */
+  active: boolean
+  /** True when this page resolves at the site's homepage path (slug === 'index'). */
+  isHomepage: boolean
+}
+
 export interface PageContext {
+  /** ID of the active page in the editor. */
+  pageId: string
   /** Active page title */
   pageTitle: string
   /** Root node ID of the active page */
   rootNodeId: string
+  /** Every page in the site (for site-level admin tools). */
+  pages: AgentPageSummary[]
   /** Configured breakpoint ID currently active in the editor. */
   activeBreakpointId: string
   /** Live breakpoint configuration for the site. */

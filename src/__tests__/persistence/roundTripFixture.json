@@ -78,20 +78,23 @@
     {
       "id": "vc-1",
       "name": "MyCard",
-      "rootNode": {
-        "id": "vc-root",
-        "moduleId": "base.container",
-        "props": {
-          "richtext": "<em>Default content</em>"
-        },
-        "breakpointOverrides": {},
-        "children": [],
-        "classIds": [],
-        "propBindings": {
-          "richtext": { "paramId": "param-content" }
-        },
-        "childNodes": [
-          {
+      "tree": {
+        "rootNodeId": "vc-root",
+        "nodes": {
+          "vc-root": {
+            "id": "vc-root",
+            "moduleId": "base.container",
+            "props": {
+              "richtext": "<em>Default content</em>"
+            },
+            "breakpointOverrides": {},
+            "children": ["vc-child-1"],
+            "classIds": [],
+            "propBindings": {
+              "richtext": { "paramId": "param-content" }
+            }
+          },
+          "vc-child-1": {
             "id": "vc-child-1",
             "moduleId": "base.text",
             "props": { "text": "Inner text" },
@@ -99,7 +102,7 @@
             "children": [],
             "classIds": []
           }
-        ]
+        }
       },
       "params": [
         {
@@ -272,7 +275,8 @@
         "rootFontSize": 10,
         "minScreenWidth": 320,
         "maxScreenWidth": 1400,
-        "isRem": true
+        "isRem": true,
+        "treeShakeGeneratedFrameworkUtilities": true
       }
     }
   },

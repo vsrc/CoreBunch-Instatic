@@ -14,7 +14,8 @@
 
 import { describe, it, expect } from 'bun:test'
 import { bagToCSS, generateClassCSS } from '@core/publisher/classCss'
-import type { CSSClass } from '@core/page-tree/schemas'
+import { collectClassCSS } from '@core/publisher/cssCollector'
+import type { CSSClass, Page, PageNode, SiteDocument } from '@core/page-tree/schemas'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -126,6 +127,134 @@ describe('bagToCSS', () => {
     const lines = css.split('\n')
     expect(lines.length).toBe(3)
     expect(lines.every((l) => l.startsWith('  '))).toBe(true)
+  })
+
+  // ── Side shorthand collapse (padding / margin) ───────────────────────────
+  // The editor stores per-side values; the publisher collapses them into the
+  // CSS shorthand so generated stylesheets read like hand-written CSS.
+
+  it('collapses 4 equal padding sides to a 1-value shorthand', () => {
+    const css = bagToCSS({
+      paddingTop: '20px',
+      paddingRight: '20px',
+      paddingBottom: '20px',
+      paddingLeft: '20px',
+    })
+    expect(css).toBe('  padding: 20px;')
+  })
+
+  it('collapses padding to 2-value shorthand when top==bottom and left==right', () => {
+    const css = bagToCSS({
+      paddingTop: '20px',
+      paddingRight: '0',
+      paddingBottom: '20px',
+      paddingLeft: '0',
+    })
+    expect(css).toBe('  padding: 20px 0;')
+  })
+
+  it('collapses padding to 3-value shorthand when only left==right', () => {
+    const css = bagToCSS({
+      paddingTop: '20px',
+      paddingRight: '8px',
+      paddingBottom: '12px',
+      paddingLeft: '8px',
+    })
+    expect(css).toBe('  padding: 20px 8px 12px;')
+  })
+
+  it('emits 4-value padding shorthand when all sides differ', () => {
+    const css = bagToCSS({
+      paddingTop: '20px',
+      paddingRight: '8px',
+      paddingBottom: '12px',
+      paddingLeft: '4px',
+    })
+    expect(css).toBe('  padding: 20px 8px 12px 4px;')
+  })
+
+  it('collapses margin sides identically to padding', () => {
+    const css = bagToCSS({
+      marginTop: '0',
+      marginRight: 'auto',
+      marginBottom: '0',
+      marginLeft: 'auto',
+    })
+    expect(css).toBe('  margin: 0 auto;')
+  })
+
+  it('preserves longhand when fewer than 4 padding sides are present', () => {
+    // Common in breakpoint overrides — only one side changes.
+    const css = bagToCSS({
+      paddingTop: '40px',
+      paddingBottom: '40px',
+    })
+    expect(css).toContain('padding-top: 40px;')
+    expect(css).toContain('padding-bottom: 40px;')
+    expect(css).not.toMatch(/^\s*padding:/m)
+  })
+
+  it('emits collapsed shorthand at the position of the first encountered side', () => {
+    const css = bagToCSS({
+      color: '#fff',
+      paddingTop: '20px',
+      paddingRight: '0',
+      paddingBottom: '20px',
+      paddingLeft: '0',
+      fontSize: '14px',
+    })
+    const lines = css.split('\n')
+    expect(lines).toEqual([
+      '  color: #fff;',
+      '  padding: 20px 0;',
+      '  font-size: 14px;',
+    ])
+  })
+
+  it('collapses CSS variable values (var(--space-md)) into the shorthand', () => {
+    const css = bagToCSS({
+      paddingTop: 'var(--space-md)',
+      paddingRight: 'var(--space-sm)',
+      paddingBottom: 'var(--space-md)',
+      paddingLeft: 'var(--space-sm)',
+    })
+    expect(css).toBe('  padding: var(--space-md) var(--space-sm);')
+  })
+
+  it('collapses padding and margin independently in the same bag', () => {
+    const css = bagToCSS({
+      paddingTop: '8px',
+      paddingRight: '8px',
+      paddingBottom: '8px',
+      paddingLeft: '8px',
+      marginTop: '0',
+      marginRight: 'auto',
+      marginBottom: '0',
+      marginLeft: 'auto',
+    })
+    expect(css).toContain('padding: 8px;')
+    expect(css).toContain('margin: 0 auto;')
+    expect(css).not.toContain('padding-top')
+    expect(css).not.toContain('margin-left')
+  })
+
+  it('refuses to collapse when a side is dropped by the sanitiser', () => {
+    // expression(...) is sanitised to null → the collapse must abort and the
+    // remaining safe sides emit as longhand instead.
+    const css = bagToCSS({
+      paddingTop: '20px',
+      paddingRight: 'expression(alert(1))',
+      paddingBottom: '20px',
+      paddingLeft: '20px',
+    })
+    // No collapsed shorthand — the malicious value broke uniformity.
+    expect(css).not.toContain('padding: ')
+    // Safe sides survive as longhand declarations.
+    expect(css).toContain('padding-top: 20px;')
+    expect(css).toContain('padding-bottom: 20px;')
+    expect(css).toContain('padding-left: 20px;')
+    // The malicious side is dropped entirely.
+    expect(css).not.toContain('expression')
   })
 })
 
@@ -274,9 +403,6 @@ describe('generateClassCSS', () => {
 // collectClassCSS — publisher integration (tree-shaking)
 // ---------------------------------------------------------------------------
 
-import { collectClassCSS } from '@core/publisher/cssCollector'
-import type { SiteDocument, Page, PageNode } from '@core/page-tree/schemas'
-
 function makeSite(
   classes: SiteDocument['classes'],
   nodeClassIds: Record<string, string[]> = {},
@@ -324,6 +450,36 @@ function makeSite(
 }
 
 describe('collectClassCSS', () => {
+  it('emits user-authored CSS but skips framework-generated CSS', () => {
+    const userClass = makeClass('user-class', { color: 'green' })
+    const frameworkClass: CSSClass = {
+      ...makeClass('framework:color:primary-token:base:text', { color: 'var(--primary)' }, {}, 'text-primary'),
+      generated: {
+        origin: 'framework',
+        family: 'color',
+        sourceId: 'primary-token',
+        utility: 'text',
+        tokenName: 'primary',
+        locked: true,
+      },
+      tags: ['framework', 'utility', 'color'],
+    }
+    const site = makeSite(
+      {
+        [userClass.id]: userClass,
+        [frameworkClass.id]: frameworkClass,
+      },
+      { child1: [userClass.id, frameworkClass.id] },
+    )
+
+    const css = collectClassCSS(site)
+
+    expect(css).toContain('.user-class {')
+    expect(css).toContain('color: green;')
+    expect(css).not.toContain('.text-primary')
+    expect(css).not.toContain('var(--primary)')
+  })
+
   it('returns empty string when no nodes have classIds', () => {
     const site = makeSite({ cls1: makeClass('cls1', { color: 'red' }) })
     expect(collectClassCSS(site)).toBe('')

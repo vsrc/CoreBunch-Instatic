@@ -24,6 +24,8 @@ const REQUIRED_PRIMITIVES = [
   'Select/Select.module.css',
   'Switch/Switch.tsx',
   'Switch/Switch.module.css',
+  'Checkbox/Checkbox.tsx',
+  'Checkbox/Checkbox.module.css',
   'Separator/Separator.tsx',
   'Separator/Separator.module.css',
   'ColorInput/ColorInput.tsx',

@@ -14,6 +14,7 @@ import { nanoid } from 'nanoid'
 import type { Page, PageNode, SiteDocument } from '@core/page-tree/schemas'
 import { DEFAULT_BREAKPOINTS, DEFAULT_SITE_SETTINGS } from '@core/page-tree/schemas'
 import type { AnyModuleDefinition } from '@core/module-engine/types'
+import type { VisualComponent, VCNode } from '@core/visualComponents/schemas'
 import { SquareIcon } from 'pixel-art-icons/icons/square'
 import { isSafeUrl } from '@core/publisher/utils'
 import { normalizeSitePackageJson } from '@core/site-dependencies/manifest'
@@ -149,7 +150,49 @@ export function makeNode(overrides: Partial<PageNode> & { id?: string } = {}): P
     classIds: overrides.classIds ?? [],
     dynamicBindings: overrides.dynamicBindings,
     propBindings: overrides.propBindings,
-    childNodes: overrides.childNodes,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// VCNode / VisualComponent factories
+// ---------------------------------------------------------------------------
+
+/** Creates a minimal valid VCNode (= BaseNode). */
+export function makeVCNode(overrides: Partial<VCNode> & { id: string; moduleId?: string }): VCNode {
+  return {
+    moduleId: 'base.container',
+    props: {},
+    breakpointOverrides: {},
+    children: [],
+    classIds: [],
+    ...overrides,
+  }
+}
+
+/**
+ * Build a flat NodeTree structure from an array of VCNodes.
+ * The first node is the root unless rootId is specified separately.
+ */
+export function makeVCTree(
+  rootId: string,
+  nodes: VCNode[],
+): { nodes: Record<string, VCNode>; rootNodeId: string } {
+  const map: Record<string, VCNode> = {}
+  for (const n of nodes) map[n.id] = n
+  return { nodes: map, rootNodeId: rootId }
+}
+
+/** Creates a minimal valid VisualComponent with a flat tree. */
+export function makeVC(overrides: Partial<VisualComponent> & { id: string; name: string }): VisualComponent {
+  const defaultRootId = 'vc-root'
+  const defaultRoot = makeVCNode({ id: defaultRootId, moduleId: 'base.container' })
+  return {
+    params: [],
+    breakpoints: [],
+    classIds: [],
+    createdAt: 1_700_000_000_000,
+    tree: makeVCTree(defaultRootId, [defaultRoot]),
+    ...overrides,
   }
 }
 

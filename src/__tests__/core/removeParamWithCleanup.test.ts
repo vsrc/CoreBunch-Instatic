@@ -17,7 +17,7 @@ import { describe, it, expect, beforeEach } from 'bun:test'
 import { produce } from 'immer'
 import { useEditorStore } from '@core/editor-store/store'
 import type { SiteDocument } from '@core/page-tree/schemas'
-import type { VisualComponent, VCNode } from '@core/visualComponents/schemas'
+import type { VisualComponent } from '@core/visualComponents/schemas'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -114,23 +114,12 @@ function setVCNodeBindings(
   useEditorStore.setState(
     produce(state, (draft) => {
       const vc = draft.site!.visualComponents.find((v) => v.id === vcId)!
-      const node = findVCNodeById(vc.rootNode, nodeId)
+      const node = vc.tree.nodes[nodeId]
       if (node) {
         node.propBindings = { ...node.propBindings, ...propBindings }
       }
     }),
   )
-}
-
-function findVCNodeById(root: VCNode, id: string): VCNode | null {
-  if (root.id === id) return root
-  if (root.childNodes) {
-    for (const child of root.childNodes) {
-      const found = findVCNodeById(child, id)
-      if (found) return found
-    }
-  }
-  return null
 }
 
 // ---------------------------------------------------------------------------
@@ -145,18 +134,18 @@ describe('Gate RP-1 — bindings cleared from VC tree', () => {
     const paramId = callAction<string>('addParam', vcId, 'title', 'string')
 
     const vc = getVC(vcId)
-    const rootNodeId = vc.rootNode.id
+    const rootNodeId = vc.tree.rootNodeId
 
     // Add a propBinding to the root node
     setVCNodeBindings(vcId, rootNodeId, { text: { paramId } })
 
     // Verify the binding is present before cleanup
-    expect(getVC(vcId).rootNode.propBindings?.text?.paramId).toBe(paramId)
+    expect(getVC(vcId).tree.nodes[rootNodeId]?.propBindings?.text?.paramId).toBe(paramId)
 
     callAction<void>('removeParamWithCleanup', vcId, paramId)
 
     // Binding must be gone
-    expect(getVC(vcId).rootNode.propBindings?.text).toBeUndefined()
+    expect(getVC(vcId).tree.nodes[rootNodeId]?.propBindings?.text).toBeUndefined()
     // Param must be removed
     expect(getVC(vcId).params.find((p) => p.id === paramId)).toBeUndefined()
   })
@@ -222,94 +211,127 @@ describe('Gate RP-2 — overrides cleared from all ref instances on all pages', 
 })
 
 // ---------------------------------------------------------------------------
-// Gate RP-3 — slot content cleared when type === 'slot'
+// Gate RP-3 — slot-instance children synced when type === 'slot'
 // ---------------------------------------------------------------------------
 
 describe('Gate RP-3 — slot content cleared for slot params', () => {
   beforeEach(() => { setupSite() })
 
-  it('removes slotContent[param.name] from all ref instances when param.type === "slot"', () => {
+  it('removes the slot-instance child node (and its subtree) from all ref instances when param.type === "slot"', () => {
     const vcId = callAction<string>('createVisualComponent', 'Layout')
     const slotParamId = callAction<string>('addParam', vcId, 'children', 'slot', [])
 
     const pageId = getActivePage().id
 
-    // A mock VCNode to use as slot content
-    const slotContentNode = {
-      id: 'content-node',
-      moduleId: 'base.text',
-      props: { text: 'content' },
-      breakpointOverrides: {},
-      children: [],
-      classIds: [],
-    }
+    // Add a ref node to the page (no slot content yet — addRefNodeToPage creates children: [])
+    const refId = addRefNodeToPage(pageId, vcId)
 
-    const refId = addRefNodeToPage(
-      pageId,
-      vcId,
-      {},
-      { children: [slotContentNode] },
+    // Manually inject a base.slot-instance child node into the page tree
+    // (simulating what syncSlotInstances produces after insertComponentRef)
+    const slotInstId = 'slot-inst-children'
+    const contentNodeId = 'content-node-1'
+    const state = useEditorStore.getState()
+    useEditorStore.setState(
+      produce(state, (draft) => {
+        const page = draft.site!.pages.find((p) => p.id === pageId)!
+        // Add content node
+        page.nodes[contentNodeId] = {
+          id: contentNodeId,
+          moduleId: 'base.text',
+          props: { text: 'slot content' },
+          breakpointOverrides: {},
+          children: [],
+          classIds: [],
+        }
+        // Add slot-instance node (children of the slot-instance are the content nodes)
+        page.nodes[slotInstId] = {
+          id: slotInstId,
+          moduleId: 'base.slot-instance',
+          props: { slotName: 'children' },
+          breakpointOverrides: {},
+          children: [contentNodeId],
+          classIds: [],
+          locked: true,
+        }
+        // Wire as child of the VC ref
+        page.nodes[refId].children = [slotInstId]
+      }),
     )
 
-    // Verify slotContent is present
+    // Verify slot-instance is present before cleanup
     const siteBefore = getSite()
     const refBefore = siteBefore.pages.find((p) => p.id === pageId)!.nodes[refId]
-    expect(
-      (refBefore.props.slotContent as Record<string, unknown[]>).children,
-    ).toBeDefined()
+    expect(refBefore.children).toContain(slotInstId)
+    expect(siteBefore.pages.find((p) => p.id === pageId)!.nodes[slotInstId]).toBeDefined()
 
     callAction<void>('removeParamWithCleanup', vcId, slotParamId)
 
     const siteAfter = getSite()
-    const refAfter = siteAfter.pages.find((p) => p.id === pageId)!.nodes[refId]
-    expect(
-      (refAfter.props.slotContent as Record<string, unknown> | undefined)?.children,
-    ).toBeUndefined()
+    const pageAfter = siteAfter.pages.find((p) => p.id === pageId)!
+    const refAfter = pageAfter.nodes[refId]
+
+    // Slot-instance child removed from vcRef.children
+    expect(refAfter.children).not.toContain(slotInstId)
+    // Slot-instance node deleted from page.nodes
+    expect(pageAfter.nodes[slotInstId]).toBeUndefined()
+    // Content nodes cascaded-deleted
+    expect(pageAfter.nodes[contentNodeId]).toBeUndefined()
   })
 })
 
 // ---------------------------------------------------------------------------
-// Gate RP-4 — slot content NOT touched when type !== 'slot'
+// Gate RP-4 — slot-instance children NOT touched for non-slot params
 // ---------------------------------------------------------------------------
 
 describe('Gate RP-4 — slot content NOT touched when param type is not slot', () => {
   beforeEach(() => { setupSite() })
 
-  it('slotContent remains untouched when a string param is removed', () => {
+  it('slot-instance children remain untouched when a string param is removed', () => {
     const vcId = callAction<string>('createVisualComponent', 'Card')
+    const slotParamId = callAction<string>('addParam', vcId, 'children', 'slot', [])
     const stringParamId = callAction<string>('addParam', vcId, 'title', 'string')
 
     const pageId = getActivePage().id
 
-    const slotContentNode = {
-      id: 'slot-node',
-      moduleId: 'base.text',
-      props: {},
-      breakpointOverrides: {},
-      children: [],
-      classIds: [],
-    }
+    // Add a ref node (children: [])
+    const refId = addRefNodeToPage(pageId, vcId, { [stringParamId]: 'some override' })
 
-    // Set up ref with both a propOverride for the string param AND some slotContent
-    const refId = addRefNodeToPage(
-      pageId,
-      vcId,
-      { [stringParamId]: 'some override' },
-      { children: [slotContentNode] },
+    // Manually inject a slot-instance child
+    const slotInstId = 'slot-inst-children-rp4'
+    const stateBeforeInject = useEditorStore.getState()
+    useEditorStore.setState(
+      produce(stateBeforeInject, (draft) => {
+        const page = draft.site!.pages.find((p) => p.id === pageId)!
+        page.nodes[slotInstId] = {
+          id: slotInstId,
+          moduleId: 'base.slot-instance',
+          props: { slotName: 'children' },
+          breakpointOverrides: {},
+          children: [],
+          classIds: [],
+          locked: true,
+        }
+        page.nodes[refId].children = [slotInstId]
+      }),
     )
 
+    // Remove the string param (not a slot param)
     callAction<void>('removeParamWithCleanup', vcId, stringParamId)
 
     const site = getSite()
-    const refNode = site.pages.find((p) => p.id === pageId)!.nodes[refId]
+    const pageAfter = site.pages.find((p) => p.id === pageId)!
+    const refNode = pageAfter.nodes[refId]
 
     // String param override removed
     expect((refNode.props.propOverrides as Record<string, unknown>)[stringParamId]).toBeUndefined()
 
-    // slotContent untouched
-    const slotContent = refNode.props.slotContent as Record<string, unknown[]>
-    expect(slotContent.children).toBeDefined()
-    expect(slotContent.children.length).toBe(1)
+    // Slot-instance child still present (only slot param removal triggers slot sync)
+    expect(refNode.children).toContain(slotInstId)
+    expect(pageAfter.nodes[slotInstId]).toBeDefined()
+    expect(pageAfter.nodes[slotInstId].props.slotName).toBe('children')
+
+    // The slot param ('children') still exists on the VC
+    expect(getVC(vcId).params.find((p) => p.id === slotParamId)).toBeDefined()
   })
 })
 

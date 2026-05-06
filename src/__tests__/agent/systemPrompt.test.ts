@@ -89,7 +89,7 @@ describe('buildSystemPrompt — static prefix (cacheable)', () => {
   it('lists every read tool by name', () => {
     const prefix = buildSystemPrompt(makeContext())[0]
     for (const name of [
-      'list_modules', 'list_classes', 'list_breakpoints',
+      'list_modules', 'list_classes', 'list_breakpoints', 'list_pages',
       'inspect_page', 'search_nodes', 'inspect_node', 'inspect_class',
       'render_snapshot',
     ]) {
@@ -100,9 +100,14 @@ describe('buildSystemPrompt — static prefix (cacheable)', () => {
   it('lists every write tool by name', () => {
     const prefix = buildSystemPrompt(makeContext())[0]
     for (const name of [
-      'insertNode', 'insertTree', 'deleteNode', 'updateNodeProps',
-      'moveNode', 'renameNode', 'createClass', 'updateClassStyles',
-      'assignClass', 'removeClass', 'addPage',
+      // Node mutations
+      'insertNode', 'insertTree', 'duplicateNode',
+      'deleteNode', 'updateNodeProps',
+      'moveNode', 'renameNode',
+      // Class mutations
+      'createClass', 'updateClassStyles', 'assignClass', 'removeClass',
+      // Page mutations
+      'addPage', 'duplicatePage', 'renamePage', 'deletePage',
     ]) {
       expect(prefix).toContain(name)
     }

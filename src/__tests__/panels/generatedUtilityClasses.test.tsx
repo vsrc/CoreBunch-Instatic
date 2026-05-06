@@ -98,7 +98,7 @@ describe('generated utility classes in editor panels', () => {
 
     const panel = screen.getByTestId('properties-panel')
     expect(within(panel).getByText('Generated utility')).toBeDefined()
-    expect(within(panel).getByText(/managed by the framework color settings/i)).toBeDefined()
+    expect(within(panel).getByText(/utility classes have a single purpose/i)).toBeDefined()
     expect(within(panel).queryByRole('searchbox', { name: /search class style properties to add/i })).toBeNull()
   })
 
@@ -116,7 +116,7 @@ describe('generated utility classes in editor panels', () => {
 
     const panel = screen.getByTestId('properties-panel')
     expect(within(panel).getByText('Generated utility')).toBeDefined()
-    expect(within(panel).getByText(/managed by the framework color settings/i)).toBeDefined()
+    expect(within(panel).getByText(/utility classes have a single purpose/i)).toBeDefined()
     expect(within(panel).queryByRole('searchbox', { name: /search class style properties to add/i })).toBeNull()
   })
 

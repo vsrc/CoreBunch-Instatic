@@ -7,7 +7,7 @@
   height: 100%;
   padding: 10px;
   overflow-y: auto;
-  border-right: 1px solid var(--panel-border, var(--editor-border));
+  border-right: 1px solid var(--panel-border);
   background: rgba(255, 255, 255, 0.025);
 }
 
@@ -62,7 +62,7 @@
   gap: 5px;
   margin-top: 2px;
   padding-top: 8px;
-  border-top: 1px solid var(--panel-border, var(--editor-border));
+  border-top: 1px solid var(--panel-border);
 }
 
 .importList {

@@ -38,28 +38,32 @@ function resetStore() {
 }
 
 function makeVC(id: string, name: string, paramCount = 0): VisualComponent {
+  const rootId = `root-${id}`
   return {
     id,
     name,
-    rootNode: {
-      id: `root-${id}`,
-      moduleId: 'base.body',
-      props: {},
-      children: [],
-      breakpointOverrides: {},
-      classIds: [],
+    tree: {
+      rootNodeId: rootId,
+      nodes: {
+        [rootId]: {
+          id: rootId,
+          moduleId: 'base.body',
+          props: {},
+          children: [],
+          breakpointOverrides: {},
+          classIds: [],
+        },
+      },
     },
     params: Array.from({ length: paramCount }, (_, i) => ({
       id: `param-${i}`,
       name: `param${i}`,
       type: 'string' as const,
-      label: `Param ${i}`,
+      defaultValue: '',
+      required: false,
     })),
     breakpoints: [],
     classIds: [],
-    filePath: `src/components/${name}.tsx`,
-    generated: true,
-    ejected: false,
     createdAt: 1_700_000_000_000,
   }
 }
@@ -205,5 +209,35 @@ describe('ModulePickerDropdown — Visual Components', () => {
       (el) => el.getAttribute('data-module-id') === 'base.slot-outlet',
     )
     expect(slotItem).toBeDefined()
+  })
+
+  it('hides base.slot-instance in page mode (auto-materialized only)', () => {
+    loadSite([])
+    render(<ModulePickerDropdown />)
+    fireEvent.click(screen.getByTestId('toolbar-add-module-btn'))
+
+    // base.slot-instance is materialized as a VC ref child by syncSlotInstances —
+    // it must NEVER appear as a user-insertable option in the picker. Otherwise
+    // the picker shows two "Slot" entries (one for slot-outlet, one for
+    // slot-instance) and orphan slot-instance nodes leak into the tree.
+    const menu = screen.getByRole('menu', { name: 'Add module' })
+    const slotInstanceItem = within(menu).queryAllByRole('menuitem').find(
+      (el) => el.getAttribute('data-module-id') === 'base.slot-instance',
+    )
+    expect(slotInstanceItem).toBeUndefined()
+  })
+
+  it('hides base.slot-instance in VC edit mode (auto-materialized only)', () => {
+    const vc = makeVC('vc-1', 'HeroCard', 0)
+    loadSite([vc], { kind: 'visualComponent', vcId: vc.id })
+    render(<ModulePickerDropdown />)
+    fireEvent.click(screen.getByTestId('toolbar-add-module-btn'))
+
+    // Same rule as page mode — slot-instance is structural-only, never picker-visible.
+    const menu = screen.getByRole('menu', { name: 'Add module' })
+    const slotInstanceItem = within(menu).queryAllByRole('menuitem').find(
+      (el) => el.getAttribute('data-module-id') === 'base.slot-instance',
+    )
+    expect(slotInstanceItem).toBeUndefined()
   })
 })

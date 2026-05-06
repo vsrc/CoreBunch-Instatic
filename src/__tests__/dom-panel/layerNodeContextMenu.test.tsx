@@ -23,23 +23,26 @@ import '../../modules/base/index'
 afterEach(cleanup)
 
 function makeVC(id: string, name: string): VisualComponent {
+  const rootId = `root-${id}`
   return {
     id,
     name,
-    rootNode: {
-      id: `root-${id}`,
-      moduleId: 'base.body',
-      props: {},
-      children: [],
-      breakpointOverrides: {},
-      classIds: [],
+    tree: {
+      rootNodeId: rootId,
+      nodes: {
+        [rootId]: {
+          id: rootId,
+          moduleId: 'base.body',
+          props: {},
+          children: [],
+          breakpointOverrides: {},
+          classIds: [],
+        },
+      },
     },
     params: [],
     breakpoints: [],
     classIds: [],
-    filePath: `src/components/${name}.tsx`,
-    generated: true,
-    ejected: false,
     createdAt: 1_700_000_000_000,
   }
 }
@@ -188,5 +191,200 @@ describe('LayerNodeContextMenu — Insert module here', () => {
     // selectedNodeId in resetStore is 'container-node' — VC ref should land there.
     const container = page?.nodes['container-node']
     expect(container?.children.length).toBe(1)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Slot-instance lock-down tests
+// ---------------------------------------------------------------------------
+
+/**
+ * Builds a page with a VC ref + one slot-instance child, then renders
+ * the LayerNodeContextMenu for the slot-instance row.
+ *
+ *   root (base.body)
+ *   └─ vc-ref (base.visual-component-ref)
+ *       └─ slot-inst (base.slot-instance, locked)
+ */
+function resetStoreWithSlotInstance() {
+  localStorage.clear()
+  const home = makePage({
+    id: 'page-home',
+    title: 'Home',
+    slug: 'index',
+    rootNodeId: 'root-home',
+    nodes: {
+      'root-home': makeNode({ id: 'root-home', moduleId: 'base.body', children: ['vc-ref'] }),
+      'vc-ref': makeNode({
+        id: 'vc-ref',
+        moduleId: 'base.visual-component-ref',
+        props: { componentId: 'vc-1' },
+        children: ['slot-inst'],
+      }),
+      'slot-inst': makeNode({
+        id: 'slot-inst',
+        moduleId: 'base.slot-instance',
+        props: { slotName: 'children' },
+        children: [],
+        locked: true,
+      }),
+    },
+  })
+  useEditorStore.setState({
+    site: makeSite({ pages: [home], files: [], visualComponents: [] }),
+    activePageId: 'page-home',
+    selectedNodeId: 'slot-inst',
+    hoveredNodeId: null,
+    activeDocument: null,
+    _historyPast: [],
+    _historyFuture: [],
+    canUndo: false,
+    canRedo: false,
+    hasUnsavedChanges: false,
+  } as Parameters<typeof useEditorStore.setState>[0])
+}
+
+describe('LayerNodeContextMenu — slot-instance lock-down', () => {
+  beforeEach(() => resetStoreWithSlotInstance())
+
+  function renderSlotInstanceMenu() {
+    return render(
+      <LayerNodeContextMenu
+        x={100}
+        y={200}
+        nodeId="slot-inst"
+        onClose={noop}
+        onDelete={noop}
+        onDuplicate={noop}
+        onRename={noop}
+        onWrapInContainer={noop}
+        onCopy={noop}
+        onCut={noop}
+        onPaste={noop}
+      />,
+    )
+  }
+
+  it('C1: Delete is NOT present for a slot-instance node', () => {
+    renderSlotInstanceMenu()
+    const del = screen.queryByRole('menuitem', { name: /delete/i })
+    expect(del).toBeNull()
+  })
+
+  it('C2: Cut is NOT present for a slot-instance node', () => {
+    renderSlotInstanceMenu()
+    expect(screen.queryByRole('menuitem', { name: /cut/i })).toBeNull()
+  })
+
+  it('C3: Wrap in Container is NOT present for a slot-instance node', () => {
+    renderSlotInstanceMenu()
+    expect(screen.queryByRole('menuitem', { name: /wrap in container/i })).toBeNull()
+  })
+
+  it('C4: Duplicate is NOT present for a slot-instance node', () => {
+    renderSlotInstanceMenu()
+    expect(screen.queryByRole('menuitem', { name: /duplicate/i })).toBeNull()
+  })
+
+  it('C5: Rename is NOT present for a slot-instance node', () => {
+    renderSlotInstanceMenu()
+    expect(screen.queryByRole('menuitem', { name: /^rename$/i })).toBeNull()
+  })
+
+  it('C6: "Insert module here" IS present for a slot-instance node', () => {
+    renderSlotInstanceMenu()
+    expect(screen.getByRole('menuitem', { name: /insert module here/i })).toBeDefined()
+  })
+
+  it('C7: picking a base module from the submenu inserts it INSIDE the slot-instance', () => {
+    renderSlotInstanceMenu()
+    openInsertSubmenu()
+
+    const submenu = screen.getByRole('menu', { name: 'Insert module here' })
+    const textOption = within(submenu).getAllByRole('menuitem').find(
+      (el) => el.getAttribute('data-module-id') === 'base.text',
+    )
+    expect(textOption).toBeDefined()
+    fireEvent.click(textOption!)
+
+    const state = useEditorStore.getState()
+    const page = state.site?.pages.find((p) => p.id === 'page-home')
+    const slotInst = page?.nodes['slot-inst']
+    expect(slotInst?.children.length).toBe(1)
+
+    const insertedId = slotInst?.children[0]
+    const inserted = insertedId ? page?.nodes[insertedId] : null
+    expect(inserted?.moduleId).toBe('base.text')
+  })
+})
+
+/**
+ * The lock-down for `base.slot-instance` rows applies ONLY when the parent is
+ * a `base.visual-component-ref`. An orphan slot-instance (e.g. left over from
+ * a parallel session before the picker filter was added, or from a migration
+ * that put one in the wrong place) must remain a regular node so the user can
+ * recover. The lock-down is a structural guard, not a brand on the moduleId.
+ */
+describe('LayerNodeContextMenu — orphan slot-instance is NOT locked', () => {
+  function resetStoreWithOrphanSlotInstance() {
+    localStorage.clear()
+    const home = makePage({
+      id: 'page-home',
+      title: 'Home',
+      slug: 'index',
+      rootNodeId: 'root-home',
+      nodes: {
+        // Orphan slot-instance: parent is base.body, NOT base.visual-component-ref.
+        'root-home': makeNode({ id: 'root-home', moduleId: 'base.body', children: ['orphan-slot'] }),
+        'orphan-slot': makeNode({
+          id: 'orphan-slot',
+          moduleId: 'base.slot-instance',
+          props: { slotName: 'children' },
+          children: [],
+        }),
+      },
+    })
+    useEditorStore.setState({
+      site: makeSite({ pages: [home], files: [], visualComponents: [] }),
+      activePageId: 'page-home',
+      selectedNodeId: 'orphan-slot',
+      hoveredNodeId: null,
+      activeDocument: null,
+      _historyPast: [],
+      _historyFuture: [],
+      canUndo: false,
+      canRedo: false,
+      hasUnsavedChanges: false,
+    } as Parameters<typeof useEditorStore.setState>[0])
+  }
+
+  beforeEach(() => resetStoreWithOrphanSlotInstance())
+
+  function renderOrphanMenu() {
+    return render(
+      <LayerNodeContextMenu
+        x={100}
+        y={200}
+        nodeId="orphan-slot"
+        onClose={noop}
+        onDelete={noop}
+        onDuplicate={noop}
+        onRename={noop}
+        onWrapInContainer={noop}
+        onCopy={noop}
+        onCut={noop}
+        onPaste={noop}
+      />,
+    )
+  }
+
+  it('Delete IS present for an orphan slot-instance', () => {
+    renderOrphanMenu()
+    expect(screen.getByRole('menuitem', { name: /delete/i })).toBeDefined()
+  })
+
+  it('Rename IS present for an orphan slot-instance', () => {
+    renderOrphanMenu()
+    expect(screen.getByRole('menuitem', { name: /^rename$/i })).toBeDefined()
   })
 })

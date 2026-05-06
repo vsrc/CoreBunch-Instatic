@@ -43,15 +43,24 @@ function makeParam(
   }
 }
 
-function makeVC(
-  overrides: Partial<VisualComponent> & { id: string; name: string; rootNode: VCNode },
-): VisualComponent {
+function makeVC(overrides: {
+  id: string
+  name: string
+  nodes: VCNode[]
+  rootId: string
+  params?: VCParam[]
+  classIds?: string[]
+}): VisualComponent {
+  const nodesMap: Record<string, VCNode> = {}
+  for (const n of overrides.nodes) nodesMap[n.id] = n
   return {
-    params: [],
+    params: overrides.params ?? [],
     breakpoints: [],
-    classIds: [],
+    classIds: overrides.classIds ?? [],
     createdAt: 0,
-    ...overrides,
+    id: overrides.id,
+    name: overrides.name,
+    tree: { nodes: nodesMap, rootNodeId: overrides.rootId },
   }
 }
 
@@ -114,12 +123,12 @@ describe('VC inline — prop override substitution', () => {
     id: 'vc-root',
     moduleId: 'base.container',
     children: ['vc-text'],
-    childNodes: [textNode],
   })
   const vc = makeVC({
     id: 'vc-card',
     name: 'Card',
-    rootNode,
+    nodes: [rootNode, textNode],
+    rootId: 'vc-root',
     params: [makeParam({ id: 'param-title', name: 'title', type: 'string', defaultValue: 'Default' })],
   })
 
@@ -129,7 +138,6 @@ describe('VC inline — prop override substitution', () => {
         props: {
           componentId: 'vc-card',
           propOverrides: { 'param-title': 'Override' },
-          slotContent: {},
         },
       }),
     })
@@ -156,13 +164,12 @@ describe('VC inline — class CSS in published output', () => {
       id: 'vc-cls-root',
       moduleId: 'base.container',
       children: ['vc-cls-text'],
-      childNodes: [textNode],
     })
-    const vc = makeVC({ id: 'vc-cls', name: 'Cls', rootNode })
+    const vc = makeVC({ id: 'vc-cls', name: 'Cls', nodes: [rootNode, textNode], rootId: 'vc-cls-root' })
 
     const page = makePage({
       root: makePageNode('root', 'base.visual-component-ref', {
-        props: { componentId: 'vc-cls', propOverrides: {}, slotContent: {} },
+        props: { componentId: 'vc-cls', propOverrides: {} },
       }),
     })
     const site = makeSite({
@@ -202,12 +209,12 @@ describe('VC inline — richText XSS sanitization', () => {
       id: 'vc-xss-root',
       moduleId: 'base.container',
       children: ['vc-xss-content'],
-      childNodes: [contentNode],
     })
     const vc = makeVC({
       id: 'vc-xss',
       name: 'XssTest',
-      rootNode,
+      nodes: [rootNode, contentNode],
+      rootId: 'vc-xss-root',
       params: [makeParam({ id: 'param-body', name: 'html', type: 'richText', defaultValue: '' })],
     })
 
@@ -216,7 +223,6 @@ describe('VC inline — richText XSS sanitization', () => {
         props: {
           componentId: 'vc-xss',
           propOverrides: { 'param-body': '<p>ok</p><script>bad()</script>' },
-          slotContent: {},
         },
       }),
     })
@@ -242,7 +248,6 @@ describe('VC inline — slot content override', () => {
     id: 'vc-slot-root',
     moduleId: 'base.container',
     children: ['vc-slot-outlet'],
-    childNodes: [slotOutletNode],
   })
   const defaultSlotText = makeVCNode({
     id: 'default-slot',
@@ -252,7 +257,8 @@ describe('VC inline — slot content override', () => {
   const vcWithSlot = makeVC({
     id: 'vc-slot',
     name: 'SlotComp',
-    rootNode: slotRootNode,
+    nodes: [slotRootNode, slotOutletNode],
+    rootId: 'vc-slot-root',
     params: [
       makeParam({
         id: 'param-body',
@@ -263,21 +269,25 @@ describe('VC inline — slot content override', () => {
     ],
   })
 
-  it('renders provided slot content over defaultValue', () => {
-    const overrideText = makeVCNode({
-      id: 'override-text',
-      moduleId: 'base.text',
-      props: { text: 'Override slot text', tag: 'p' },
-    })
-    const page = makePage({
-      root: makePageNode('root', 'base.visual-component-ref', {
-        props: {
-          componentId: 'vc-slot',
-          propOverrides: {},
-          slotContent: { body: [overrideText] },
-        },
-      }),
-    })
+  it('renders provided slot-instance content over defaultValue (Task 4 Tree Unification)', () => {
+    // Slot content is now a base.slot-instance child of the VC ref in the page tree.
+    // The slot-instance node's children are the user-authored content nodes.
+    const page = makePage(
+      {
+        root: makePageNode('root', 'base.visual-component-ref', {
+          props: { componentId: 'vc-slot', propOverrides: {} },
+          children: ['slot-inst-body'],
+        }),
+        'slot-inst-body': makePageNode('slot-inst-body', 'base.slot-instance', {
+          props: { slotName: 'body' },
+          children: ['override-text'],
+          locked: true,
+        }),
+        'override-text': makePageNode('override-text', 'base.text', {
+          props: { text: 'Override slot text', tag: 'p' },
+        }),
+      },
+    )
     const site = makeSite({ visualComponents: [vcWithSlot], pages: [page] })
     const { html } = publishPage(page, site, registry)
     expect(html).toContain('Override slot text')
@@ -300,7 +310,6 @@ describe('VC inline — slot defaultValue fallback', () => {
       id: 'vc-fb-root',
       moduleId: 'base.container',
       children: ['vc-fb-outlet'],
-      childNodes: [slotOutletNode],
     })
     const defaultText = makeVCNode({
       id: 'fb-default',
@@ -310,7 +319,8 @@ describe('VC inline — slot defaultValue fallback', () => {
     const vc = makeVC({
       id: 'vc-fb',
       name: 'FallbackComp',
-      rootNode: slotRootNode,
+      nodes: [slotRootNode, slotOutletNode],
+      rootId: 'vc-fb-root',
       params: [
         makeParam({
           id: 'param-main',
@@ -322,7 +332,7 @@ describe('VC inline — slot defaultValue fallback', () => {
     })
     const page = makePage({
       root: makePageNode('root', 'base.visual-component-ref', {
-        props: { componentId: 'vc-fb', propOverrides: {}, slotContent: {} },
+        props: { componentId: 'vc-fb', propOverrides: {} },
       }),
     })
     const site = makeSite({ visualComponents: [vc], pages: [page] })
@@ -342,7 +352,6 @@ describe('VC inline — unknown componentId', () => {
         props: {
           componentId: 'nonexistent-vc-xyz',
           propOverrides: {},
-          slotContent: {},
         },
       }),
     })

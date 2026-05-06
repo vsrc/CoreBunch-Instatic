@@ -77,6 +77,8 @@ export const VideoModule: ModuleDefinition<VideoProps> = {
 
   component: VideoEditor,
 
+  htmlTag: (props) => (String(props.source) === 'youtube' ? 'iframe' : 'video'),
+
   render: (props) => {
     const isYoutube = String(props.source) === 'youtube'
 

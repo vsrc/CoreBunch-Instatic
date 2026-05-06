@@ -71,7 +71,19 @@ export function resolveDomDropTarget({
 
   if (zone === 'inside') {
     if (!canHaveChildren(over.moduleId)) return null
-    if (over.locked) return null
+
+    // ─── slot-instance structural lock-down — Task 5 ──────────────────────
+    // slot-instance nodes are locked (preventing reorder/detach), but their
+    // children are fully editable. Allow drops inside a locked slot-instance;
+    // reject drops inside all other locked nodes.
+    if (over.locked && over.moduleId !== 'base.slot-instance') return null
+
+    // Direct children of a VC ref are exclusively managed by syncSlotInstances.
+    // The only valid entry point into VC ref content is *inside* one of its
+    // slot-instance children — not directly inside the VC ref itself.
+    if (over.moduleId === 'base.visual-component-ref') return null
+    // ─────────────────────────────────────────────────────────────────────────
+
     if (isAncestor(page, draggedId, overId)) return null
 
     const index = normalizeIndexAfterRemoval(page, draggedId, overId, over.children.length)
@@ -91,6 +103,14 @@ export function resolveDomDropTarget({
   const parent = getParent(page, overId)
   if (!parent) return null
   if (parent.locked) return null
+
+  // ─── slot-instance structural lock-down — Task 5 ────────────────────────
+  // Direct children of a VC ref are slot-instances managed by syncSlotInstances.
+  // No external node may be inserted as a sibling of slot-instance nodes — the
+  // only valid way to place content is *inside* a slot-instance.
+  if (parent.moduleId === 'base.visual-component-ref') return null
+  // ─────────────────────────────────────────────────────────────────────────
+
   if (isAncestor(page, draggedId, parent.id)) return null
 
   const overIndex = parent.children.indexOf(overId)

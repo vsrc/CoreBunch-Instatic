@@ -189,18 +189,23 @@ function rawSite(overrides: Record<string, unknown> = {}): Record<string, unknow
   }
 }
 
-/** Minimal valid VC shape for validateSite tests */
+/** Minimal valid VC shape for validateSite tests — flat tree. */
 function rawVC(overrides: Record<string, unknown> = {}) {
   return {
     id: 'vc-card-1',
     name: 'Card',
-    rootNode: {
-      id: 'vc-root',
-      moduleId: 'base.container',
-      props: {},
-      children: [],
-      breakpointOverrides: {},
-      classIds: [],
+    tree: {
+      rootNodeId: 'vc-root',
+      nodes: {
+        'vc-root': {
+          id: 'vc-root',
+          moduleId: 'base.container',
+          props: {},
+          children: [],
+          breakpointOverrides: {},
+          classIds: [],
+        },
+      },
     },
     params: [],
     breakpoints: [],
@@ -344,9 +349,10 @@ describe('Gate TS-4 — VisualComponent shape has required fields', () => {
     // schemas.ts is the canonical Zod source (types.ts shim has been deleted)
     const definitionSource = readFileSync(VC_SCHEMAS_TS, 'utf8')
 
-    // VisualComponent must be declared as an exported type (via z.infer)
+    // VisualComponent must be declared as an exported type (via Static<typeof>)
     expect(definitionSource).toMatch(/(interface VisualComponent|export type VisualComponent)/)
-    expect(definitionSource).toMatch(/\brootNode\s*:/)
+    // After flat-tree migration: VC uses tree: NodeTree instead of rootNode
+    expect(definitionSource).toMatch(/\btree\s*:/)
     expect(definitionSource).toMatch(/\bparams\s*:/)
   })
 })
@@ -454,7 +460,7 @@ describe('Gate RG-1 — getReferencedComponentIds: leaf node returns empty set',
 })
 
 describe('Gate RG-2 — getReferencedComponentIds: direct componentRef found', () => {
-  it('a node with moduleId=base.visual-component-ref returns its componentId', () => {
+  it('a VC whose tree root is a base.visual-component-ref returns its componentId', () => {
     requireRG(getReferencedComponentIds)
     const refNode = {
       id: 'n1',
@@ -463,13 +469,15 @@ describe('Gate RG-2 — getReferencedComponentIds: direct componentRef found', (
       children: [],
       breakpointOverrides: {},
     }
-    const ids = getReferencedComponentIds(refNode)
+    // getReferencedComponentIds expects a VC with flat tree.nodes, not a raw node
+    const vc = { tree: { nodes: { n1: refNode }, rootNodeId: 'n1' } }
+    const ids = getReferencedComponentIds(vc)
     expect(ids.has('vc-banner-1')).toBe(true)
   })
 })
 
 describe('Gate RG-3 — getReferencedComponentIds: nested componentRef discovered', () => {
-  it('a componentRef nested inside a container is still found via tree walk', () => {
+  it('a componentRef nested inside the flat tree is found', () => {
     requireRG(getReferencedComponentIds)
     const containerNode = {
       id: 'container',
@@ -477,27 +485,45 @@ describe('Gate RG-3 — getReferencedComponentIds: nested componentRef discovere
       props: {},
       children: ['ref-child'],
       breakpointOverrides: {},
-      childNodes: [
-        {
-          id: 'ref-child',
-          moduleId: 'base.visual-component-ref',
-          props: { componentId: 'vc-card-1', propOverrides: {} },
-          children: [],
-          breakpointOverrides: {},
-        },
-      ],
     }
-    const ids = getReferencedComponentIds(containerNode)
+    const refChild = {
+      id: 'ref-child',
+      moduleId: 'base.visual-component-ref',
+      props: { componentId: 'vc-card-1', propOverrides: {} },
+      children: [],
+      breakpointOverrides: {},
+    }
+    // getReferencedComponentIds expects a VC with flat tree.nodes
+    const vc = {
+      tree: {
+        nodes: { container: containerNode, 'ref-child': refChild },
+        rootNodeId: 'container',
+      },
+    }
+    const ids = getReferencedComponentIds(vc)
     expect(ids.has('vc-card-1')).toBe(true)
   })
 })
+
+function makeSimpleVC(id: string, name: string, extraNodes: Record<string, unknown> = {}) {
+  const rootNode = { id: 'root', moduleId: 'base.container', props: {}, children: Object.keys(extraNodes), breakpointOverrides: {} }
+  return {
+    id,
+    name,
+    tree: { nodes: { root: rootNode, ...extraNodes }, rootNodeId: 'root' },
+    params: [],
+    breakpoints: [],
+    classIds: [],
+    createdAt: 1000,
+  }
+}
 
 describe('Gate RG-4 — wouldCreateCycle: returns false when no cycle', () => {
   it('adding Banner inside Card (no cross-reference) → no cycle', () => {
     requireRG(wouldCreateCycle)
     const vcs = [
-      { id: 'vc-card', name: 'Card', rootNode: { id: 'root', moduleId: 'base.container', props: {}, children: [], breakpointOverrides: {} }, params: [], breakpoints: [], classIds: [], createdAt: 1000 },
-      { id: 'vc-banner', name: 'Banner', rootNode: { id: 'root', moduleId: 'base.container', props: {}, children: [], breakpointOverrides: {} }, params: [], breakpoints: [], classIds: [], createdAt: 1000 },
+      makeSimpleVC('vc-card', 'Card'),
+      makeSimpleVC('vc-banner', 'Banner'),
     ]
     const result = wouldCreateCycle(vcs, 'vc-card', 'vc-banner')
     expect(result).toBe(false)
@@ -507,9 +533,7 @@ describe('Gate RG-4 — wouldCreateCycle: returns false when no cycle', () => {
 describe('Gate RG-5 — wouldCreateCycle: detects self-cycle', () => {
   it('adding Card inside Card → cycle detected', () => {
     requireRG(wouldCreateCycle)
-    const vcs = [
-      { id: 'vc-card', name: 'Card', rootNode: { id: 'root', moduleId: 'base.container', props: {}, children: [], breakpointOverrides: {} }, params: [], breakpoints: [], classIds: [], createdAt: 1000 },
-    ]
+    const vcs = [makeSimpleVC('vc-card', 'Card')]
     const result = wouldCreateCycle(vcs, 'vc-card', 'vc-card')
     expect(result).toBe(true)
   })
@@ -518,26 +542,37 @@ describe('Gate RG-5 — wouldCreateCycle: detects self-cycle', () => {
 describe('Gate RG-6 — wouldCreateCycle: detects 2-step cycle', () => {
   it('A contains B; trying to add A inside B → cycle detected', () => {
     requireRG(wouldCreateCycle)
-    // Banner's rootNode already contains a visualComponentRef to Card
-    const bannerRoot = {
-      id: 'banner-root',
-      moduleId: 'base.container',
-      props: {},
-      children: ['card-ref'],
-      breakpointOverrides: {},
-      childNodes: [
-        {
-          id: 'card-ref',
-          moduleId: 'base.visual-component-ref',
-          props: { componentId: 'vc-card', propOverrides: {} },
-          children: [],
-          breakpointOverrides: {},
+    // Banner's flat tree already contains a visualComponentRef to Card
+    const vcBanner = {
+      id: 'vc-banner',
+      name: 'Banner',
+      tree: {
+        rootNodeId: 'banner-root',
+        nodes: {
+          'banner-root': {
+            id: 'banner-root',
+            moduleId: 'base.container',
+            props: {},
+            children: ['card-ref'],
+            breakpointOverrides: {},
+          },
+          'card-ref': {
+            id: 'card-ref',
+            moduleId: 'base.visual-component-ref',
+            props: { componentId: 'vc-card', propOverrides: {} },
+            children: [],
+            breakpointOverrides: {},
+          },
         },
-      ],
+      },
+      params: [],
+      breakpoints: [],
+      classIds: [],
+      createdAt: 1000,
     }
     const vcs = [
-      { id: 'vc-card', name: 'Card', rootNode: { id: 'root', moduleId: 'base.container', props: {}, children: [], breakpointOverrides: {} }, params: [], breakpoints: [], classIds: [], createdAt: 1000 },
-      { id: 'vc-banner', name: 'Banner', rootNode: bannerRoot, params: [], breakpoints: [], classIds: [], createdAt: 1000 },
+      makeSimpleVC('vc-card', 'Card'),
+      vcBanner,
     ]
     // Card tries to embed Banner — Banner already contains Card → cycle
     const result = wouldCreateCycle(vcs, 'vc-card', 'vc-banner')
@@ -549,42 +584,40 @@ describe('Gate RG-7 — wouldCreateCycle: detects 3-step cycle', () => {
   it('A→B→C; trying to add A inside C → cycle detected', () => {
     requireRG(wouldCreateCycle)
     // C contains B, B contains A. Trying to add A inside C would create A→B→C→A
-    const cRoot = {
-      id: 'c-root',
-      moduleId: 'base.container',
-      props: {},
-      children: ['b-ref'],
-      breakpointOverrides: {},
-      childNodes: [
-        {
-          id: 'b-ref',
-          moduleId: 'base.visual-component-ref',
-          props: { componentId: 'vc-b', propOverrides: {} },
-          children: [],
-          breakpointOverrides: {},
+    const vcC = {
+      id: 'vc-c',
+      name: 'Gamma',
+      tree: {
+        rootNodeId: 'c-root',
+        nodes: {
+          'c-root': { id: 'c-root', moduleId: 'base.container', props: {}, children: ['b-ref'], breakpointOverrides: {} },
+          'b-ref': { id: 'b-ref', moduleId: 'base.visual-component-ref', props: { componentId: 'vc-b', propOverrides: {} }, children: [], breakpointOverrides: {} },
         },
-      ],
+      },
+      params: [],
+      breakpoints: [],
+      classIds: [],
+      createdAt: 1000,
     }
-    const bRoot = {
-      id: 'b-root',
-      moduleId: 'base.container',
-      props: {},
-      children: ['a-ref'],
-      breakpointOverrides: {},
-      childNodes: [
-        {
-          id: 'a-ref',
-          moduleId: 'base.visual-component-ref',
-          props: { componentId: 'vc-a', propOverrides: {} },
-          children: [],
-          breakpointOverrides: {},
+    const vcB = {
+      id: 'vc-b',
+      name: 'Beta',
+      tree: {
+        rootNodeId: 'b-root',
+        nodes: {
+          'b-root': { id: 'b-root', moduleId: 'base.container', props: {}, children: ['a-ref'], breakpointOverrides: {} },
+          'a-ref': { id: 'a-ref', moduleId: 'base.visual-component-ref', props: { componentId: 'vc-a', propOverrides: {} }, children: [], breakpointOverrides: {} },
         },
-      ],
+      },
+      params: [],
+      breakpoints: [],
+      classIds: [],
+      createdAt: 1000,
     }
     const vcs = [
-      { id: 'vc-a', name: 'Alpha', rootNode: { id: 'root', moduleId: 'base.container', props: {}, children: [], breakpointOverrides: {} }, params: [], breakpoints: [], classIds: [], createdAt: 1000 },
-      { id: 'vc-b', name: 'Beta', rootNode: bRoot, params: [], breakpoints: [], classIds: [], createdAt: 1000 },
-      { id: 'vc-c', name: 'Gamma', rootNode: cRoot, params: [], breakpoints: [], classIds: [], createdAt: 1000 },
+      makeSimpleVC('vc-a', 'Alpha'),
+      vcB,
+      vcC,
     ]
     // vc-c tries to embed vc-a; vc-c already reaches vc-a via vc-b → cycle
     const result = wouldCreateCycle(vcs, 'vc-c', 'vc-a')
@@ -595,9 +628,7 @@ describe('Gate RG-7 — wouldCreateCycle: detects 3-step cycle', () => {
 describe('Gate RG-8 — wouldCreateCycle: handles unknown candidate id gracefully', () => {
   it('candidate vc not in the array → returns false (no crash)', () => {
     requireRG(wouldCreateCycle)
-    const vcs = [
-      { id: 'vc-card', name: 'Card', rootNode: { id: 'root', moduleId: 'base.container', props: {}, children: [], breakpointOverrides: {} }, params: [], breakpoints: [], classIds: [], createdAt: 1000 },
-    ]
+    const vcs = [makeSimpleVC('vc-card', 'Card')]
     // candidate doesn't exist — should not throw, just return false
     expect(() => wouldCreateCycle(vcs, 'vc-card', 'vc-nonexistent')).not.toThrow()
     const result = wouldCreateCycle(vcs, 'vc-card', 'vc-nonexistent')
@@ -771,25 +802,25 @@ describe('Gate SL-12 — removeParamWithCleanup: removes a VCParam by id and cle
     ;((useEditorStore.getState() as Record<string, unknown>).addParam as (vcId: string, name: string, type: string) => void)(vcId, 'title', 'string')
     const paramId = (useEditorStore.getState().site as unknown as { visualComponents: Array<{ id: string; params: Array<{ id: string }> }> }).visualComponents.find((v) => v.id === vcId)!.params[0].id
 
-    // Set a propBinding on the VC rootNode to verify cleanup
-    const vc = (useEditorStore.getState().site as unknown as { visualComponents: Array<{ id: string; rootNode: { id: string } }> }).visualComponents.find((v) => v.id === vcId)!
-    ;((useEditorStore.getState() as Record<string, unknown>).setNodePropBinding as (nodeId: string, propKey: string, paramId: string) => void)
+    // Set a propBinding on the VC root node to verify cleanup
+    type FlatVC = { id: string; tree: { rootNodeId: string; nodes: Record<string, { propBindings?: Record<string, { paramId: string }> }> }; params: Array<{ id: string }> }
+    const vc = (useEditorStore.getState().site as unknown as { visualComponents: FlatVC[] }).visualComponents.find((v) => v.id === vcId)!
     // Set activeDocument so setNodePropBinding targets the VC tree
     useEditorStore.setState({ activeDocument: { kind: 'visualComponent', vcId } } as Parameters<typeof useEditorStore.setState>[0])
-    ;((useEditorStore.getState() as Record<string, unknown>).setNodePropBinding as (nodeId: string, propKey: string, paramId: string) => void)(vc.rootNode.id, 'text', paramId)
+    ;((useEditorStore.getState() as Record<string, unknown>).setNodePropBinding as (nodeId: string, propKey: string, paramId: string) => void)(vc.tree.rootNodeId, 'text', paramId)
 
     // Verify binding is set
-    const vcBefore = (useEditorStore.getState().site as unknown as { visualComponents: Array<{ id: string; rootNode: { propBindings?: Record<string, { paramId: string }> }; params: Array<{ id: string }> }> }).visualComponents.find((v) => v.id === vcId)!
-    expect(vcBefore.rootNode.propBindings?.text?.paramId).toBe(paramId)
+    const vcBefore = (useEditorStore.getState().site as unknown as { visualComponents: FlatVC[] }).visualComponents.find((v) => v.id === vcId)!
+    expect(vcBefore.tree.nodes[vcBefore.tree.rootNodeId]?.propBindings?.text?.paramId).toBe(paramId)
 
     // Call removeParamWithCleanup
     ;((useEditorStore.getState() as Record<string, unknown>).removeParamWithCleanup as (vcId: string, paramId: string) => void)(vcId, paramId)
 
-    const vcAfter = (useEditorStore.getState().site as unknown as { visualComponents: Array<{ id: string; rootNode: { propBindings?: Record<string, { paramId: string }> }; params: Array<{ id: string }> }> }).visualComponents.find((v) => v.id === vcId)!
+    const vcAfter = (useEditorStore.getState().site as unknown as { visualComponents: FlatVC[] }).visualComponents.find((v) => v.id === vcId)!
     // Param removed
     expect(vcAfter.params).toHaveLength(0)
     // Binding cleaned up
-    expect(vcAfter.rootNode.propBindings?.text).toBeUndefined()
+    expect(vcAfter.tree.nodes[vcAfter.tree.rootNodeId]?.propBindings?.text).toBeUndefined()
   })
 })
 
@@ -808,8 +839,8 @@ describe('Gate SL-13 — addNodeToVc: cycle guard fires at slice write boundary'
       children: [],
       breakpointOverrides: {},
     }
-    // The vc's rootNode id — get from state
-    const vcRootNodeId = (useEditorStore.getState().site as unknown as { visualComponents: Array<{ id: string; rootNode: { id: string } }> }).visualComponents.find((v) => v.id === vcId)!.rootNode.id
+    // The vc's root node id — get from flat tree
+    const vcRootNodeId = (useEditorStore.getState().site as unknown as { visualComponents: Array<{ id: string; tree: { rootNodeId: string } }> }).visualComponents.find((v) => v.id === vcId)!.tree.rootNodeId
     expect(() =>
       ((useEditorStore.getState() as Record<string, unknown>).addNodeToVc as (vcId: string, parentNodeId: string, newNode: unknown) => void)(vcId, vcRootNodeId, selfRefNode)
     ).toThrow()
@@ -831,7 +862,7 @@ describe('Gate SL-14 — addNodeToVc: succeeds when no cycle', () => {
       children: [],
       breakpointOverrides: {},
     }
-    const vcRootNodeId = (useEditorStore.getState().site as unknown as { visualComponents: Array<{ id: string; rootNode: { id: string } }> }).visualComponents.find((v) => v.id === vcId)!.rootNode.id
+    const vcRootNodeId = (useEditorStore.getState().site as unknown as { visualComponents: Array<{ id: string; tree: { rootNodeId: string } }> }).visualComponents.find((v) => v.id === vcId)!.tree.rootNodeId
     expect(() =>
       ((useEditorStore.getState() as Record<string, unknown>).addNodeToVc as (vcId: string, parentNodeId: string, newNode: unknown) => void)(vcId, vcRootNodeId, headingNode)
     ).not.toThrow()
@@ -898,205 +929,227 @@ describe('Gate VP-7 — full site with valid VC still passes full validateSite',
 
 // ── Round-trip gates (added post-#635 hot-fix — Coverage gaps surfaced by CR msg #1948) ──
 
-describe('Gate VP-8 — validateSite preserves rootNode.childNodes on VC round-trip', () => {
+describe('Gate VP-8 — validateSite round-trips flat VC tree and converts legacy shape', () => {
   /**
-   * WHY THIS GATE EXISTS
-   * ─────────────────────
-   * Code Reviewer (Contribution #638 / msg #1948) found that validatePageNode()
-   * does not pass through `childNodes?: PageNode[]`. Any VC saved with a non-trivial
-   * tree (container → child nodes) loses all children after validateSite() is called
-   * on reload. Silent data loss on every Convex hydration (Constraint #346).
-   *
-   * Fix (Task #448): validatePageNode() must preserve childNodes by recursively
-   * validating each entry and including them in its return shape.
+   * After Task 3 flat-tree migration:
+   *   - New shape: vc.tree = { nodes: Record<string, VCNode>, rootNodeId }
+   *   - Legacy shape (rootNode + childNodes) is auto-converted by convertLegacyVCShape()
+   *     in validateSite before parsing. The output always has the flat tree.
    */
-  it('a VC rootNode with childNodes survives validateSite() with childNodes intact', () => {
+  it('a VC with flat tree.nodes survives validateSite() with the full nodes map intact', () => {
     const childNode = {
       id: 'child-heading',
       moduleId: 'base.text',
       props: { text: 'Card Title' },
       children: [],
       breakpointOverrides: {},
+      classIds: [],
     }
-    const rootNodeWithChildren = {
-      id: 'vc-root',
-      moduleId: 'base.container',
-      props: {},
-      children: ['child-heading'],
-      breakpointOverrides: {},
-      // The childNodes array carries inline child node objects used by VC tree rendering
-      childNodes: [childNode],
-    }
-    const vc = rawVC({ rootNode: rootNodeWithChildren })
-    const raw = rawSite({ visualComponents: [vc] })
+    const flatVC = rawVC({
+      tree: {
+        rootNodeId: 'vc-root',
+        nodes: {
+          'vc-root': {
+            id: 'vc-root',
+            moduleId: 'base.container',
+            props: {},
+            children: ['child-heading'],
+            breakpointOverrides: {},
+            classIds: [],
+          },
+          'child-heading': childNode,
+        },
+      },
+    })
+    const raw = rawSite({ visualComponents: [flatVC] })
 
     const site = validateSite(raw) as {
       visualComponents: Array<{
-        rootNode: { childNodes?: unknown[] }
+        tree: { rootNodeId: string; nodes: Record<string, { id: string }> }
       }>
     }
 
-    const resultRoot = site.visualComponents[0]?.rootNode
-    expect(resultRoot).toBeDefined()
-
-    // childNodes must survive the round-trip — not be stripped by validatePageNode()
-    expect(Array.isArray(resultRoot.childNodes)).toBe(true)
-    expect((resultRoot.childNodes as unknown[]).length).toBe(1)
-    expect((resultRoot.childNodes as Array<{ id: string }>)[0].id).toBe('child-heading')
+    const vcResult = site.visualComponents[0]
+    expect(vcResult).toBeDefined()
+    expect(vcResult.tree.rootNodeId).toBe('vc-root')
+    // Both nodes must be present in the flat map
+    expect(vcResult.tree.nodes['vc-root']).toBeDefined()
+    expect(vcResult.tree.nodes['child-heading']).toBeDefined()
+    expect(vcResult.tree.nodes['child-heading'].id).toBe('child-heading')
   })
 
-  it('childNodes are recursively validated (grandchildren preserved)', () => {
-    const grandchild = {
-      id: 'grand-text',
-      moduleId: 'base.text',
-      props: { content: 'Hello' },
-      children: [],
-      breakpointOverrides: {},
+  it('legacy shape (rootNode + childNodes) is converted to flat tree by validateSite', () => {
+    // Feed old-shape data directly — convertLegacyVCShape() handles it before parsing
+    const legacyVC = {
+      id: 'vc-card-1',
+      name: 'Card',
+      // Old shape: rootNode with nested childNodes (not tree:)
+      rootNode: {
+        id: 'vc-root',
+        moduleId: 'base.container',
+        props: {},
+        children: ['inner-container'],
+        breakpointOverrides: {},
+        classIds: [],
+        childNodes: [
+          {
+            id: 'inner-container',
+            moduleId: 'base.container',
+            props: {},
+            children: ['grand-text'],
+            breakpointOverrides: {},
+            classIds: [],
+            childNodes: [
+              {
+                id: 'grand-text',
+                moduleId: 'base.text',
+                props: { content: 'Hello' },
+                children: [],
+                breakpointOverrides: {},
+                classIds: [],
+              },
+            ],
+          },
+        ],
+      },
+      params: [],
+      breakpoints: [],
+      classIds: [],
+      createdAt: 1000,
     }
-    const child = {
-      id: 'inner-container',
-      moduleId: 'base.container',
-      props: {},
-      children: ['grand-text'],
-      breakpointOverrides: {},
-      childNodes: [grandchild],
-    }
-    const rootNode = {
-      id: 'vc-root',
-      moduleId: 'base.container',
-      props: {},
-      children: ['inner-container'],
-      breakpointOverrides: {},
-      childNodes: [child],
-    }
-    const vc = rawVC({ rootNode })
-    const raw = rawSite({ visualComponents: [vc] })
+    const raw = rawSite({ visualComponents: [legacyVC] })
 
     const site = validateSite(raw) as {
       visualComponents: Array<{
-        rootNode: { childNodes?: Array<{ id: string; childNodes?: Array<{ id: string }> }> }
+        tree: { rootNodeId: string; nodes: Record<string, { id: string }> }
       }>
     }
 
-    const outerChild = site.visualComponents[0]?.rootNode?.childNodes?.[0]
-    expect(outerChild?.id).toBe('inner-container')
-    // Grandchildren must survive too
-    expect(Array.isArray(outerChild?.childNodes)).toBe(true)
-    expect(outerChild?.childNodes?.[0]?.id).toBe('grand-text')
+    const vcResult = site.visualComponents[0]
+    expect(vcResult).toBeDefined()
+    // Legacy shape is converted: output has flat tree, not rootNode
+    expect(vcResult.tree).toBeDefined()
+    expect(vcResult.tree.rootNodeId).toBe('vc-root')
+    // All nodes from the nested tree must appear in the flat map
+    expect(vcResult.tree.nodes['vc-root']).toBeDefined()
+    expect(vcResult.tree.nodes['inner-container']).toBeDefined()
+    expect(vcResult.tree.nodes['grand-text']).toBeDefined()
   })
 })
 
-describe('Gate VP-9 — validateSite preserves rootNode.propBindings on VC round-trip', () => {
+describe('Gate VP-9 — validateSite preserves propBindings on VC nodes in flat tree', () => {
   /**
-   * WHY THIS GATE EXISTS
-   * ─────────────────────
-   * Code Reviewer (Contribution #638 / msg #1948) found that validatePageNode()
-   * does not pass through `propBindings?: Record<string, { paramId: string }>`.
-   * Any VC saved with param bindings (e.g. a heading node's `text` prop bound to
-   * a VC param) loses all bindings after validateSite() on reload.
-   * This silently breaks VC re-usability (the whole point of VCParam).
-   *
-   * Fix (Task #448): validatePageNode() must preserve propBindings in its
-   * return shape.
+   * propBindings on any node in the VC flat tree must survive validateSite().
+   * After the Task 3 migration, the VC tree is stored as tree.nodes (flat map),
+   * and parseVCNode() must preserve propBindings on each node.
    */
-  it('a VC rootNode with propBindings survives validateSite() with bindings intact', () => {
-    const rootNodeWithBindings = {
-      id: 'vc-root',
-      moduleId: 'base.text',
-      props: { text: 'Default Title' },
-      children: [],
-      breakpointOverrides: {},
-      // propBindings maps prop keys → VC param ids for runtime substitution
-      propBindings: {
-        text: { paramId: 'param-title-1' },
+  it('propBindings on the root node survive the round-trip', () => {
+    const flatVC = rawVC({
+      tree: {
+        rootNodeId: 'vc-root',
+        nodes: {
+          'vc-root': {
+            id: 'vc-root',
+            moduleId: 'base.text',
+            props: { text: 'Default Title' },
+            children: [],
+            breakpointOverrides: {},
+            classIds: [],
+            propBindings: {
+              text: { paramId: 'param-title-1' },
+            },
+          },
+        },
       },
-    }
-    const vc = rawVC({ rootNode: rootNodeWithBindings })
-    const raw = rawSite({ visualComponents: [vc] })
+    })
+    const raw = rawSite({ visualComponents: [flatVC] })
 
     const site = validateSite(raw) as {
       visualComponents: Array<{
-        rootNode: {
-          propBindings?: Record<string, { paramId: string }>
-        }
+        tree: { rootNodeId: string; nodes: Record<string, { propBindings?: Record<string, { paramId: string }> }> }
       }>
     }
 
-    const resultRoot = site.visualComponents[0]?.rootNode
-    expect(resultRoot).toBeDefined()
-
-    // propBindings must survive the round-trip
-    expect(resultRoot.propBindings).toBeDefined()
-    expect(resultRoot.propBindings?.text).toBeDefined()
-    expect(resultRoot.propBindings?.text?.paramId).toBe('param-title-1')
+    const vcResult = site.visualComponents[0]
+    expect(vcResult).toBeDefined()
+    const rootNode = vcResult.tree.nodes[vcResult.tree.rootNodeId]
+    expect(rootNode?.propBindings?.text?.paramId).toBe('param-title-1')
   })
 
-  it('multiple propBindings all survive the round-trip', () => {
-    const rootNode = {
-      id: 'vc-root',
-      moduleId: 'base.container',
-      props: {},
-      children: [],
-      breakpointOverrides: {},
-      propBindings: {
-        title: { paramId: 'param-title-1' },
-        subtitle: { paramId: 'param-subtitle-2' },
-        backgroundColor: { paramId: 'param-bg-3' },
+  it('multiple propBindings on root node all survive the round-trip', () => {
+    const flatVC = rawVC({
+      tree: {
+        rootNodeId: 'vc-root',
+        nodes: {
+          'vc-root': {
+            id: 'vc-root',
+            moduleId: 'base.container',
+            props: {},
+            children: [],
+            breakpointOverrides: {},
+            classIds: [],
+            propBindings: {
+              title: { paramId: 'param-title-1' },
+              subtitle: { paramId: 'param-subtitle-2' },
+              backgroundColor: { paramId: 'param-bg-3' },
+            },
+          },
+        },
       },
-    }
-    const vc = rawVC({ rootNode })
-    const raw = rawSite({ visualComponents: [vc] })
+    })
+    const raw = rawSite({ visualComponents: [flatVC] })
 
     const site = validateSite(raw) as {
       visualComponents: Array<{
-        rootNode: { propBindings?: Record<string, { paramId: string }> }
+        tree: { rootNodeId: string; nodes: Record<string, { propBindings?: Record<string, { paramId: string }> }> }
       }>
     }
 
-    const bindings = site.visualComponents[0]?.rootNode?.propBindings
-    expect(bindings).toBeDefined()
-    expect(bindings?.title?.paramId).toBe('param-title-1')
-    expect(bindings?.subtitle?.paramId).toBe('param-subtitle-2')
-    expect(bindings?.backgroundColor?.paramId).toBe('param-bg-3')
+    const vcResult = site.visualComponents[0]
+    const rootNode = vcResult?.tree.nodes[vcResult.tree.rootNodeId]
+    expect(rootNode?.propBindings?.title?.paramId).toBe('param-title-1')
+    expect(rootNode?.propBindings?.subtitle?.paramId).toBe('param-subtitle-2')
+    expect(rootNode?.propBindings?.backgroundColor?.paramId).toBe('param-bg-3')
   })
 
-  it('propBindings on childNodes also survive the round-trip', () => {
-    // propBindings can appear on any node in the VC tree, not just the root
-    const childWithBindings = {
-      id: 'heading-child',
-      moduleId: 'base.text',
-      props: { text: 'Default' },
-      children: [],
-      breakpointOverrides: {},
-      propBindings: {
-        text: { paramId: 'param-label-5' },
+  it('propBindings on child nodes in the flat map also survive the round-trip', () => {
+    const flatVC = rawVC({
+      tree: {
+        rootNodeId: 'vc-root',
+        nodes: {
+          'vc-root': {
+            id: 'vc-root',
+            moduleId: 'base.container',
+            props: {},
+            children: ['heading-child'],
+            breakpointOverrides: {},
+            classIds: [],
+          },
+          'heading-child': {
+            id: 'heading-child',
+            moduleId: 'base.text',
+            props: { text: 'Default' },
+            children: [],
+            breakpointOverrides: {},
+            classIds: [],
+            propBindings: {
+              text: { paramId: 'param-label-5' },
+            },
+          },
+        },
       },
-    }
-    const rootNode = {
-      id: 'vc-root',
-      moduleId: 'base.container',
-      props: {},
-      children: ['heading-child'],
-      breakpointOverrides: {},
-      childNodes: [childWithBindings],
-    }
-    const vc = rawVC({ rootNode })
-    const raw = rawSite({ visualComponents: [vc] })
+    })
+    const raw = rawSite({ visualComponents: [flatVC] })
 
     const site = validateSite(raw) as {
       visualComponents: Array<{
-        rootNode: {
-          childNodes?: Array<{
-            id: string
-            propBindings?: Record<string, { paramId: string }>
-          }>
-        }
+        tree: { nodes: Record<string, { id: string; propBindings?: Record<string, { paramId: string }> }> }
       }>
     }
 
-    const child = site.visualComponents[0]?.rootNode?.childNodes?.[0]
-    expect(child?.id).toBe('heading-child')
-    expect(child?.propBindings?.text?.paramId).toBe('param-label-5')
+    const childNode = site.visualComponents[0]?.tree.nodes['heading-child']
+    expect(childNode?.id).toBe('heading-child')
+    expect(childNode?.propBindings?.text?.paramId).toBe('param-label-5')
   })
 })
 
@@ -1241,98 +1294,98 @@ describe('Gate PT-4 — description field on VCParam survives validateSite round
   })
 })
 
-describe('Gate RG-9 — getReferencedComponentIds finds vcRef nested inside slotContent', () => {
-  it('a vcRef inside props.slotContent is found by getReferencedComponentIds', () => {
+describe('Gate RG-9 — getReferencedComponentIds finds all vcRefs in flat tree regardless of nesting', () => {
+  it('finds vcRefs at multiple depths in the flat tree.nodes map', () => {
     requireRG(getReferencedComponentIds)
 
-    const vcRefInsideSlot = {
-      id: 'ref-in-slot',
-      moduleId: 'base.visual-component-ref',
-      props: { componentId: 'vc-inner', propOverrides: {}, slotContent: {} },
-      children: [],
-      breakpointOverrides: {},
-    }
-
-    const parentRef = {
-      id: 'parent-ref',
-      moduleId: 'base.visual-component-ref',
-      props: {
-        componentId: 'vc-outer',
-        propOverrides: {},
-        slotContent: {
-          children: [vcRefInsideSlot],
+    // VC with two vcRef nodes: one direct child of root, one grandchild via container
+    const vc = {
+      tree: {
+        rootNodeId: 'root',
+        nodes: {
+          root: {
+            id: 'root',
+            moduleId: 'base.container',
+            props: {},
+            children: ['direct-ref', 'mid-container'],
+            breakpointOverrides: {},
+          },
+          'direct-ref': {
+            id: 'direct-ref',
+            moduleId: 'base.visual-component-ref',
+            props: { componentId: 'vc-outer', propOverrides: {} },
+            children: [],
+            breakpointOverrides: {},
+          },
+          'mid-container': {
+            id: 'mid-container',
+            moduleId: 'base.container',
+            props: {},
+            children: ['nested-ref'],
+            breakpointOverrides: {},
+          },
+          'nested-ref': {
+            id: 'nested-ref',
+            moduleId: 'base.visual-component-ref',
+            props: { componentId: 'vc-inner', propOverrides: {} },
+            children: [],
+            breakpointOverrides: {},
+          },
         },
       },
-      children: [],
-      breakpointOverrides: {},
     }
 
-    const ids = getReferencedComponentIds(parentRef)
-    // The direct ref to vc-outer
+    const ids = getReferencedComponentIds(vc)
     expect(ids.has('vc-outer')).toBe(true)
-    // The vcRef nested inside slotContent
     expect(ids.has('vc-inner')).toBe(true)
   })
 
-  it('deeply nested vcRef inside slotContent is found', () => {
+  it('all vcRefs in a flat tree with many sibling nodes are collected', () => {
     requireRG(getReferencedComponentIds)
 
-    const deepRef = {
-      id: 'deep-ref',
-      moduleId: 'base.visual-component-ref',
-      props: { componentId: 'vc-deep', propOverrides: {}, slotContent: {} },
-      children: [],
-      breakpointOverrides: {},
-    }
-
-    const shallowRef = {
-      id: 'shallow-ref',
-      moduleId: 'base.visual-component-ref',
-      props: {
-        componentId: 'vc-shallow',
-        propOverrides: {},
-        slotContent: {
-          header: [deepRef],
+    const vc = {
+      tree: {
+        rootNodeId: 'root',
+        nodes: {
+          root: { id: 'root', moduleId: 'base.container', props: {}, children: ['ref-a', 'ref-b', 'ref-c'], breakpointOverrides: {} },
+          'ref-a': { id: 'ref-a', moduleId: 'base.visual-component-ref', props: { componentId: 'vc-alpha', propOverrides: {} }, children: [], breakpointOverrides: {} },
+          'ref-b': { id: 'ref-b', moduleId: 'base.visual-component-ref', props: { componentId: 'vc-beta', propOverrides: {} }, children: [], breakpointOverrides: {} },
+          'ref-c': { id: 'ref-c', moduleId: 'base.visual-component-ref', props: { componentId: 'vc-gamma', propOverrides: {} }, children: [], breakpointOverrides: {} },
         },
       },
-      children: [],
-      breakpointOverrides: {},
     }
 
-    const rootNode = {
-      id: 'root',
-      moduleId: 'base.container',
-      props: {},
-      children: [],
-      breakpointOverrides: {},
-      childNodes: [shallowRef],
-    }
-
-    const ids = getReferencedComponentIds(rootNode)
-    expect(ids.has('vc-shallow')).toBe(true)
-    expect(ids.has('vc-deep')).toBe(true)
+    const ids = getReferencedComponentIds(vc)
+    expect(ids.has('vc-alpha')).toBe(true)
+    expect(ids.has('vc-beta')).toBe(true)
+    expect(ids.has('vc-gamma')).toBe(true)
+    expect(ids.size).toBe(3)
   })
 })
 
-describe('Gate RG-10 — wouldCreateCycle detects cycle via slotContent path', () => {
-  it('a vcRef inside slotContent that would create a cycle is detected', () => {
+describe('Gate RG-10 — wouldCreateCycle detects cycle via flat tree vcRef', () => {
+  it('a vcRef in the flat tree that would create a cycle is detected', () => {
     requireRG(wouldCreateCycle)
     requireRG(getReferencedComponentIds)
 
-    // vc-a's rootNode contains a vcRef to vc-b via slotContent
+    // vc-a's flat tree root node is a vcRef to vc-b
     const vcA = {
       id: 'vc-a',
       name: 'ComponentA',
-      rootNode: {
-        id: 'root-a',
-        moduleId: 'base.visual-component-ref',
-        props: {
-          componentId: 'vc-b',
-          propOverrides: {},
-          slotContent: {},
+      tree: {
+        rootNodeId: 'root-a',
+        nodes: {
+          'root-a': {
+            id: 'root-a',
+            moduleId: 'base.visual-component-ref',
+            props: {
+              componentId: 'vc-b',
+              propOverrides: {},
+            },
+            children: [],
+            breakpointOverrides: {},
+          },
         },
-        children: [],
-        breakpointOverrides: {},
       },
     }
 

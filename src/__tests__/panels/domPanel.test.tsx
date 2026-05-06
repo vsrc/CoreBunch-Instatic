@@ -299,15 +299,20 @@ describe('DomPanel — tree accessibility', () => {
     }
   })
 
-  it('tree node rows have compact height of 28px (Guideline #357 — compact density)', () => {
+  it('tree node rows have compact height of 28px by default (Guideline #357 — compact density)', () => {
     // Guideline #357 (user directive #1532): WCAG 2.5.5 touch target requirement
-    // is explicitly waived for editor chrome. Row height is 28px for compact density.
-    // Shared TreeRow owns the row visual contract for structural trees.
+    // is explicitly waived for editor chrome. Default row height is 28px for
+    // compact density. The `density` user preference can override to 36px via
+    // a CSS variable on the editor root, but the default contract still has to
+    // resolve to 28px when no density attribute is present.
     // (CSS Modules are not injected into happy-dom, so DOM class checks are unreliable).
     const css = readFileSync(TREE_ROW_CSS_PATH, 'utf8')
-    // Find the .row block and check height is 28px
-    const hasCompactHeight = /\.row\s*\{[^}]*height:\s*28px/s.test(css)
-    expect(hasCompactHeight).toBe(true)
+    // The .row block declares `--tree-row-h: 28px` as the compact default and
+    // applies it via `height: var(--tree-row-h)`. Both halves must be present.
+    const hasCompactDefault = /\.row\s*\{[^}]*--tree-row-h:\s*28px/s.test(css)
+    const hasHeightFromVar = /\.row\s*\{[^}]*height:\s*var\(--tree-row-h\)/s.test(css)
+    expect(hasCompactDefault).toBe(true)
+    expect(hasHeightFromVar).toBe(true)
   })
 
   it('drop indicators are CSS overlays that do not change tree row height', () => {

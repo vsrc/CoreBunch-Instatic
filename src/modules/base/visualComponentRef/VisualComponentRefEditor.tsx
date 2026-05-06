@@ -11,12 +11,17 @@
  *   the publisher's `injectClassIntoRootElement`.
  * - The site's `classes` registry is also forwarded so VCInlineTree can
  *   resolve each inlined VC node's classIds → class names.
+ *
+ * Slot content lives in the active page tree as `base.slot-instance` children
+ * of this VC ref node (Task 4 Tree Unification). We look up those nodes in
+ * the active canvas tree and build `slotInstancesByName` (slotName → child IDs)
+ * to pass to `instantiateVCAtRef`.
  */
 import React, { useCallback } from 'react'
 import type { ModuleComponentProps } from '@core/module-engine/types'
 import { useEditorStore } from '@core/editor-store/store'
 import { instantiateVCAtRef } from '@core/visualComponents/instantiate'
-import type { VCNode } from '@core/visualComponents/schemas'
+import type { BaseNode } from '@core/page-tree/baseNode'
 import { BracesIcon } from 'pixel-art-icons/icons/braces'
 import { VCInlineTree } from './VCInlineTree'
 import styles from './VisualComponentRef.module.css'
@@ -25,7 +30,6 @@ interface VisualComponentRefProps extends Record<string, unknown> {
   componentId: string
   /** Per-param value overrides — keyed by VCParam.id (stable across renames) */
   propOverrides: Record<string, unknown>
-  slotContent: Record<string, unknown[]>
 }
 
 export const VisualComponentRefEditor: React.FC<ModuleComponentProps<VisualComponentRefProps>> = ({
@@ -38,16 +42,28 @@ export const VisualComponentRefEditor: React.FC<ModuleComponentProps<VisualCompo
     props.propOverrides && typeof props.propOverrides === 'object' && !Array.isArray(props.propOverrides)
       ? (props.propOverrides as Record<string, unknown>)
       : {}
-  const slotContent =
-    props.slotContent && typeof props.slotContent === 'object' && !Array.isArray(props.slotContent)
-      ? (props.slotContent as Record<string, VCNode[]>)
-      : {}
 
   const vc = useEditorStore(
     useCallback(
       (s) => s.site?.visualComponents?.find((v) => v.id === componentId) ?? null,
       [componentId],
     ),
+  )
+
+  // Subscribe to the active canvas tree nodes so we can resolve slot-instance children.
+  // In page mode this is the active page's nodes; in VC mode it is the active VC's tree nodes.
+  const canvasNodes = useEditorStore(
+    useCallback((s): Record<string, BaseNode> | null => {
+      if (!s.site) return null
+      const { activeDocument } = s
+      if (activeDocument?.kind === 'visualComponent') {
+        const activeVc = s.site.visualComponents.find((v) => v.id === activeDocument.vcId)
+        return activeVc ? (activeVc.tree.nodes as Record<string, BaseNode>) : null
+      }
+      const pageId = activeDocument?.kind === 'page' ? activeDocument.pageId : s.activePageId
+      const page = s.site.pages.find((p) => p.id === pageId)
+      return page ? (page.nodes as Record<string, BaseNode>) : null
+    }, []),
   )
 
   // Class registry — VCInlineTree resolves each inlined node's classIds against this.
@@ -64,7 +80,25 @@ export const VisualComponentRefEditor: React.FC<ModuleComponentProps<VisualCompo
     )
   }
 
-  const { nodes, rootNodeId } = instantiateVCAtRef(vc, propOverrides, slotContent, nodeId)
+  // Build slotInstancesByName from the VC ref node's base.slot-instance children
+  // in the active canvas tree. This replaces the old slotContent prop approach.
+  const pageNodes = canvasNodes ?? {}
+  const vcRefNode = pageNodes[nodeId]
+  const slotInstancesByName: Record<string, string[]> = {}
+  if (vcRefNode) {
+    for (const childId of vcRefNode.children) {
+      const child = pageNodes[childId]
+      if (child?.moduleId === 'base.slot-instance') {
+        const slotName =
+          typeof child.props.slotName === 'string' && child.props.slotName
+            ? child.props.slotName
+            : 'children'
+        slotInstancesByName[slotName] = child.children
+      }
+    }
+  }
+
+  const { nodes, rootNodeId } = instantiateVCAtRef(vc, propOverrides, slotInstancesByName, pageNodes, nodeId)
 
   return (
     <VCInlineTree

@@ -33,5 +33,6 @@ import './link'
 import './video'
 
 // Component system modules
+import './slotInstance'
 import './slotOutlet'
 import './visualComponentRef'

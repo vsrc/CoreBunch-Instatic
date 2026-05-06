@@ -412,8 +412,196 @@ describe('executeAgentTool — addPage', () => {
     freshStore()
     const result = await executeAgentTool('addPage', { title: 'About', slug: 'about' })
     expect(result.success).toBe(true)
+    expect(result.nodeId).toBeTruthy() // returns new page id
     const pages = useEditorStore.getState().site!.pages
     expect(pages.some((p) => p.title === 'About')).toBe(true)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// renamePage / deletePage / duplicatePage — page-admin
+// ---------------------------------------------------------------------------
+
+describe('executeAgentTool — renamePage', () => {
+  it('renames an existing page', async () => {
+    freshStore()
+    const addResult = await executeAgentTool('addPage', { title: 'About', slug: 'about' })
+    const pageId = addResult.nodeId!
+
+    const result = await executeAgentTool('renamePage', {
+      pageId,
+      title: 'About Us',
+      slug: 'about-us',
+    })
+    expect(result.success).toBe(true)
+
+    const page = useEditorStore.getState().site!.pages.find((p) => p.id === pageId)!
+    expect(page.title).toBe('About Us')
+    expect(page.slug).toBe('about-us')
+  })
+
+  it('fails for a missing page id', async () => {
+    freshStore()
+    const result = await executeAgentTool('renamePage', {
+      pageId: 'nonexistent',
+      title: 'Whatever',
+    })
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('Page not found')
+  })
+})
+
+describe('executeAgentTool — deletePage', () => {
+  it('deletes a page when more than one remains', async () => {
+    freshStore()
+    const added = await executeAgentTool('addPage', { title: 'About', slug: 'about' })
+    const pageId = added.nodeId!
+
+    const result = await executeAgentTool('deletePage', { pageId })
+    expect(result.success).toBe(true)
+
+    const pages = useEditorStore.getState().site!.pages
+    expect(pages.some((p) => p.id === pageId)).toBe(false)
+  })
+
+  it('fails for a missing page id', async () => {
+    freshStore()
+    const result = await executeAgentTool('deletePage', { pageId: 'nonexistent' })
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('Page not found')
+  })
+
+  it('refuses to delete the last remaining page', async () => {
+    freshStore()
+    // freshStore creates one page; we did not add another, so it's the only one.
+    const onlyPage = useEditorStore.getState().site!.pages[0]
+    const result = await executeAgentTool('deletePage', { pageId: onlyPage.id })
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('last page')
+  })
+})
+
+describe('executeAgentTool — duplicatePage', () => {
+  it('deep-clones a page with all of its nodes under a new title and slug', async () => {
+    const { rootId } = freshStore()
+    // Add some content to the source page so the duplicate isn't trivially empty.
+    await executeAgentTool('insertNode', {
+      moduleId: 'base.text',
+      parentId: rootId,
+      props: { text: 'Hero', tag: 'h1' },
+    })
+    await executeAgentTool('insertNode', {
+      moduleId: 'base.button',
+      parentId: rootId,
+      props: { label: 'Click me' },
+    })
+
+    const sourcePage = useEditorStore.getState().site!.pages[0]
+    const sourceNodeCount = Object.keys(sourcePage.nodes).length
+
+    const result = await executeAgentTool('duplicatePage', {
+      pageId: sourcePage.id,
+      title: 'Pricing',
+      slug: 'pricing',
+    })
+    expect(result.success).toBe(true)
+    expect(result.nodeId).toBeTruthy()
+
+    const newPage = useEditorStore.getState().site!.pages.find((p) => p.id === result.nodeId)!
+    expect(newPage.title).toBe('Pricing')
+    expect(newPage.slug).toBe('pricing')
+    // Every source node has a fresh-id counterpart in the new page.
+    expect(Object.keys(newPage.nodes)).toHaveLength(sourceNodeCount)
+    // No id overlap with the source.
+    const sharedIds = Object.keys(newPage.nodes).filter((id) => sourcePage.nodes[id])
+    expect(sharedIds).toEqual([])
+  })
+
+  it('fails for a missing source page id', async () => {
+    freshStore()
+    const result = await executeAgentTool('duplicatePage', {
+      pageId: 'nonexistent',
+      title: 'Copy',
+    })
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('Page not found')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// duplicateNode
+// ---------------------------------------------------------------------------
+
+describe('executeAgentTool — duplicateNode', () => {
+  it('clones a node and inserts it immediately after the source', async () => {
+    const { rootId } = freshStore()
+    const { nodeId: sourceId } = await executeAgentTool('insertNode', {
+      moduleId: 'base.text',
+      parentId: rootId,
+      props: { text: 'Original', tag: 'h2' },
+    })
+
+    const result = await executeAgentTool('duplicateNode', { nodeId: sourceId! })
+    expect(result.success).toBe(true)
+    expect(result.nodeId).toBeTruthy()
+    expect(result.nodeId).not.toBe(sourceId)
+
+    const root = useEditorStore.getState().site!.pages[0].nodes[rootId]
+    expect(root.children).toEqual([sourceId, result.nodeId])
+    // Cloned props match source.
+    const cloned = useEditorStore.getState().site!.pages[0].nodes[result.nodeId!]
+    expect(cloned.props.text).toBe('Original')
+    expect(cloned.props.tag).toBe('h2')
+  })
+
+  it('produces N clones in arrival order when count is set', async () => {
+    const { rootId } = freshStore()
+    const { nodeId: sourceId } = await executeAgentTool('insertNode', {
+      moduleId: 'base.container',
+      parentId: rootId,
+    })
+
+    const result = await executeAgentTool('duplicateNode', {
+      nodeId: sourceId!,
+      count: 3,
+    })
+    expect(result.success).toBe(true)
+
+    const root = useEditorStore.getState().site!.pages[0].nodes[rootId]
+    // Source + 3 clones, all in order, all distinct ids.
+    expect(root.children).toHaveLength(4)
+    expect(root.children[0]).toBe(sourceId)
+    expect(new Set(root.children).size).toBe(4)
+  })
+
+  it('preserves class assignments and breakpoint overrides on clones', async () => {
+    const { rootId } = freshStore()
+    const cls = useEditorStore.getState().createClass('btn-primary', { color: '#fff' })
+    const { nodeId: sourceId } = await executeAgentTool('insertNode', {
+      moduleId: 'base.text',
+      parentId: rootId,
+      props: { text: 'Hi' },
+      classIds: [cls.id],
+    })
+    await executeAgentTool('updateNodeProps', {
+      nodeId: sourceId!,
+      breakpointId: 'mobile',
+      patch: { text: 'Hi (mobile)' },
+    })
+
+    const result = await executeAgentTool('duplicateNode', { nodeId: sourceId! })
+    expect(result.success).toBe(true)
+
+    const cloned = useEditorStore.getState().site!.pages[0].nodes[result.nodeId!]
+    expect(cloned.classIds).toContain(cls.id)
+    expect(cloned.breakpointOverrides.mobile?.text).toBe('Hi (mobile)')
+  })
+
+  it('fails for a missing source node id', async () => {
+    freshStore()
+    const result = await executeAgentTool('duplicateNode', { nodeId: 'nonexistent' })
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('duplicate')
   })
 })
 

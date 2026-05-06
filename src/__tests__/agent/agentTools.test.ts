@@ -9,8 +9,13 @@ import type { PageContext } from '@core/agent/types'
 
 function makeContext(): PageContext {
   return {
+    pageId: 'page-home',
     pageTitle: 'Home',
     rootNodeId: 'root',
+    pages: [
+      { id: 'page-home', title: 'Home', slug: 'index', active: true, isHomepage: true },
+      { id: 'page-about', title: 'About', slug: 'about', active: false, isHomepage: false },
+    ],
     selectedNodeId: null,
     activeBreakpointId: 'mobile',
     breakpoints: [

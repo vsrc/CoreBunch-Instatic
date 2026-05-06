@@ -37,6 +37,7 @@ import {
   getClassStyleSectionSetCounts,
   getActiveStyleTab,
 } from './cssControlTypes'
+import { useEditorPreference } from '@editor/preferences/editorPreferences'
 import styles from './StyleSurface.module.css'
 import sectionStyles from './Section.module.css'
 
@@ -128,14 +129,21 @@ export function StyleSurface({
     return () => container.removeEventListener('scroll', updateActive)
   }, [])
 
+  // Smooth-scroll behaviour gated by the `propertiesSmoothScroll` preference.
+  // Read fresh inside the handler so toggling the pref takes effect on the
+  // very next click without re-binding the callback.
+  const propertiesSmoothScroll = useEditorPreference('propertiesSmoothScroll')
+
   // Scroll to the section corresponding to the clicked rail button.
   const handleSectionClick = useCallback((sectionId: string) => {
     const container = scrollRef.current
     if (!container) return
 
+    const behavior: ScrollBehavior = propertiesSmoothScroll ? 'smooth' : 'auto'
+
     if (sectionId === ALL_STYLE_CATEGORY_ID || sectionId === MODULE_CATEGORY_ID) {
       setActiveAnchorId(MODULE_CATEGORY_ID)
-      container.scrollTo({ top: 0, behavior: 'smooth' })
+      container.scrollTo({ top: 0, behavior })
       return
     }
 
@@ -146,9 +154,9 @@ export function StyleSurface({
     const rect = el.getBoundingClientRect()
     container.scrollTo({
       top: rect.top - containerRect.top + container.scrollTop,
-      behavior: 'smooth',
+      behavior,
     })
-  }, [])
+  }, [propertiesSmoothScroll])
 
   const clearStyleQuery = useCallback(() => setStyleQuery(''), [])
 
@@ -329,8 +337,8 @@ function GeneratedUtilityLockedState({ cls }: { cls: CSSClass }) {
         <span className={styles.generatedUtilityName}>.{cls.name}</span>
       </div>
       <p className={styles.generatedUtilityCopy}>
-        This class is managed by the framework color settings. Assign it from the class picker,
-        and edit its token, variants, or generated utility options in the Colors panel.
+        This is a utility class. Utility classes have a single purpose and aren&apos;t meant to be
+        edited.
       </p>
       {(utility || tokenName) && (
         <div className={styles.generatedUtilityMeta}>

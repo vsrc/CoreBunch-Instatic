@@ -87,7 +87,7 @@
 
 .classSelector {
     color: var(--editor-text);
-    font-family: var(--font-mono, monospace);
+    font-family: var(--font-mono);
     font-size: 12px;
     font-weight: 600;
 }

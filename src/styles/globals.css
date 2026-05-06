@@ -8,6 +8,7 @@
  */
 :root {
     --font-sans: "Inter Variable", "Geist Variable", sans-serif;
+    --font-mono: "Geist Mono", "JetBrains Mono", ui-monospace, monospace;
 
     /* ─── Editor Surface Hierarchy (Vercel/Linear pure-black) ─────────────── */
     --editor-bg: #000000;
@@ -92,6 +93,9 @@
     --admin-panel-bg: #0b0b0b; /* admin panel surface */
     --admin-panel-border: #232323; /* admin panel border */
     --admin-input-border: #2a2a2a; /* admin input border on dark panel */
+
+    /* ─── Focus Ring ─────────────────────────────────────────────────────── */
+    --editor-focus-ring: 0 0 0 1px rgba(255, 255, 255, 0.25);
 
     /* ─── Border Radius ──────────────────────────────────────────────────── */
     --editor-radius-sm: 3px;

@@ -27,7 +27,7 @@ import {
   ContextMenuSeparator,
   ContextMenuSubmenu,
 } from '@ui/components/ContextMenu'
-import { useEditorStore } from '@core/editor-store/store'
+import { useEditorStore, selectActiveCanvasPage } from '@core/editor-store/store'
 import { useInsertModule } from '../../hooks/useInsertModule'
 import { ModulePicker } from '../ModulePicker'
 import type { AnyModuleDefinition } from '@core/module-engine/types'
@@ -83,6 +83,32 @@ export function LayerNodeContextMenu({
 
   const nodeId = nodeIdProp ?? selectedNodeId
 
+  // slot-instance structural lock-down — Task 5
+  //
+  // A `base.slot-instance` node is structural ONLY when its parent is a
+  // `base.visual-component-ref` — that is the only context in which it is
+  // managed by `syncSlotInstances` and must not be deleted/moved/renamed by
+  // hand. An orphan slot-instance anywhere else (e.g. left over from a
+  // parallel session before the picker filter was added) is just a regular
+  // node the user must be able to delete to recover.
+  const lockedSlotInstance = useEditorStore(
+    useCallback(
+      (s) => {
+        if (!nodeId) return false
+        const tree = selectActiveCanvasPage(s)
+        if (!tree) return false
+        const node = tree.nodes[nodeId]
+        if (!node || node.moduleId !== 'base.slot-instance') return false
+        // Find the parent. Locked only when parent is a VC ref.
+        const parent = Object.values(tree.nodes).find((n) =>
+          n.children.includes(nodeId),
+        )
+        return parent?.moduleId === 'base.visual-component-ref'
+      },
+      [nodeId],
+    ),
+  )
+
   useEffect(() => {
     firstItemRef.current?.focus()
   }, [])
@@ -110,41 +136,49 @@ export function LayerNodeContextMenu({
       ariaLabel="Node options"
       onClose={onClose}
     >
-      <ContextMenuItem ref={firstItemRef} onClick={onRename}>
-        <span aria-hidden="true"><EditIcon size={13} /></span>
-        Rename
-      </ContextMenuItem>
+      {/* Rename, Duplicate, Copy/Cut/Paste, Wrap, Delete are hidden for
+          slot-instance nodes — they are structural placeholders managed by
+          syncSlotInstances and must not be moved, renamed, or deleted by hand.
+          Only "Insert module here" remains so users can populate the slot. */}
+      {!lockedSlotInstance && (
+        <>
+          <ContextMenuItem ref={firstItemRef} onClick={onRename}>
+            <span aria-hidden="true"><EditIcon size={13} /></span>
+            Rename
+          </ContextMenuItem>
 
-      <ContextMenuItem onClick={onDuplicate}>
-        <span aria-hidden="true"><CopyIcon size={13} /></span>
-        Duplicate
-      </ContextMenuItem>
+          <ContextMenuItem onClick={onDuplicate}>
+            <span aria-hidden="true"><CopyIcon size={13} /></span>
+            Duplicate
+          </ContextMenuItem>
 
-      <ContextMenuSeparator />
+          <ContextMenuSeparator />
 
-      <ContextMenuItem onClick={onCopy}>
-        <span aria-hidden="true"><Copy2Icon size={13} /></span>
-        Copy
-      </ContextMenuItem>
+          <ContextMenuItem onClick={onCopy}>
+            <span aria-hidden="true"><Copy2Icon size={13} /></span>
+            Copy
+          </ContextMenuItem>
 
-      <ContextMenuItem onClick={onCut}>
-        <span aria-hidden="true"><EraserIcon size={13} /></span>
-        Cut
-      </ContextMenuItem>
+          <ContextMenuItem onClick={onCut}>
+            <span aria-hidden="true"><EraserIcon size={13} /></span>
+            Cut
+          </ContextMenuItem>
 
-      {canPaste && (
-        <ContextMenuItem onClick={onPaste}>
-          <span aria-hidden="true"><FilesStack2Icon size={13} /></span>
-          Paste
-        </ContextMenuItem>
+          {canPaste && (
+            <ContextMenuItem onClick={onPaste}>
+              <span aria-hidden="true"><FilesStack2Icon size={13} /></span>
+              Paste
+            </ContextMenuItem>
+          )}
+
+          <ContextMenuSeparator />
+
+          <ContextMenuItem onClick={onWrapInContainer}>
+            <span aria-hidden="true"><CheckboxIcon size={13} /></span>
+            Wrap in Container
+          </ContextMenuItem>
+        </>
       )}
-
-      <ContextMenuSeparator />
-
-      <ContextMenuItem onClick={onWrapInContainer}>
-        <span aria-hidden="true"><CheckboxIcon size={13} /></span>
-        Wrap in Container
-      </ContextMenuItem>
 
       <ContextMenuSubmenu
         label="Insert module here"
@@ -163,12 +197,16 @@ export function LayerNodeContextMenu({
         />
       </ContextMenuSubmenu>
 
-      <ContextMenuSeparator />
+      {!lockedSlotInstance && (
+        <>
+          <ContextMenuSeparator />
 
-      <ContextMenuItem danger onClick={onDelete}>
-        <span aria-hidden="true"><DeleteIcon size={13} /></span>
-        Delete
-      </ContextMenuItem>
+          <ContextMenuItem danger onClick={onDelete}>
+            <span aria-hidden="true"><DeleteIcon size={13} /></span>
+            Delete
+          </ContextMenuItem>
+        </>
+      )}
     </UIContextMenu>
   )
 }

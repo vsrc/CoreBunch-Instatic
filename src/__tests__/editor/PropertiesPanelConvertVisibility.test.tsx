@@ -173,18 +173,17 @@ describe('PPVC-4 — VC canvas mode → Convert button not present', () => {
       breakpointOverrides: {},
       children: ['text-in-vc'],
       classIds: [],
-      childNodes: [textVCNode],
     }
     const vc: VisualComponent = {
       id: 'vc-1',
       name: 'TestVC',
-      rootNode: vcRootNode,
+      tree: {
+        rootNodeId: 'vc-root',
+        nodes: { 'vc-root': vcRootNode, 'text-in-vc': textVCNode },
+      },
       params: [],
       breakpoints: [],
       classIds: [],
-      filePath: 'src/components/TestVC.tsx',
-      generated: true,
-      ejected: false,
       createdAt: Date.now(),
     }
 

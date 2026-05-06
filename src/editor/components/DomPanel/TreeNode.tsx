@@ -24,7 +24,11 @@ import { memo, useCallback, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useEditorStore, selectActiveCanvasPage } from '@core/editor-store/store'
 import { registry } from '@core/module-engine/registry'
-import { getNodeDisplayName } from '@core/page-tree/nodeDisplayName'
+import {
+  getNodeDisplayName,
+  getNodeHtmlTag,
+  getNodeClassNames,
+} from '@core/page-tree/nodeDisplayName'
 import { useDraggable } from '@dnd-kit/core'
 import { useDomTree } from './DomTreeContext'
 import { useDomPanelDndContext } from './DomPanelDndContext'
@@ -40,6 +44,9 @@ import {
   TreeRow,
 } from '../../ui/Tree'
 import { ModuleIcon } from '../../ui/ModuleIcon'
+import { pillAccent } from '../../ui/pillAccent'
+import { useEditorPreference } from '@editor/preferences/editorPreferences'
+import { useConfirmDelete } from '../shared/ConfirmDeleteDialog'
 import styles from './TreeNode.module.css'
 
 interface TreeNodeProps {
@@ -64,6 +71,22 @@ export const TreeNode = memo(function TreeNode({ nodeId, depth }: TreeNodeProps)
   // Subscribe to visualComponents so VC renames re-render every ref's tree row
   // (the VC name is part of the resolved displayName for visual-component-ref nodes).
   const visualComponents = useEditorStore((s) => s.site?.visualComponents)
+  // Subscribe to the class registry so renaming a class updates every row that
+  // references it. The reference is stable across unrelated edits because
+  // siteSlice mutations only swap classes when class state actually changes.
+  const classes = useEditorStore((s) => s.site?.classes)
+
+  // User preferences — controls visibility of the tag pill, class chip, and
+  // module icon beside each row. Re-evaluated on storage / preferences-changed
+  // events so toggling the Setting flips the layout instantly.
+  const showIcon = useEditorPreference('layersShowIcon')
+  const showTag = useEditorPreference('layersShowTag')
+  const showClasses = useEditorPreference('layersShowClasses')
+
+  // Delete confirmation — gated by `confirmBeforeDelete` preference. The
+  // hook returns a function that either runs `commit` immediately (pref off)
+  // or routes through the central confirm dialog (pref on).
+  const confirmDelete = useConfirmDelete()
 
   const selectNode = useEditorStore((s) => s.selectNode)
   const hoverNode = useEditorStore((s) => s.hoverNode)
@@ -109,6 +132,8 @@ export const TreeNode = memo(function TreeNode({ nodeId, depth }: TreeNodeProps)
 
   const definition = registry.get(node.moduleId)
   const displayName = getNodeDisplayName(node, definition, visualComponents)
+  const htmlTag = getNodeHtmlTag(node, definition)
+  const classNames = getNodeClassNames(node, classes)
   const hasChildren = node.children.length > 0
   // The page body is the root of the page tree — the only top-level row, so
   // collapsing it would just hide the entire document. Force it open and hide
@@ -174,10 +199,9 @@ export const TreeNode = memo(function TreeNode({ nodeId, depth }: TreeNodeProps)
     if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setIsRenaming(false) }
   }
 
-  // Module type tag: last segment after "." (e.g. "base.button" → "button")
-  const moduleType = node.moduleId.includes('.')
-    ? node.moduleId.split('.').pop()!
-    : node.moduleId
+  // Joined class chip (e.g. ".header.padding-m") — chained CSS-selector style.
+  // CSS truncates with an ellipsis when there isn't enough horizontal room.
+  const classSelectorChip = classNames.length > 0 ? `.${classNames.join('.')}` : null
 
   return (
     // Wrapper preserves the recursive tree shape. DnD refs live on TreeRow so
@@ -186,6 +210,7 @@ export const TreeNode = memo(function TreeNode({ nodeId, depth }: TreeNodeProps)
       data-node-id={nodeId}
       data-open-container-group={isOpenContainerGroup ? 'true' : undefined}
       className={cn(
+        node.moduleId === 'base.slot-instance' && styles.slotInstanceRow,
         isOpenContainerGroup && styles.openContainerGroup,
         activeId === nodeId && styles.dragSource,
       )}
@@ -250,14 +275,17 @@ export const TreeNode = memo(function TreeNode({ nodeId, depth }: TreeNodeProps)
           visible={hasChildren && !isRoot}
         />
 
-        {/* Module icon — resolved from the module declaration via ModuleIcon */}
-        <TreeIconSlot iconSize={11} iconColor="var(--editor-text-subtle)">
-          <ModuleIcon
-            module={definition}
-            size={11}
-            color="var(--editor-text-subtle)"
-          />
-        </TreeIconSlot>
+        {/* Module icon — resolved from the module declaration via ModuleIcon.
+            Hidden when the user turns off the `layersShowIcon` preference. */}
+        {showIcon && (
+          <TreeIconSlot iconSize={11} iconColor="var(--editor-text-subtle)">
+            <ModuleIcon
+              module={definition}
+              size={11}
+              color="var(--editor-text-subtle)"
+            />
+          </TreeIconSlot>
+        )}
 
         {/* Node label — inline editable when renaming */}
         {isRenaming ? (
@@ -280,16 +308,37 @@ export const TreeNode = memo(function TreeNode({ nodeId, depth }: TreeNodeProps)
           />
         ) : (
           <TreeLabelGroup>
+            {/* HTML tag pill — gradient-tinted chip placed BEFORE the label,
+                using the same accent palette as the ClassPicker (mint / lilac
+                / sky / peach) so a tag named "header" renders in the same
+                tint as a class named "header". Surfaced from the module's
+                `htmlTag` hint; hidden when the module declines to declare a
+                tag (visual-component-ref, slot, loop, etc.) or when the user
+                turns off the `layersShowTag` preference. */}
+            {showTag && htmlTag && (
+              <TreeMeta
+                aria-hidden="true"
+                data-accent={pillAccent(htmlTag)}
+                className={styles.tagPill}
+              >
+                {htmlTag}
+              </TreeMeta>
+            )}
             <TreeLabel>
               {displayName}
             </TreeLabel>
-            {/* Module type annotation — React DevTools-style <type> chip.
-                Shown when the user has set a custom label (so the module type
-                is still visible alongside it). Hidden when displayName already
-                IS the registry name (no label set) to avoid redundancy. */}
-            {node.label && (
-              <TreeMeta aria-hidden="true" className={styles.moduleTag}>
-                &lt;{moduleType}&gt;
+            {/* Class selector chip — chained-dot CSS selector style after the
+                label (".header.padding-m"). Truncates with an ellipsis when
+                space runs out so the row's primary info (tag + name) stays
+                readable on narrow panels. Hidden when `layersShowClasses` is
+                turned off. */}
+            {showClasses && classSelectorChip && (
+              <TreeMeta
+                aria-hidden="true"
+                title={classSelectorChip}
+                className={styles.classChip}
+              >
+                {classSelectorChip}
               </TreeMeta>
             )}
           </TreeLabelGroup>
@@ -327,7 +376,14 @@ export const TreeNode = memo(function TreeNode({ nodeId, depth }: TreeNodeProps)
           y={contextMenu.y}
           nodeId={nodeId}
           onClose={() => setContextMenu(null)}
-          onDelete={() => { deleteNode(nodeId); setContextMenu(null) }}
+          onDelete={() => {
+            setContextMenu(null)
+            confirmDelete({
+              title: 'Delete layer?',
+              description: `${displayName} and any of its children will be removed. This can be undone with Ctrl/Cmd+Z.`,
+              commit: () => deleteNode(nodeId),
+            })
+          }}
           onDuplicate={() => { duplicateNode(nodeId); setContextMenu(null) }}
           onRename={() => { setContextMenu(null); openRename() }}
           onWrapInContainer={() => {

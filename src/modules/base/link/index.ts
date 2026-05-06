@@ -48,6 +48,8 @@ export const LinkModule: ModuleDefinition<LinkProps> = {
 
   component: LinkEditor,
 
+  htmlTag: 'a',
+
   render: (props, renderedChildren) => {
     const href = safeUrl(props.href)
     const rel = props.target === '_blank' ? ' rel="noopener noreferrer"' : ''

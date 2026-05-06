@@ -5,10 +5,11 @@
  *
  * Two pure functions:
  *
- *   getReferencedComponentIds(node)
- *     Walks a VC node tree and returns the set of all componentIds
- *     referenced by any base.visual-component-ref nodes in that tree.
- *     Uses childNodes[] for tree traversal (VC nested-tree format).
+ *   getReferencedComponentIds(vc)
+ *     Iterates the VC's flat tree (vc.tree.nodes) and returns the set of all
+ *     componentIds referenced by any base.visual-component-ref nodes in that tree.
+ *     Accepts `unknown` so it can safely receive raw data from validateSite
+ *     without requiring a fully-typed VisualComponent.
  *
  *   wouldCreateCycle(visualComponents, hostVcId, candidateChildVcId)
  *     Returns true if adding a componentRef to candidateChildVcId inside
@@ -30,61 +31,46 @@
 // ---------------------------------------------------------------------------
 
 /**
- * Walk a VC node tree and collect all componentIds referenced by
- * base.visual-component-ref nodes anywhere in the tree.
+ * Iterate a VC's flat tree (vc.tree.nodes) and collect all componentIds
+ * referenced by base.visual-component-ref nodes anywhere in the tree.
  *
- * Accepts `unknown` so it can safely receive raw data from test fixtures
- * and validateSite without requiring a fully-typed PageNode.
+ * Accepts `unknown` so it can safely receive raw/untyped data from
+ * validateSite and wouldCreateCycle without requiring a fully-typed VisualComponent.
  *
- * Tree traversal uses `childNodes: unknown[]` (VC-tree nested format) and
- * `props.slotContent: Record<string, unknown[]>` (slot children on vcRef nodes).
+ * Expected shape: { tree: { nodes: Record<string, { moduleId, props? }> } }
  *
- * @param node - Root node of the tree to walk (or any subtree node).
- * @returns Set of componentId strings found in the tree.
+ * @param vc - A VisualComponent (or unknown value from an untyped context).
+ * @returns Set of componentId strings found in the VC's flat tree.
  */
-export function getReferencedComponentIds(node: unknown): Set<string> {
+export function getReferencedComponentIds(vc: unknown): Set<string> {
   const result = new Set<string>()
+  if (!vc || typeof vc !== 'object' || Array.isArray(vc)) return result
 
-  function walk(n: unknown): void {
-    if (!n || typeof n !== 'object' || Array.isArray(n)) return
-    const obj = n as Record<string, unknown>
+  const vcObj = vc as Record<string, unknown>
+  const tree = vcObj.tree
+  if (!tree || typeof tree !== 'object' || Array.isArray(tree)) return result
 
-    // If this is a visualComponentRef node, collect its componentId
+  const treeObj = tree as Record<string, unknown>
+  const nodes = treeObj.nodes
+  if (!nodes || typeof nodes !== 'object' || Array.isArray(nodes)) return result
+
+  for (const node of Object.values(nodes as Record<string, unknown>)) {
+    if (!node || typeof node !== 'object' || Array.isArray(node)) continue
+    const n = node as Record<string, unknown>
+
     if (
-      obj.moduleId === 'base.visual-component-ref' &&
-      obj.props &&
-      typeof obj.props === 'object' &&
-      !Array.isArray(obj.props)
+      n.moduleId === 'base.visual-component-ref' &&
+      n.props &&
+      typeof n.props === 'object' &&
+      !Array.isArray(n.props)
     ) {
-      const componentId = (obj.props as Record<string, unknown>).componentId
+      const componentId = (n.props as Record<string, unknown>).componentId
       if (typeof componentId === 'string' && componentId.length > 0) {
         result.add(componentId)
       }
     }
-
-    // Recurse into childNodes (VC nested-tree format)
-    if (Array.isArray(obj.childNodes)) {
-      for (const child of obj.childNodes) {
-        walk(child)
-      }
-    }
-
-    // Recurse into slotContent (Record<string, PageNode[]> — slot children on vcRef nodes)
-    if (obj.props && typeof obj.props === 'object' && !Array.isArray(obj.props)) {
-      const propsObj = obj.props as Record<string, unknown>
-      if (propsObj.slotContent && typeof propsObj.slotContent === 'object' && !Array.isArray(propsObj.slotContent)) {
-        for (const slotNodes of Object.values(propsObj.slotContent as Record<string, unknown>)) {
-          if (Array.isArray(slotNodes)) {
-            for (const child of slotNodes) {
-              walk(child)
-            }
-          }
-        }
-      }
-    }
   }
 
-  walk(node)
   return result
 }
 
@@ -132,7 +118,7 @@ export function wouldCreateCycle(
 
   /**
    * Collect all VC IDs transitively reachable from vcId by following
-   * componentRef edges through each VC's rootNode tree.
+   * componentRef edges through each VC's flat tree.nodes.
    * Uses iterative BFS to avoid stack overflow on deep graphs.
    */
   function transitivelyReachable(startVcId: string): Set<string> {
@@ -147,8 +133,7 @@ export function wouldCreateCycle(
       const vc = vcMap.get(current)
       if (!vc) continue
 
-      const rootNode = (vc as Record<string, unknown>).rootNode
-      const directRefs = getReferencedComponentIds(rootNode)
+      const directRefs = getReferencedComponentIds(vc)
 
       for (const refId of directRefs) {
         if (!visited.has(refId)) {

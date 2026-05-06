@@ -1,4 +1,4 @@
-import type { SiteDocument, PageNode } from '../page-tree/schemas'
+import type { SiteDocument } from '../page-tree/schemas'
 import type { AnyModuleDefinition, IModuleRegistry, ModuleDependencies } from './types'
 import type { SitePackageJson } from '../site-dependencies/manifest'
 import { isSafePackageName } from '../site-dependencies/packageNames'
@@ -100,30 +100,10 @@ export function getSiteModuleDependencyUsage(
   }
 
   for (const component of site.visualComponents) {
-    walkNestedNode(component.rootNode, recordModule)
+    for (const node of Object.values(component.tree.nodes)) {
+      recordModule(node.moduleId)
+    }
   }
 
   return usage
-}
-
-function walkNestedNode(
-  node: Pick<PageNode, 'moduleId' | 'childNodes'> | unknown,
-  visit: (moduleId: string) => void,
-): void {
-  if (!isNodeLike(node)) return
-
-  visit(node.moduleId)
-
-  for (const child of node.childNodes ?? []) {
-    walkNestedNode(child, visit)
-  }
-}
-
-function isNodeLike(value: unknown): value is Pick<PageNode, 'moduleId' | 'childNodes'> {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'moduleId' in value &&
-    typeof value.moduleId === 'string'
-  )
 }

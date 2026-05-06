@@ -20,7 +20,7 @@
  *
  * Outer dashed rectangle = margin, inner solid rectangle = padding,
  * each crossed by corner-to-corner diagonals (dashed for margin, solid
- * for padding). The widget is locked to a square aspect ratio with the
+ * for padding). The widget is locked to a 4:3 aspect ratio with the
  * padding box centred at exactly 50% of the margin box, so the diagonals
  * always pass through the padding's outer corners — classic Chrome
  * DevTools box-model look. Side inputs sit at the 12.5% line of each
@@ -34,13 +34,15 @@
  * Storage model:
  *   - The control owns paddingTop/Right/Bottom/Left and marginTop/Right/
  *     Bottom/Left as the source of truth.
- *   - The legacy `padding` / `margin` shorthand values are read for initial
- *     display (parsed into 4 sides) and **cleared** on first edit so the
- *     stored shape stays unambiguous.
+ *   - There is no shorthand `padding` / `margin` key in storage — that
+ *     ambiguity is removed at the schema level. The publisher collapses
+ *     the 4 sides into the CSS shorthand (`padding: 20px 0;`) at emission
+ *     time (see `bagToCSS` in `core/publisher/classCss.ts`).
  */
 
 import {
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -56,6 +58,7 @@ import { ContextMenu, ContextMenuItem } from '@ui/components/ContextMenu'
 import { LinkIcon } from 'pixel-art-icons/icons/link'
 import { CloseIcon } from 'pixel-art-icons/icons/close'
 import { cn } from '@ui/cn'
+import { useEditorPreference } from '@editor/preferences/editorPreferences'
 import styles from './SpacingBoxControl.module.css'
 
 // ---------------------------------------------------------------------------
@@ -106,51 +109,6 @@ interface SpacingToken {
 function sideKey(box: Box, side: Side): keyof CSSPropertyBag {
   // Build "paddingTop", "marginRight", etc.
   return `${box}${side[0].toUpperCase()}${side.slice(1)}` as keyof CSSPropertyBag
-}
-
-function shorthandKey(box: Box): keyof CSSPropertyBag {
-  return box
-}
-
-// ---------------------------------------------------------------------------
-// Shorthand parsing — turns "12px 8px" into {top:12px, right:8px, bottom:12px, left:8px}
-// ---------------------------------------------------------------------------
-
-function parseShorthand(input: string): Record<Side, string> {
-  const fallback = { top: '', right: '', bottom: '', left: '' }
-  const trimmed = input.trim()
-  if (!trimmed) return fallback
-
-  // Split on whitespace but keep var(--…) and calc(…) tokens intact.
-  const parts: string[] = []
-  let depth = 0
-  let buf = ''
-  for (const ch of trimmed) {
-    if (ch === '(') depth++
-    else if (ch === ')') depth = Math.max(0, depth - 1)
-    if (depth === 0 && /\s/.test(ch)) {
-      if (buf) {
-        parts.push(buf)
-        buf = ''
-      }
-    } else {
-      buf += ch
-    }
-  }
-  if (buf) parts.push(buf)
-
-  switch (parts.length) {
-    case 1:
-      return { top: parts[0], right: parts[0], bottom: parts[0], left: parts[0] }
-    case 2:
-      return { top: parts[0], right: parts[1], bottom: parts[0], left: parts[1] }
-    case 3:
-      return { top: parts[0], right: parts[1], bottom: parts[2], left: parts[1] }
-    case 4:
-      return { top: parts[0], right: parts[1], bottom: parts[2], left: parts[3] }
-    default:
-      return fallback
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -290,13 +248,11 @@ function extractVarName(value: string): string | null {
 // ---------------------------------------------------------------------------
 
 interface BoxState {
-  /** Effective per-side values (parsed from explicit side OR shorthand). */
+  /** Per-side stored values (empty string when the side is unset). */
   effective: Record<Side, string>
-  /** Whether each side has an explicit stored value (vs derived from shorthand). */
+  /** Whether each side has an explicit stored value. */
   storedFlags: Record<Side, boolean>
-  /** Whether the original shorthand is set (legacy data). */
-  hasShorthand: boolean
-  /** All four effective values are equal (and at least one is non-empty). */
+  /** All four sides are equal (and at least one is non-empty). */
   isUniform: boolean
 }
 
@@ -304,9 +260,6 @@ function computeBoxState(
   storedStyles: Record<string, unknown>,
   box: Box,
 ): BoxState {
-  const shorthand = pickString(storedStyles[shorthandKey(box)])
-  const sidesFromShorthand = parseShorthand(shorthand)
-
   const effective: Record<Side, string> = { top: '', right: '', bottom: '', left: '' }
   const storedFlags: Record<Side, boolean> = {
     top: false,
@@ -320,8 +273,6 @@ function computeBoxState(
     if (explicit) {
       effective[side] = explicit
       storedFlags[side] = true
-    } else if (sidesFromShorthand[side]) {
-      effective[side] = sidesFromShorthand[side]
     }
   }
 
@@ -329,12 +280,7 @@ function computeBoxState(
   const hasAny = values.some((v) => v !== '')
   const isUniform = hasAny && values.every((v) => v === values[0])
 
-  return {
-    effective,
-    storedFlags,
-    hasShorthand: shorthand !== '',
-    isUniform,
-  }
+  return { effective, storedFlags, isUniform }
 }
 
 function pickString(value: unknown): string {
@@ -408,9 +354,6 @@ export function SpacingBoxControl({
       const sidesToWrite: Side[] =
         side === 'all' || isLinked ? [...SIDES] : [side]
 
-      // Always clear the legacy shorthand so the stored shape is unambiguous.
-      onChange(shorthandKey(box), undefined)
-
       for (const s of sidesToWrite) {
         onChange(sideKey(box, s), resolved)
       }
@@ -421,7 +364,6 @@ export function SpacingBoxControl({
   // ── Clear a box ────────────────────────────────────────────────────────
   const clearBox = useCallback(
     (box: Box) => {
-      onRemove(shorthandKey(box))
       for (const s of SIDES) onRemove(sideKey(box, s))
     },
     [onRemove],
@@ -528,7 +470,7 @@ function SpacingBox({
   nested,
 }: SpacingBoxProps) {
   // Set count (used to enable/disable Clear button).
-  const setCount = SIDES.filter((s) => state.storedFlags[s]).length + (state.hasShorthand ? 1 : 0)
+  const setCount = SIDES.filter((s) => state.storedFlags[s]).length
 
   return (
     <div className={cn(styles.box, styles[`box--${box}`])} data-linked={linked ? 'true' : undefined}>
@@ -579,7 +521,7 @@ function SpacingBox({
             side={side}
             value={state.effective[side]}
             placeholder={fallback.effective[side]}
-            isSet={state.storedFlags[side] || state.hasShorthand}
+            isSet={state.storedFlags[side]}
             isLinkedTarget={linked && state.isUniform}
             isFocusedTarget={focused === side}
             tokens={tokens}
@@ -604,6 +546,14 @@ function SpacingBox({
 // BoxDiagonals — SVG overlay drawing two corner-to-corner diagonals.
 // preserveAspectRatio="none" stretches the lines to the actual box size so
 // they reach exact corners. Stroke width is held in CSS.
+//
+// allowed: non-icon SVG (geometric overlay)
+// This is a layout overlay — two diagonal lines that scale with the
+// box and switch between solid/dashed for the padding/margin layers.
+// It is not iconography (Constraint #348 is about icons) and there is
+// no equivalent in the pixel-art-icons catalog. CSS gradients can't
+// produce a true 1px non-scaling stroke or scalable dashed diagonals,
+// so SVG is the right primitive here.
 // ---------------------------------------------------------------------------
 
 function BoxDiagonals({ dashed }: { dashed: boolean }) {
@@ -668,6 +618,12 @@ function SideInput({
   const display = displayValue(value, tokens)
   const placeholderDisplay = displayValue(placeholder, tokens) || '0'
 
+  // The shared "preview suggestions on hover" preference. When off, hovering
+  // a token in the dropdown does NOT trigger the canvas preview — but typing
+  // a value still does (live as-you-type preview is a separate UX feature
+  // that the user did not opt out of).
+  const hoverPreviewEnabled = useEditorPreference('hoverPreview')
+
   // Local draft so we don't fire onChange on every keystroke (which would
   // round-trip through Immer + re-validate every press).
   const [draft, setDraft] = useState(display)
@@ -711,13 +667,28 @@ function SideInput({
   // Preview a hovered token's value on the canvas. Only the resolved value
   // is forwarded — the parent decides which sides the preview affects
   // (single side or all four, depending on the linked toggle).
+  //
+  // Gated by the `hoverPreview` preference so users who don't want the
+  // canvas to flicker as they scan the autocomplete list can opt out.
+  // Note: this only gates HOVER previews — the as-you-type preview below
+  // (`previewDraft`) is intentionally always on, since it reflects an
+  // explicit edit the user is making.
   const previewToken = useCallback(
     (rawValue: string) => {
+      if (!hoverPreviewEnabled) return
       const resolved = resolveTypedValue(rawValue, tokens)
       onPreview(resolved)
     },
-    [tokens, onPreview],
+    [hoverPreviewEnabled, tokens, onPreview],
   )
+
+  // Defensive: if the preference is toggled off while a hover preview is
+  // active (e.g. user flips the toggle in another tab), clear the canvas
+  // preview so it doesn't stick around. Mirrors the same pattern in
+  // ClassPicker.
+  useEffect(() => {
+    if (!hoverPreviewEnabled) onClearPreview()
+  }, [hoverPreviewEnabled, onClearPreview])
 
   // Live-preview a typed draft. Updates the canvas on every keystroke so
   // users see their values applied without having to press Enter / Tab /

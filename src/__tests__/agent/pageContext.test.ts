@@ -58,6 +58,10 @@ beforeEach(() => {
 
 afterEach(() => {
   registry.unregister(DYNAMIC_MODULE_ID)
+  // One of these tests calls setActiveBreakpoint('mobile'); reset to the
+  // default so the next test file doesn't inherit a non-desktop breakpoint
+  // (PropertiesPanel routes prop writes to breakpointOverrides at non-desktop).
+  useEditorStore.setState({ activeBreakpointId: 'desktop' })
 })
 
 describe('buildPageContext — dynamic module registry', () => {
@@ -129,5 +133,25 @@ describe('buildPageContext — dynamic module registry', () => {
       width: 375,
       icon: 'smartphone',
     })
+  })
+
+  it('includes the full page list with active + isHomepage flags', () => {
+    const page = freshSite()
+    // Add a second page so the list isn't trivial.
+    useEditorStore.getState().addPage('About', 'about')
+    // Re-activate the original home page so we can assert `active`.
+    useEditorStore.setState({ activePageId: page.id })
+
+    const context = buildPageContext(useEditorStore.getState(), page)
+
+    expect(context.pageId).toBe(page.id)
+    expect(context.pages).toHaveLength(2)
+    const home = context.pages.find((p) => p.id === page.id)
+    const about = context.pages.find((p) => p.title === 'About')
+    expect(home).toBeDefined()
+    expect(home?.active).toBe(true)
+    expect(home?.isHomepage).toBe(true) // freshSite's home gets slug 'index'
+    expect(about?.active).toBe(false)
+    expect(about?.isHomepage).toBe(false)
   })
 })

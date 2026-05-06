@@ -34,9 +34,10 @@
 
 .frame {
     position: relative;
+    --preview-width: 100%;
     display: flex;
     align-items: stretch;
-    width: var(--preview-width, 100%);
+    width: var(--preview-width);
     height: 100%;
 }
 

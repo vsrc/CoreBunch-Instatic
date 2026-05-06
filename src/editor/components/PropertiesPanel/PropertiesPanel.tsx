@@ -59,6 +59,7 @@ import { PanelHeader } from '../shared/PanelHeader'
 import { useDraggablePanel } from '../../hooks/useDraggablePanel'
 import { Button } from '@ui/components/Button'
 import { EmptyState } from '@ui/components/EmptyState'
+import { useEditorPreference } from '@editor/preferences/editorPreferences'
 import { Input } from '@ui/components/Input'
 import { OpenIcon } from 'pixel-art-icons/icons/open'
 import { DockIcon } from 'pixel-art-icons/icons/dock'
@@ -590,6 +591,8 @@ function SelectorInspector({ cls, activeBreakpointId }: SelectorInspectorProps) 
   const [activeAnchorId, setActiveAnchorId] = useState(ALL_STYLE_CATEGORY_ID)
   const [styleQuery, setStyleQuery] = useState('')
   const clearStyleQuery = useCallback(() => setStyleQuery(''), [])
+  // Smooth-scroll behaviour gated by the `propertiesSmoothScroll` preference.
+  const propertiesSmoothScroll = useEditorPreference('propertiesSmoothScroll')
 
   // Derive active anchor from scroll position.
   useEffect(() => {
@@ -621,9 +624,10 @@ function SelectorInspector({ cls, activeBreakpointId }: SelectorInspectorProps) 
   const handleSectionClick = useCallback((sectionId: string) => {
     const container = scrollRef.current
     if (!container) return
+    const behavior: ScrollBehavior = propertiesSmoothScroll ? 'smooth' : 'auto'
     if (sectionId === ALL_STYLE_CATEGORY_ID) {
       setActiveAnchorId(ALL_STYLE_CATEGORY_ID)
-      container.scrollTo({ top: 0, behavior: 'smooth' })
+      container.scrollTo({ top: 0, behavior })
       return
     }
     setActiveAnchorId(sectionId)
@@ -631,8 +635,8 @@ function SelectorInspector({ cls, activeBreakpointId }: SelectorInspectorProps) 
     if (!el) return
     const containerRect = container.getBoundingClientRect()
     const rect = el.getBoundingClientRect()
-    container.scrollTo({ top: rect.top - containerRect.top + container.scrollTop, behavior: 'smooth' })
-  }, [])
+    container.scrollTo({ top: rect.top - containerRect.top + container.scrollTop, behavior })
+  }, [propertiesSmoothScroll])
 
   if (isGeneratedClassLocked(cls)) {
     return (

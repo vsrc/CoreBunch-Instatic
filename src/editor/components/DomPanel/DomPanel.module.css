@@ -4,8 +4,10 @@
 .panel {
     position: absolute;
     /* Position driven by --panel-x / --panel-y CSS vars (useDraggablePanel) */
-    left: var(--panel-x, 16px);
-    top: var(--panel-y, 16px);
+    --panel-x: 16px;
+    --panel-y: 16px;
+    left: var(--panel-x);
+    top: var(--panel-y);
     z-index: 50;
     max-height: 80vh;
     overflow: hidden;
@@ -87,4 +89,55 @@
     padding: 16px;
     color: var(--editor-text-subtle);
     font-size: 12px;
+}
+
+/* Search-result row meta — same visual treatment as the live tree row badges
+   so a user looking at a "search by class" result sees the same chip layout
+   they would see in the tree itself. Mirrors TreeNode.module.css → .tagPill
+   / .classChip. */
+.searchTagPill {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 6px;
+    border-radius: 6px;
+    --pill-bg: transparent;
+    --pill-color: var(--editor-text-muted);
+    background: linear-gradient(0deg, var(--pill-bg), transparent);
+    color: var(--pill-color);
+    font-family: monospace;
+    font-size: 10px;
+    font-weight: 620;
+    letter-spacing: 0.01em;
+    line-height: 1.4;
+}
+
+.searchTagPill[data-accent="mint"] {
+    --pill-color: var(--rail-tint-mint);
+    --pill-bg: rgba(142, 230, 200, 0.14);
+}
+
+.searchTagPill[data-accent="lilac"] {
+    --pill-color: var(--rail-tint-lilac);
+    --pill-bg: rgba(200, 182, 255, 0.14);
+}
+
+.searchTagPill[data-accent="sky"] {
+    --pill-color: var(--rail-tint-sky);
+    --pill-bg: rgba(155, 220, 255, 0.13);
+}
+
+.searchTagPill[data-accent="peach"] {
+    --pill-color: var(--rail-tint-peach);
+    --pill-bg: rgba(255, 199, 168, 0.13);
+}
+
+.searchClassChip {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--editor-text-muted);
+    font-family: monospace;
 }

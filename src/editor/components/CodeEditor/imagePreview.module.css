@@ -85,7 +85,7 @@
 .binaryMeta {
   font-size: 10px;
   color: var(--editor-border-med);
-  font-family: var(--font-mono, monospace);
+  font-family: var(--font-mono);
 }
 
 .binaryHint {

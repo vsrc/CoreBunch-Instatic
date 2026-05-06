@@ -151,6 +151,7 @@
 
 .colorTokenOptionSwatch {
     display: block;
+    --color-token-option-value: var(--editor-bg);
     width: 18px;
     height: 18px;
     border-radius: 7px;
@@ -167,7 +168,7 @@
             transparent 25% 75%,
             rgb(255 255 255 / 0.12) 75%
         ),
-        var(--color-token-option-value, var(--editor-bg));
+        var(--color-token-option-value);
     background-position:
         0 0,
         5px 5px,

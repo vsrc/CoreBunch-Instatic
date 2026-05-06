@@ -193,7 +193,7 @@
 .listItemSubtitle {
   font-size: 11px;
   color: var(--editor-text-subtle);
-  font-family: var(--font-mono, monospace);
+  font-family: var(--font-mono);
 }
 
 .listItemActions {
@@ -261,7 +261,7 @@
   border-radius: 4px;
   font-size: 10px;
   color: var(--editor-text-secondary);
-  font-family: var(--font-mono, monospace);
+  font-family: var(--font-mono);
   white-space: nowrap;
 }
 
@@ -271,6 +271,21 @@
 }
 
 /* ── PreferencesSection ──────────────────────────────────────────────────── */
+.preferenceCategoryDesc {
+  font-size: 11px;
+  color: var(--editor-text-subtle);
+  margin: 0 0 8px;
+  line-height: 1.5;
+}
+
+/* Select control inside a preference row — give it a fixed width so the row
+   layout (label + control on the right) stays consistent across boolean rows
+   (which use a fixed-size Switch) and select rows. */
+.preferenceSelect {
+  flex-shrink: 0;
+  width: 180px;
+}
+
 .toggleRow {
   display: flex;
   align-items: flex-start;
@@ -362,7 +377,7 @@
   margin: 0;
   font-size: 12px;
   color: var(--editor-text);
-  font-family: var(--font-mono, monospace);
+  font-family: var(--font-mono);
 }
 
 .pubErrorNote {
@@ -398,7 +413,7 @@
 .pageItemSlug {
   font-size: 11px;
   color: var(--editor-text-subtle);
-  font-family: var(--font-mono, monospace);
+  font-family: var(--font-mono);
 }
 
 .errorText {

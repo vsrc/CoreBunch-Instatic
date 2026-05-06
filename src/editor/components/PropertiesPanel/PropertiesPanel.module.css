@@ -2,8 +2,10 @@
 
 .panel {
     position: absolute;
-    left: var(--panel-x, calc(100% - 376px));
-    top: var(--panel-y, 16px);
+    --panel-x: calc(100% - 376px);
+    --panel-y: 16px;
+    left: var(--panel-x);
+    top: var(--panel-y);
     bottom: 12px;
     z-index: 50;
     display: flex;

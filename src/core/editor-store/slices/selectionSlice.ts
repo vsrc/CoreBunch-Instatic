@@ -81,27 +81,15 @@ function findSelectableNode(state: EditorStore, nodeId: string): BaseNode | null
   const activeDocument = state.activeDocument
   if (activeDocument?.kind === 'visualComponent') {
     const component = state.site.visualComponents?.find((vc) => vc.id === activeDocument.vcId)
-    const node = component ? findNodeInTree(component.rootNode, nodeId) : null
-    if (node) return node
+    if (component) {
+      const node = component.tree.nodes[nodeId]
+      if (node) return node
+    }
   }
 
   for (const page of state.site.pages) {
     const node = page.nodes[nodeId]
     if (node) return node
-  }
-
-  return null
-}
-
-function findNodeInTree<T extends { id: string; childNodes?: T[] }>(
-  node: T,
-  nodeId: string,
-): T | null {
-  if (node.id === nodeId) return node
-
-  for (const child of node.childNodes ?? []) {
-    const match = findNodeInTree(child, nodeId)
-    if (match) return match
   }
 
   return null

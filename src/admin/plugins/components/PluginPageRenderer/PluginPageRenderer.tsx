@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { Button } from '@ui/components/Button'
+import { Checkbox } from '@ui/components/Checkbox'
 import { ErrorBoundary } from '@ui/components/ErrorBoundary'
 import type {
   PluginAdminPageRoute,
@@ -306,12 +307,11 @@ function PluginResourcePage({ page }: { page: ResourcePluginPageRoute }) {
                     }))}
                   />
                 ) : field.type === 'boolean' ? (
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     checked={Boolean(formData[field.id])}
-                    onChange={(event) => setFormData((current) => ({
+                    onCheckedChange={(next) => setFormData((current) => ({
                       ...current,
-                      [field.id]: event.target.checked,
+                      [field.id]: next,
                     }))}
                   />
                 ) : (

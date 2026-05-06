@@ -2,7 +2,6 @@ import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
 import { subscribeWithSelector } from 'zustand/middleware'
 import type { Page, PageNode } from '../page-tree/schemas'
-import type { BaseNode } from '../page-tree/baseNode'
 import type { VisualComponent } from '../visualComponents/schemas'
 import type { EditorStore } from './types'
 import { createSiteSlice } from './slices/siteSlice'
@@ -100,32 +99,19 @@ export const selectRightSidebarExpanded = (s: EditorStore) =>
 const _vcVirtualPageCache = new WeakMap<object, Page>()
 
 /**
- * Flatten a VC's nested rootNode tree into a flat PageNode dict.
- * Uses the same PageNode shape as Pages (childNodes are iterated recursively).
+ * Build a virtual Page from a VC's flat tree for canvas rendering.
+ *
+ * VCNode (= BaseNode) is structurally compatible with PageNode (which adds
+ * only optional `dynamicBindings`), so the cast is safe. The virtual page
+ * lets NodeRenderer + BreakpointFrame work unchanged in VC edit mode.
  */
 function _flattenVCToVirtualPage(vc: VisualComponent): Page {
-  const nodes: Record<string, PageNode> = {}
-
-  // Accepts any node type rooted at BaseNode — VCNode and PageNode both qualify.
-  // The single `as PageNode` cast is safe because VCNode is structurally compatible
-  // with PageNode (both extend BaseNode; PageNode only adds optional fields).
-  function visit<T extends BaseNode & { childNodes?: T[] }>(node: T): void {
-    nodes[node.id] = node as PageNode
-    if (node.childNodes) {
-      for (const child of node.childNodes) {
-        visit(child)
-      }
-    }
-  }
-
-  visit(vc.rootNode)
-
   return {
     id: `vc-virtual:${vc.id}`,
     title: vc.name,
     slug: `components/${vc.name}`,
-    rootNodeId: vc.rootNode.id,
-    nodes,
+    rootNodeId: vc.tree.rootNodeId,
+    nodes: vc.tree.nodes as Record<string, PageNode>,
   }
 }
 
@@ -151,8 +137,8 @@ export const selectActiveCanvasPage = (s: EditorStore): Page | null => {
     if (!vc) return null
 
     // WeakMap key: vc object — Immer gives a new ref on ANY field change (name,
-    // params, rootNode…). Keying on vc.rootNode would miss renames because Immer reuses
-    // rootNode when only top-level VC fields change (O-2 / CR #666 finding).
+    // params, tree…). Keying on vc.tree would miss renames because Immer reuses
+    // the tree object when only top-level VC fields change (O-2 / CR #666 finding).
     const cached = _vcVirtualPageCache.get(vc as object)
     if (cached) return cached
 

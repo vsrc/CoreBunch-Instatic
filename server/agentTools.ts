@@ -16,8 +16,10 @@ interface PageBuilderToolContext {
   modules: PageContext['availableModules']
   classes: PageContext['classes']
   breakpoints: PageContext['breakpoints']
+  pages: PageContext['pages']
   activeBreakpointId: string
   page: {
+    pageId: string
     pageTitle: string
     rootNodeId: string
     selectedNodeId: string | null
@@ -32,8 +34,10 @@ export function buildPageBuilderToolContext(ctx: PageContext): PageBuilderToolCo
     modules: ctx.availableModules,
     classes: ctx.classes,
     breakpoints: ctx.breakpoints,
+    pages: ctx.pages,
     activeBreakpointId: ctx.activeBreakpointId,
     page: {
+      pageId: ctx.pageId,
       pageTitle: ctx.pageTitle,
       rootNodeId: ctx.rootNodeId,
       selectedNodeId: ctx.selectedNodeId,
@@ -146,6 +150,27 @@ const removeClassInputSchema = {
 const addPageInputSchema = {
   title: z.string().min(1),
   slug: z.string().optional(),
+}
+
+const deletePageInputSchema = {
+  pageId: z.string().min(1),
+}
+
+const renamePageInputSchema = {
+  pageId: z.string().min(1),
+  title: z.string().min(1),
+  slug: z.string().optional(),
+}
+
+const duplicatePageInputSchema = {
+  pageId: z.string().min(1),
+  title: z.string().min(1),
+  slug: z.string().optional(),
+}
+
+const duplicateNodeInputSchema = {
+  nodeId: z.string().min(1),
+  count: z.number().int().min(1).max(50).optional(),
 }
 
 const renderSnapshotInputSchema = {
@@ -333,6 +358,13 @@ export function createPageBuilderMcpServer(
         async (input) => callBridgeSnapshot(input),
         { alwaysLoad: true },
       ),
+      tool(
+        'list_pages',
+        'List every page in the site (id, title, slug, active flag, isHomepage flag). The homepage is whichever page has slug "index". Use this for any site-level admin task: "duplicate the landing page", "list all my pages", "rename /pricing to /plans", "make this the homepage" (rename slug to "index").',
+        {},
+        async () => jsonToolResult({ pages: snapshot.pages }),
+        { alwaysLoad: true },
+      ),
 
       // ── Mutation (write) tools — bridged to the browser ────────────────────
       tool(
@@ -407,9 +439,37 @@ export function createPageBuilderMcpServer(
       ),
       tool(
         'addPage',
-        'Add a new page to the site with the given title and optional slug (defaults to a slugified title). Use this when the user asks to create a new page, blog post, etc. — not for in-page navigation links.',
+        'Add a new EMPTY page to the site with the given title and optional slug (defaults to a slugified title). Use this when the user asks to create a fresh page from scratch. For "create a page like this one" or "copy the landing page", use duplicatePage instead. Returns the new page id in `nodeId`.',
         addPageInputSchema,
         async (input) => callBridgeMutation('addPage', input),
+        { alwaysLoad: true },
+      ),
+      tool(
+        'deletePage',
+        'Permanently delete a page and all of its content. Cannot delete the only remaining page in a site (a site must have at least one page). Use list_pages first if you need to find the page id.',
+        deletePageInputSchema,
+        async (input) => callBridgeMutation('deletePage', input),
+        { alwaysLoad: true },
+      ),
+      tool(
+        'renamePage',
+        'Change a page\'s title and/or slug. Pass `slug` as "index" to make this page the site\'s homepage (the homepage convention is whichever page lives at slug "index"). Pass `slug` as undefined to keep the current slug. Use list_pages first if you need to find the page id.',
+        renamePageInputSchema,
+        async (input) => callBridgeMutation('renamePage', input),
+        { alwaysLoad: true },
+      ),
+      tool(
+        'duplicatePage',
+        'Deep-clone an existing page (every node, prop, class assignment, and breakpoint override) under a new title and slug. Use this for "copy this page", "make a /pricing page like the /plans page", or any template-style workflow. Every node in the new page gets a fresh id; class assignments are preserved. Returns the new page id in `nodeId`.',
+        duplicatePageInputSchema,
+        async (input) => callBridgeMutation('duplicatePage', input),
+        { alwaysLoad: true },
+      ),
+      tool(
+        'duplicateNode',
+        'Deep-clone a node and its entire subtree (props, classIds, breakpoint overrides, all descendants) right after the original in the same parent. Pass `count` (1-50, default 1) to produce N clones in one call — the canonical way to handle "make 6 cards from the existing 3" or "add another section like this one". Returns the first new node\'s id in `nodeId`. The clones share class assignments with the original, so styling stays consistent.',
+        duplicateNodeInputSchema,
+        async (input) => callBridgeMutation('duplicateNode', input),
         { alwaysLoad: true },
       ),
     ],

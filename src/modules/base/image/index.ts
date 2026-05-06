@@ -51,6 +51,8 @@ export const ImageModule: ModuleDefinition<ImageProps> = {
 
   component: ImageEditor,
 
+  htmlTag: 'img',
+
   render: (props) => {
     const src = safeUrl(props.src)
     const alt = String(props.alt ?? '')

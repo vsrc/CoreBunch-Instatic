@@ -9,7 +9,8 @@
  */
 
 import { Type, type Static, withFallback } from '@core/utils/typeboxHelpers'
-import { BaseNodeSchema, parsePropBindings } from '@core/page-tree/baseNode'
+import { BaseNodeSchema, type BaseNode, parsePropBindings } from '@core/page-tree/baseNode'
+import { NodeTreeSchema } from '@core/page-tree/treeSchema'
 
 // ---------------------------------------------------------------------------
 // VCParamType — valid param type values
@@ -34,33 +35,23 @@ const VC_PARAM_TYPE_VALUES: VCParamType[] = [
 ]
 
 // ---------------------------------------------------------------------------
-// VCNode — a node inside a Visual Component tree (parallel to PageNode)
+// VCNode — a node inside a Visual Component tree (structurally identical to BaseNode)
 //
-// VCNode uses a nested structure (childNodes) rather than the flat-map structure
-// of Page.nodes — tree traversal is simpler for VC authoring.
-//
-// VCNodeSchema extends BaseNodeSchema with a recursive childNodes field via
-// Type.Recursive. Unlike PageNode, VCNode carries no `dynamicBindings` — that
-// field is exclusive to CMS template pages.
+// VCNode uses the same flat-map structure as PageNode.
+// The VC tree is stored as a NodeTree<VCNode> = { nodes: Record<string, VCNode>, rootNodeId }.
+// Unlike PageNode, VCNode carries no `dynamicBindings` — that field is exclusive
+// to CMS template pages.
 // ---------------------------------------------------------------------------
 
 /**
  * A node inside a Visual Component tree.
  *
- * Defined as BaseNode (shared with PageNode) with a self-referential
- * `childNodes` for nested tree traversal. Unlike `PageNode`, `VCNode` carries
- * no `dynamicBindings` — that field is exclusive to CMS template pages.
- *
- * All props are flat (no dot-path keys) — same invariant as PageNode.
+ * Structurally identical to BaseNode — no nested child objects, no
+ * `dynamicBindings`. The VC tree uses the same flat-map shape as Page.nodes,
+ * stored in VisualComponent.tree: NodeTree<VCNode>.
  */
-export const VCNodeSchema = Type.Recursive((Self) =>
-  Type.Object({
-    ...BaseNodeSchema.properties,
-    childNodes: Type.Optional(Type.Array(Self)),
-  }),
-)
-
-export type VCNode = Static<typeof VCNodeSchema>
+export const VCNodeSchema = BaseNodeSchema
+export type VCNode = BaseNode
 
 // ---------------------------------------------------------------------------
 // VCParam — a named parameter on a Visual Component
@@ -147,11 +138,11 @@ function parseVCBreakpoint(raw: unknown): VCBreakpoint | null {
 }
 
 // ---------------------------------------------------------------------------
-// parseVCNode — tolerant recursive VCNode parser
+// parseVCNode — tolerant flat VCNode parser
 //
 // Replicates the Zod .catch() fallback behaviour for fields that use
 // withFallback() in BaseNodeSchema (props, breakpointOverrides, classIds).
-// Required by parseVisualComponent to handle persisted data where child nodes
+// Required by parseVisualComponent to handle persisted data where nodes
 // may have been stored without classIds or other optional-with-fallback fields.
 // ---------------------------------------------------------------------------
 
@@ -162,12 +153,12 @@ function parseVCBreakpoint(raw: unknown): VCBreakpoint | null {
  *   - Missing classIds → default []
  *   - Missing/invalid props → default {}
  *   - Missing/invalid breakpointOverrides → default {}
- *   - childNodes: recursively parsed, invalid children silently dropped
  *   - propBindings: per-entry filtered via parsePropBindings
  *
  * Returns null when required fields (id, moduleId, children) are invalid.
+ * VCNode is a flat node in a flat-map tree (no recursive nesting).
  */
-function parseVCNode(raw: unknown): VCNode | null {
+export function parseVCNode(raw: unknown): VCNode | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
   const r = raw as Record<string, unknown>
   if (typeof r.id !== 'string') return null
@@ -192,13 +183,6 @@ function parseVCNode(raw: unknown): VCNode | null {
 
   const propBindings = parsePropBindings(r.propBindings)
 
-  const childNodes: VCNode[] = Array.isArray(r.childNodes)
-    ? r.childNodes.flatMap((child) => {
-        const node = parseVCNode(child)
-        return node ? [node] : []
-      })
-    : []
-
   return {
     id: r.id,
     moduleId: r.moduleId,
@@ -210,7 +194,6 @@ function parseVCNode(raw: unknown): VCNode | null {
     ...(typeof r.locked === 'boolean' ? { locked: r.locked } : {}),
     ...(typeof r.hidden === 'boolean' ? { hidden: r.hidden } : {}),
     ...(propBindings !== undefined ? { propBindings } : {}),
-    ...(childNodes.length > 0 ? { childNodes } : {}),
   }
 }
 
@@ -220,6 +203,9 @@ function parseVCNode(raw: unknown): VCNode | null {
 
 /**
  * TypeBox schema for a VisualComponent stored in SiteDocument.visualComponents[].
+ *
+ * The VC tree is stored as a flat NodeTree (same shape as Page.nodes) in the
+ * `tree` field: { nodes: Record<string, VCNode>, rootNodeId: string }.
  *
  * For tolerant parsing (silently dropping invalid params/breakpoints and
  * providing timestamp fallbacks), use `parseVisualComponent` instead of
@@ -232,7 +218,11 @@ function parseVCNode(raw: unknown): VCNode | null {
 export const VisualComponentSchema = Type.Object({
   id: Type.String({ minLength: 1 }),
   name: Type.String({ minLength: 1 }),
-  rootNode: VCNodeSchema,
+  /** Flat node tree — same shape as Page.nodes + rootNodeId. */
+  tree: Type.Object({
+    ...NodeTreeSchema.properties,
+    nodes: Type.Record(Type.String(), VCNodeSchema),
+  }),
   params: Type.Array(VCParamSchema),
   breakpoints: Type.Array(VCBreakpointSchema),
   classIds: Type.Array(Type.String()),
@@ -244,12 +234,17 @@ export type VisualComponent = Static<typeof VisualComponentSchema>
 
 /**
  * Tolerant parser for a VisualComponent. Handles:
- *   - rootNode: parsed via parseVCNode (tolerant, handles missing classIds etc.)
+ *   - tree.nodes: parsed via parseVCNode (tolerant, handles missing classIds etc.)
+ *   - tree.rootNodeId: required string; VC is dropped if invalid
  *   - params: silently drops items that fail parseVCParam
  *   - breakpoints: silently drops items with empty id
  *   - createdAt: falls back to Date.now() for missing/invalid timestamps
  *
- * Returns null when required fields (id, name, rootNode) are invalid.
+ * Returns null when required fields (id, name, tree.rootNodeId) are invalid or
+ * when rootNodeId is not found in the parsed nodes map.
+ *
+ * NOTE: Legacy VC shape (rootNode + nested child objects) is converted to flat tree by
+ * the `convertLegacyVCShape` function in `validate.ts` BEFORE this parser runs.
  */
 export function parseVisualComponent(raw: unknown): VisualComponent | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
@@ -257,8 +252,21 @@ export function parseVisualComponent(raw: unknown): VisualComponent | null {
   if (typeof r.id !== 'string' || r.id.length === 0) return null
   if (typeof r.name !== 'string' || r.name.length === 0) return null
 
-  const rootNode = parseVCNode(r.rootNode)
-  if (!rootNode) return null
+  // Parse tree: { rootNodeId, nodes }
+  if (!r.tree || typeof r.tree !== 'object' || Array.isArray(r.tree)) return null
+  const rawTree = r.tree as Record<string, unknown>
+  if (typeof rawTree.rootNodeId !== 'string' || rawTree.rootNodeId.length === 0) return null
+  if (!rawTree.nodes || typeof rawTree.nodes !== 'object' || Array.isArray(rawTree.nodes)) return null
+
+  const rawNodes = rawTree.nodes as Record<string, unknown>
+  const nodes: Record<string, VCNode> = {}
+  for (const [_nodeId, rawNode] of Object.entries(rawNodes)) {
+    const node = parseVCNode(rawNode)
+    if (node) nodes[node.id] = node
+  }
+
+  // Root node must exist in the parsed map
+  if (!nodes[rawTree.rootNodeId]) return null
 
   const params = Array.isArray(r.params)
     ? r.params.flatMap((item) => {
@@ -283,7 +291,7 @@ export function parseVisualComponent(raw: unknown): VisualComponent | null {
   return {
     id: r.id,
     name: r.name,
-    rootNode,
+    tree: { nodes, rootNodeId: rawTree.rootNodeId },
     params,
     breakpoints,
     classIds,

@@ -531,8 +531,10 @@ export function buildPageContext(
 ): PageContext {
   if (!activePage || !state.site) {
     return {
+      pageId: '',
       pageTitle: 'Untitled',
       rootNodeId: '',
+      pages: [],
       activeBreakpointId: state.activeBreakpointId,
       breakpoints: [],
       nodes: [],
@@ -574,9 +576,19 @@ export function buildPageContext(
     breakpointStyles: toSerializableBreakpointStyles(c.breakpointStyles ?? {}),
   }))
 
+  const pages = state.site.pages.map((page) => ({
+    id: page.id,
+    title: page.title,
+    slug: page.slug,
+    active: page.id === activePage.id,
+    isHomepage: page.slug === 'index',
+  }))
+
   return {
+    pageId: activePage.id,
     pageTitle: activePage.title,
     rootNodeId: activePage.rootNodeId,
+    pages,
     activeBreakpointId: state.activeBreakpointId,
     breakpoints: state.site.breakpoints.map((breakpoint) => ({
       id: breakpoint.id,

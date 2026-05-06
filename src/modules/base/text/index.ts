@@ -87,6 +87,8 @@ export const TextModule: ModuleDefinition<TextProps> = {
 
   component: TextEditor,
 
+  htmlTag: (props) => normalizeTag(props.tag),
+
   render: (props) => {
     const tag = normalizeTag(props.tag)
     return {

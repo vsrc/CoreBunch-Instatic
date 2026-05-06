@@ -182,7 +182,10 @@ describe('VCBreadcrumb — inline name editing', () => {
         const otherVC = {
           id: 'vc-other',
           name: 'TakenName',
-          rootNode: { id: 'r', moduleId: 'base.body', props: {}, children: [], breakpointOverrides: {}, classIds: [] },
+          tree: {
+            rootNodeId: 'r',
+            nodes: { r: { id: 'r', moduleId: 'base.body', props: {}, children: [], breakpointOverrides: {}, classIds: [] } },
+          },
           params: [],
           breakpoints: [],
           classIds: [],

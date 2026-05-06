@@ -210,12 +210,17 @@ describe('Gate 3 — No inline <svg JSX in src/editor/ (Constraint #348)', () =>
     // We intentionally exclude:
     //   - Imports from pixel-art-icons (those ARE the MotionPageMaster icons)
     //   - src/ui/ entirely — icons live there legitimately
+    //   - files that carry an explicit opt-out comment for non-icon SVG usage
+    //     (e.g. geometric overlays, scientific charts) — same pattern as
+    //     Gate 5's `// allowed: X social brand mark`
     const INLINE_SVG_PATTERN = /return\s*\(\s*\n?\s*<svg|return\s+<svg/
+    const ALLOWED_NON_ICON_MARKER = '// allowed: non-icon SVG (geometric overlay)'
 
     const violations: string[] = []
 
     for (const filePath of editorFiles) {
       const source = readFileSync(filePath, 'utf8')
+      if (source.includes(ALLOWED_NON_ICON_MARKER)) continue
       if (INLINE_SVG_PATTERN.test(source)) {
         violations.push(filePath.replace(PROJECT_ROOT, ''))
       }

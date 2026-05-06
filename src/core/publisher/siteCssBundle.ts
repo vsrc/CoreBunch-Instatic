@@ -15,9 +15,9 @@
  *
  *   framework.<hash>.css  — Platform-emitted CSS:
  *                              · @font-face declarations (`@font-face` + `--font-*` tokens)
- *                              · `:root { --color-… }` from `site.settings.colorTokens`
- *                              · framework color / typography / spacing root variables
- *                                + utility classes
+ *                              · framework color / typography / spacing variables
+ *                              · generated framework utilities, tree-shaken by
+ *                                site preference unless explicitly disabled
  *                              · plugin-emitted module CSS (deduped by moduleId,
  *                                collected across every page on the site).
  *                            Hash rotates when site framework settings or the

@@ -3,11 +3,16 @@
 .row {
     --tree-row-accent: transparent;
     --tree-row-focus: transparent;
+    /* Default — overridden by `data-editor-density` on the editor root.
+       Compact (default): 28px. Comfortable: 36px. The `--tree-row-h` var
+       lives on the editor root so EVERY tree (Layers, Selectors, …) follows
+       the same density without per-tree wiring. */
+    --tree-row-h: 28px;
 
     position: relative;
     display: flex;
     align-items: center;
-    height: 28px;
+    height: var(--tree-row-h);
     padding-left: var(--tree-row-pl);
     padding-right: 12px;
     gap: 3px;
@@ -24,6 +29,13 @@
         background 80ms ease,
         color 80ms ease,
         opacity 80ms ease;
+}
+
+/* Density override — the editor root sets `data-editor-density` so the
+   variable cascades to every tree row regardless of where it lives. */
+:global([data-editor-density='comfortable']) .row {
+    --tree-row-h: 36px;
+    font-size: 12px;
 }
 
 .row:hover,

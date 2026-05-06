@@ -9,7 +9,7 @@
  *
  * Every write boundary:
  *  - Calls validateComponentName() and throws on invalid name.
- *  - Calls wouldCreateCycle() at addNodeToVc boundary and throws on cycle.
+ *  - Calls wouldCreateCycle() at insertComponentRef boundary and throws on cycle.
  *
  * Constraint #269: MUST NOT import from editor/.
  * This is a pure data-layer slice.
@@ -19,8 +19,10 @@ import { nanoid } from 'nanoid'
 import type { EditorStoreSliceCreator } from '../types'
 import type { VisualComponent, VCParam, VCNode } from '@core/visualComponents/schemas'
 import type { PageNode, CSSClass } from '@core/page-tree/schemas'
+import type { BaseNode } from '@core/page-tree/baseNode'
 import { validateComponentName, validateParamName } from '@core/visualComponents/nameValidation'
 import { wouldCreateCycle } from '@core/visualComponents/recursionGuard'
+import { syncSlotInstances, applySlotSyncResult } from '@core/visualComponents/slotSync'
 
 // ---------------------------------------------------------------------------
 // Custom error types (exported so UI + tests can catch by class)
@@ -54,58 +56,6 @@ export class VisualComponentRecursionError extends Error {
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
-
-/** DFS to find a node by ID in a VC tree (walks childNodes) */
-function findNodeById(root: VCNode, id: string): VCNode | null {
-  if (root.id === id) return root
-  if (root.childNodes) {
-    for (const child of root.childNodes) {
-      const found = findNodeById(child, id)
-      if (found) return found
-    }
-  }
-  return null
-}
-
-/**
- * Collect all paramIds currently referenced by propBindings in the VC tree.
- * Used by clearNodePropBinding to determine if an orphan param can be GC'd.
- */
-function collectAllBoundParamIds(root: VCNode): Set<string> {
-  const result = new Set<string>()
-  function visit(node: VCNode) {
-    if (node.propBindings) {
-      for (const binding of Object.values(node.propBindings)) {
-        result.add(binding.paramId)
-      }
-    }
-    if (node.childNodes) {
-      for (const child of node.childNodes) visit(child)
-    }
-  }
-  visit(root)
-  return result
-}
-
-/**
- * Walk a VCNode tree and delete every propBinding entry where
- * binding.paramId === targetParamId. Leaves the propBindings object
- * intact (even if empty) for consistency with existing slice behaviour.
- */
-function removePropBindingsByParamId(node: VCNode, targetParamId: string): void {
-  if (node.propBindings) {
-    for (const propKey of Object.keys(node.propBindings)) {
-      if (node.propBindings[propKey].paramId === targetParamId) {
-        delete node.propBindings[propKey]
-      }
-    }
-  }
-  if (node.childNodes) {
-    for (const child of node.childNodes) {
-      removePropBindingsByParamId(child, targetParamId)
-    }
-  }
-}
 
 /**
  * Collect all VC componentIds referenced by base.visual-component-ref nodes
@@ -152,75 +102,93 @@ function collectSubtreeNodeIds(
 }
 
 /**
- * Recursively clone a page's flat-map subtree into a nested VCNode tree.
+ * Clone a page's flat-map subtree into a flat VCNode map.
  *
  * - Allocates a fresh nanoid() for every cloned node.
  * - Populates idMap (oldId → newId) for each visited node so that
- *   parent `children` string arrays can reference the correct new IDs.
+ *   parent `children` string arrays reference the correct new IDs.
  * - For node-scoped classes (scope.type === 'node' && scope.nodeId === oldId):
  *   rewrites scope.nodeId to the new ID in-place (must run inside an Immer
  *   producer) and records the classId in hoistedClassIds so the caller can
  *   attach it to the new VC's top-level classIds array.
  * - dynamicBindings is intentionally NOT copied — VCNode has no dynamicBindings.
+ *
+ * Returns { nodes, rootNodeId } — a flat NodeTree for VisualComponent.tree.
  */
-function clonePageSubtreeAsVCNode(
+function clonePageSubtreeToFlatNodes(
   pageNodes: Record<string, PageNode>,
-  nodeId: string,
+  rootNodeId: string,
   siteClasses: Record<string, CSSClass>,
   idMap: Map<string, string>,
   hoistedClassIds: Set<string>,
-): VCNode {
-  const pageNode = pageNodes[nodeId]
-  if (!pageNode) {
-    throw new Error(`convertNodeToComponent: page node "${nodeId}" not found during clone`)
+): { nodes: Record<string, VCNode>; rootNodeId: string } {
+  const nodes: Record<string, VCNode> = {}
+
+  // Step 1: allocate new IDs for every node in the subtree (DFS)
+  function allocateIds(nodeId: string): void {
+    if (idMap.has(nodeId)) return // already allocated (cycle guard)
+    idMap.set(nodeId, nanoid())
+    const pageNode = pageNodes[nodeId]
+    if (!pageNode) return
+    for (const childId of pageNode.children) allocateIds(childId)
   }
+  allocateIds(rootNodeId)
 
-  // Allocate fresh ID for this node FIRST so children can reference it via idMap
-  const newId = nanoid()
-  idMap.set(nodeId, newId)
+  // Step 2: clone each node using the id map
+  const visited = new Set<string>()
+  function cloneNode(oldNodeId: string): void {
+    if (visited.has(oldNodeId)) return
+    visited.add(oldNodeId)
 
-  // Recursively clone all children (each call populates idMap for that child)
-  const childNodes: VCNode[] = pageNode.children.map((childId) =>
-    clonePageSubtreeAsVCNode(pageNodes, childId, siteClasses, idMap, hoistedClassIds),
-  )
-
-  // Process classIds: rewrite node-scoped ones to the new ID and hoist to VC level
-  const clonedClassIds: string[] = []
-  for (const classId of pageNode.classIds) {
-    const cls = siteClasses[classId]
-    if (cls && cls.scope?.type === 'node' && cls.scope.nodeId === nodeId) {
-      // Rewrite scope in-place (Immer draft mutation)
-      cls.scope.nodeId = newId
-      hoistedClassIds.add(classId)
+    const pageNode = pageNodes[oldNodeId]
+    if (!pageNode) {
+      throw new Error(`convertNodeToComponent: page node "${oldNodeId}" not found during clone`)
     }
-    // Always carry classId onto the cloned node (whether scoped or generic)
-    clonedClassIds.push(classId)
-  }
 
-  const vcNode: VCNode = {
-    id: newId,
-    moduleId: pageNode.moduleId,
-    props: { ...pageNode.props },
-    breakpointOverrides: Object.fromEntries(
-      Object.entries(pageNode.breakpointOverrides).map(([k, v]) => [k, { ...v }]),
-    ),
-    // children string[] must reference the NEW ids of direct children
-    children: pageNode.children.map((childId) => idMap.get(childId)!),
-    classIds: clonedClassIds,
-    childNodes,
-  }
+    const newId = idMap.get(oldNodeId)!
 
-  // Carry optional fields (dynamicBindings excluded — VCNode has no dynamicBindings field)
-  if (pageNode.label !== undefined) vcNode.label = pageNode.label
-  if (pageNode.locked !== undefined) vcNode.locked = pageNode.locked
-  if (pageNode.hidden !== undefined) vcNode.hidden = pageNode.hidden
-  if (pageNode.propBindings !== undefined) {
-    vcNode.propBindings = Object.fromEntries(
-      Object.entries(pageNode.propBindings).map(([k, v]) => [k, { ...v }]),
-    )
-  }
+    // Process classIds: rewrite node-scoped ones to the new ID and hoist to VC level
+    const clonedClassIds: string[] = []
+    for (const classId of pageNode.classIds) {
+      const cls = siteClasses[classId]
+      if (cls && cls.scope?.type === 'node' && cls.scope.nodeId === oldNodeId) {
+        // Rewrite scope in-place (Immer draft mutation)
+        cls.scope.nodeId = newId
+        hoistedClassIds.add(classId)
+      }
+      clonedClassIds.push(classId)
+    }
 
-  return vcNode
+    const vcNode: VCNode = {
+      id: newId,
+      moduleId: pageNode.moduleId,
+      props: { ...pageNode.props },
+      breakpointOverrides: Object.fromEntries(
+        Object.entries(pageNode.breakpointOverrides).map(([k, v]) => [k, { ...v }]),
+      ),
+      // children[] references the NEW ids of direct children
+      children: pageNode.children.map((childId) => idMap.get(childId)!),
+      classIds: clonedClassIds,
+    }
+
+    // Carry optional fields (dynamicBindings excluded — VCNode has no dynamicBindings field)
+    if (pageNode.label !== undefined) vcNode.label = pageNode.label
+    if (pageNode.locked !== undefined) vcNode.locked = pageNode.locked
+    if (pageNode.hidden !== undefined) vcNode.hidden = pageNode.hidden
+    if (pageNode.propBindings !== undefined) {
+      vcNode.propBindings = Object.fromEntries(
+        Object.entries(pageNode.propBindings).map(([k, v]) => [k, { ...v }]),
+      )
+    }
+
+    nodes[newId] = vcNode
+
+    // Recurse into children
+    for (const childId of pageNode.children) cloneNode(childId)
+  }
+  cloneNode(rootNodeId)
+
+  return { nodes, rootNodeId: idMap.get(rootNodeId)! }
 }
 
 // ---------------------------------------------------------------------------
@@ -264,7 +232,7 @@ export interface VisualComponentsSlice {
    *  - Deletes every propBinding in the VC tree that references the param.
    *  - For every page node that is a base.visual-component-ref pointing at this VC,
    *    deletes node.props.propOverrides[paramId] and (for slot params)
-   *    node.props.slotContent[param.name].
+   *    removes the matching base.slot-instance child via syncSlotInstances.
    *
    * No-op if the VC or param does not exist.
    */
@@ -273,12 +241,15 @@ export interface VisualComponentsSlice {
   /**
    * Add a new node to a VC's canvas tree under `parentNodeId`.
    *
+   * If `index` is provided, the node is inserted at that position among the
+   * parent's existing children; otherwise it is appended.
+   *
    * Throws VisualComponentRecursionError if `newNode` is a
    * base.visual-component-ref that would create a cycle.
    *
    * No-op if the VC or parent node does not exist.
    */
-  addNodeToVc(vcId: string, parentNodeId: string, newNode: VCNode): void
+  addNodeToVc(vcId: string, parentNodeId: string, newNode: VCNode, index?: number): void
 
   /**
    * Bind a node's prop to a VC param.
@@ -379,7 +350,10 @@ export const createVisualComponentsSlice: EditorStoreSliceCreator<VisualComponen
     const newVC: VisualComponent = {
       id,
       name: trimmedName,
-      rootNode,
+      tree: {
+        nodes: { [rootNodeId]: rootNode },
+        rootNodeId,
+      },
       params: [],
       breakpoints: [],
       classIds: [],
@@ -456,6 +430,24 @@ export const createVisualComponentsSlice: EditorStoreSliceCreator<VisualComponen
           required: false,
         }
         vc.params.push(newParam)
+
+        // If a slot param was added, sync every VC ref on every page so the new
+        // slot gets a materialized slot-instance child immediately.
+        if (type === 'slot') {
+          for (const page of state.site.pages) {
+            for (const node of Object.values(page.nodes)) {
+              if (
+                node.moduleId === 'base.visual-component-ref' &&
+                node.props.componentId === vcId
+              ) {
+                const treeNodes = page.nodes as Record<string, BaseNode>
+                const syncResult = syncSlotInstances(node as BaseNode, vc, treeNodes)
+                applySlotSyncResult(treeNodes, syncResult, node.id)
+              }
+            }
+          }
+        }
+
         state.site.updatedAt = Date.now()
       })
 
@@ -472,15 +464,26 @@ export const createVisualComponentsSlice: EditorStoreSliceCreator<VisualComponen
         const paramIdx = vc.params.findIndex((p) => p.id === paramId)
         if (paramIdx === -1) return
 
-        // Capture before deletion — slotContent is keyed by param name, not id
         const param = vc.params[paramIdx]
-        const paramName = param.name
         const isSlot = param.type === 'slot'
 
-        // 1. Remove propBindings referencing this param from the VC tree
-        removePropBindingsByParamId(vc.rootNode, paramId)
+        // 1. Remove propBindings referencing this param from the VC's flat tree
+        for (const node of Object.values(vc.tree.nodes)) {
+          if (node.propBindings) {
+            for (const propKey of Object.keys(node.propBindings)) {
+              if (node.propBindings[propKey].paramId === paramId) {
+                delete node.propBindings[propKey]
+              }
+            }
+          }
+        }
 
-        // 2. Clean up every page node that is a base.visual-component-ref for this VC
+        // 2. Remove the param itself (before syncing, so syncSlotInstances sees the final params)
+        vc.params.splice(paramIdx, 1)
+
+        // 3. Clean up every page node that is a base.visual-component-ref for this VC:
+        //    - remove propOverrides[paramId]
+        //    - if slot param: re-sync slot-instance children (removes the deleted slot's instance)
         for (const page of state.site.pages) {
           for (const node of Object.values(page.nodes)) {
             if (
@@ -493,23 +496,19 @@ export const createVisualComponentsSlice: EditorStoreSliceCreator<VisualComponen
               }
 
               if (isSlot) {
-                const slotContent = node.props.slotContent
-                if (slotContent && typeof slotContent === 'object' && !Array.isArray(slotContent)) {
-                  delete (slotContent as Record<string, unknown>)[paramName]
-                }
+                const treeNodes = page.nodes as Record<string, BaseNode>
+                const syncResult = syncSlotInstances(node as BaseNode, vc, treeNodes)
+                applySlotSyncResult(treeNodes, syncResult, node.id)
               }
             }
           }
         }
 
-        // 3. Remove the param itself
-        vc.params.splice(paramIdx, 1)
-
         state.site.updatedAt = Date.now()
       })
   },
 
-  addNodeToVc(vcId, parentNodeId, newNode) {
+  addNodeToVc(vcId, parentNodeId, newNode, index) {
     const { site } = get()
     if (!site) throw new Error('[visualComponentsSlice] Site document is not initialized')
 
@@ -532,19 +531,22 @@ export const createVisualComponentsSlice: EditorStoreSliceCreator<VisualComponen
         const vc = (state.site.visualComponents ?? []).find((v) => v.id === vcId)
         if (!vc) return
 
-        const parent = findNodeById(vc.rootNode, parentNodeId)
+        const parent = vc.tree.nodes[parentNodeId]
         if (!parent) return
 
         // Duplicate-node-id guard — silently no-op if node ID already exists in the tree
-        if (findNodeById(vc.rootNode, newNode.id)) return
+        if (vc.tree.nodes[newNode.id]) return
 
-        // Add to flat children IDs list (standard PageNode.children)
-        if (!parent.children) parent.children = []
-        parent.children.push(newNode.id)
+        // Register the new node in the flat map
+        vc.tree.nodes[newNode.id] = newNode
 
-        // Add to nested childNodes list (VC tree traversal format)
-        if (!parent.childNodes) parent.childNodes = []
-        parent.childNodes.push(newNode)
+        // Add to parent's children list
+        if (index === undefined || index >= parent.children.length) {
+          parent.children.push(newNode.id)
+        } else {
+          const insertAt = Math.max(0, index)
+          parent.children.splice(insertAt, 0, newNode.id)
+        }
 
         state.site.updatedAt = Date.now()
       })
@@ -559,7 +561,7 @@ export const createVisualComponentsSlice: EditorStoreSliceCreator<VisualComponen
         if (activeDocument?.kind === 'visualComponent') {
           const vc = (state.site.visualComponents ?? []).find((v) => v.id === activeDocument.vcId)
           if (!vc) return
-          const node = findNodeById(vc.rootNode, nodeId)
+          const node = vc.tree.nodes[nodeId]
           if (!node) return
           if (!node.propBindings) node.propBindings = {}
           node.propBindings[propKey] = { paramId }
@@ -589,7 +591,7 @@ export const createVisualComponentsSlice: EditorStoreSliceCreator<VisualComponen
         if (activeDocument?.kind === 'visualComponent') {
           const vc = (state.site.visualComponents ?? []).find((v) => v.id === activeDocument.vcId)
           if (!vc) return
-          const node = findNodeById(vc.rootNode, nodeId)
+          const node = vc.tree.nodes[nodeId]
           if (!node?.propBindings) return
 
           const removedParamId = node.propBindings[propKey]?.paramId
@@ -597,7 +599,14 @@ export const createVisualComponentsSlice: EditorStoreSliceCreator<VisualComponen
 
           // GC: remove orphan param if no other node references it
           if (removedParamId) {
-            const stillBound = collectAllBoundParamIds(vc.rootNode)
+            const stillBound = new Set<string>()
+            for (const n of Object.values(vc.tree.nodes)) {
+              if (n.propBindings) {
+                for (const binding of Object.values(n.propBindings)) {
+                  stillBound.add(binding.paramId)
+                }
+              }
+            }
             if (!stillBound.has(removedParamId)) {
               const idx = vc.params.findIndex((p) => p.id === removedParamId)
               if (idx !== -1) vc.params.splice(idx, 1)
@@ -652,7 +661,26 @@ export const createVisualComponentsSlice: EditorStoreSliceCreator<VisualComponen
         if (!vc) return
         const param = vc.params.find((p) => p.id === paramId)
         if (!param) return
+        const isSlot = param.type === 'slot'
         param.name = trimmedName
+
+        // If this is a slot param, sync all VC refs on all pages so the
+        // slot-instance's slotName prop tracks the renamed param.
+        if (isSlot) {
+          for (const page of state.site.pages) {
+            for (const node of Object.values(page.nodes)) {
+              if (
+                node.moduleId === 'base.visual-component-ref' &&
+                node.props.componentId === vcId
+              ) {
+                const treeNodes = page.nodes as Record<string, BaseNode>
+                const syncResult = syncSlotInstances(node as BaseNode, vc, treeNodes)
+                applySlotSyncResult(treeNodes, syncResult, node.id)
+              }
+            }
+          }
+        }
+
         state.site.updatedAt = Date.now()
       })
   },
@@ -742,12 +770,12 @@ export const createVisualComponentsSlice: EditorStoreSliceCreator<VisualComponen
         // 5a. Generate the new VC id
         newVcId = nanoid()
 
-        // 5b. Deep-clone the subtree from the page's flat nodes into a nested VCNode tree.
+        // 5b. Deep-clone the subtree from the page's flat nodes into a flat VCNode tree.
         // hoistedClassIds accumulates node-scoped class IDs that should be declared
         // at the new VC level (scope.nodeId is rewritten inside the helper).
         const idMap = new Map<string, string>()
         const hoistedClassIds = new Set<string>()
-        const clonedRoot = clonePageSubtreeAsVCNode(
+        const clonedTree = clonePageSubtreeToFlatNodes(
           draftPage.nodes,
           nodeId,
           state.site.classes,
@@ -755,11 +783,43 @@ export const createVisualComponentsSlice: EditorStoreSliceCreator<VisualComponen
           hoistedClassIds,
         )
 
+        // 5c. Always wrap the cloned source in a `base.body` root.
+        //
+        // INVARIANT: every NodeTree in this codebase — page trees, VC trees,
+        // future slot fragments — has `base.body` as its root. Pages enforce
+        // this by construction; `createVisualComponent` enforces it for new
+        // VCs; this branch enforces it for VCs created by componentizing
+        // existing page subtrees.
+        //
+        // The user-facing benefit: always-the-same shape. No "did the source
+        // happen to be a container?" branching in callers, no special cases
+        // in `useInsertModule`'s parent resolution. `base.body` is transparent
+        // at publish time (its render emits naked children HTML, no `<div>`),
+        // so the wrapper doesn't add HTML clutter — it's purely a structural
+        // anchor inside the editor.
+        //
+        // Pre-existing behaviour: if the user componentized a single
+        // non-container node (Text, Button), the cloned root was that node;
+        // `canHaveChildren: false` made the VC unusable for adding siblings,
+        // and the toolbar silently corrupted the tree by inserting into the
+        // non-container. Always-wrapping eliminates that class of bug entirely.
+        const wrapperId = nanoid()
+        const wrapperNode: VCNode = {
+          id: wrapperId,
+          moduleId: 'base.body',
+          props: {},
+          breakpointOverrides: {},
+          children: [clonedTree.rootNodeId],
+          classIds: [],
+        }
+        clonedTree.nodes[wrapperId] = wrapperNode
+        clonedTree.rootNodeId = wrapperId
+
         // 5d. Build the new VisualComponent
         const newVc: VisualComponent = {
           id: newVcId,
           name: trimmedName,
-          rootNode: clonedRoot,
+          tree: clonedTree,
           params: [],
           breakpoints: [],
           classIds: [...hoistedClassIds],
@@ -790,7 +850,7 @@ export const createVisualComponentsSlice: EditorStoreSliceCreator<VisualComponen
         draftPage.nodes[refNodeId] = {
           id: refNodeId,
           moduleId: 'base.visual-component-ref',
-          props: { componentId: newVcId, propOverrides: {}, slotContent: {} },
+          props: { componentId: newVcId, propOverrides: {} },
           breakpointOverrides: {},
           children: [],
           classIds: [],

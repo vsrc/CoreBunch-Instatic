@@ -93,7 +93,6 @@ export function makePage(
       hidden: spec.hidden ?? false,
       dynamicBindings: spec.dynamicBindings,
       propBindings: spec.propBindings,
-      childNodes: spec.childNodes,
     }
   }
   return {

@@ -44,12 +44,14 @@ export const DEFAULT_ROOT_FONT_SIZE = 10
 export const DEFAULT_MIN_SCREEN_WIDTH = 320
 export const DEFAULT_MAX_SCREEN_WIDTH = 1400
 export const DEFAULT_IS_REM = true
+export const DEFAULT_TREE_SHAKE_GENERATED_FRAMEWORK_UTILITIES = true
 
 export interface FrameworkPreferences {
   rootFontSize: number
   minScreenWidth: number
   maxScreenWidth: number
   isRem: boolean
+  treeShakeGeneratedFrameworkUtilities: boolean
 }
 
 export const DEFAULT_FRAMEWORK_PREFERENCES: FrameworkPreferences = {
@@ -57,6 +59,7 @@ export const DEFAULT_FRAMEWORK_PREFERENCES: FrameworkPreferences = {
   minScreenWidth: DEFAULT_MIN_SCREEN_WIDTH,
   maxScreenWidth: DEFAULT_MAX_SCREEN_WIDTH,
   isRem: DEFAULT_IS_REM,
+  treeShakeGeneratedFrameworkUtilities: DEFAULT_TREE_SHAKE_GENERATED_FRAMEWORK_UTILITIES,
 }
 
 /**

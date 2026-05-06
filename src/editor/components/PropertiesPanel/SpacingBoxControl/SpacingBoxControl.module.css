@@ -15,15 +15,15 @@
  * actual <input> sits on top, transparent and centred at the segment's
  * centroid, so clicking anywhere in the segment focuses the input.
  *
- * The whole widget is locked to a square aspect ratio so the diagonals
- * always read as a clean 45° X regardless of panel width.
+ * The whole widget is locked to a 4:3 aspect ratio so the diagonals
+ * read as a stable, predictable X regardless of panel width.
  */
 
 .root {
     width: 100%;
     max-width: 280px;
     margin: 0 auto;
-    aspect-ratio: 1 / 1;
+    aspect-ratio: 4 / 3;
     min-width: 0;
 }
 
@@ -41,7 +41,7 @@
     border-color: var(--input-border-hover);
 }
 
-/* Margin box fills the (square) root so its diagonals are 45°. */
+/* Margin box fills the (4:3) root. */
 .box--margin {
     width: 100%;
     height: 100%;
@@ -49,8 +49,8 @@
 
 /* Padding box — solid border + opaque background so it visually
  * interrupts the margin's dashed diagonals where the two layers
- * overlap. Sized automatically by its parent .boxInner (inset: 25% of
- * a square margin box → padding box is also square). */
+ * overlap. Sized automatically by its parent .boxInner (inset: 25%
+ * per axis → padding box keeps the same 4:3 aspect ratio). */
 .box--padding {
     border-style: solid;
     background: var(--editor-surface);
@@ -349,13 +349,7 @@
 .sideMenuVar {
     overflow: hidden;
     color: var(--editor-text-muted);
-    font-family: var(
-        --editor-mono,
-        ui-monospace,
-        SFMono-Regular,
-        Menlo,
-        monospace
-    );
+    font-family: var(--font-mono);
     font-size: 11px;
     text-overflow: ellipsis;
     white-space: nowrap;

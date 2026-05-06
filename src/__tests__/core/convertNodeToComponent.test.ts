@@ -24,6 +24,11 @@ import { produce } from 'immer'
 import type { SiteDocument, PageNode, CSSClass } from '@core/page-tree/schemas'
 import type { VisualComponent } from '@core/visualComponents/schemas'
 import { VisualComponentNameError } from '@core/editor-store/slices/visualComponentsSlice'
+// Side-effect import: registers base modules in the registry so
+// `registry.get('base.text')`, `'base.container'`, etc. resolve at runtime.
+// Required for the auto-wrap behavior in convertNodeToComponent (which checks
+// `def.canHaveChildren` on the cloned root) to work in this test file.
+import '../../modules/base/index'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -169,15 +174,22 @@ describe('Gate CNC-1 — subtree cloned with fresh IDs', () => {
     const newVc = site.visualComponents.find((v) => v.id === newVcId)!
     expect(newVc).toBeDefined()
 
-    // VC rootNode.id must NOT be the original container id
-    expect(newVc.rootNode.id).not.toBe(containerId)
+    // VC tree.rootNodeId must NOT be the original container id
+    expect(newVc.tree.rootNodeId).not.toBe(containerId)
 
-    // VC rootNode.childNodes must have 2 children, none with original IDs
-    expect(newVc.rootNode.childNodes).toBeDefined()
-    expect(newVc.rootNode.childNodes!.length).toBe(2)
-    const childIds = newVc.rootNode.childNodes!.map((c) => c.id)
-    expect(childIds).not.toContain(text1Id)
-    expect(childIds).not.toContain(text2Id)
+    // Tree shape after always-wrap:
+    //   tree.rootNodeId → fresh base.body wrapper
+    //     children[0]   → cloned base.container (the source)
+    //       children    → cloned text1, text2
+    const vcRoot = newVc.tree.nodes[newVc.tree.rootNodeId]
+    expect(vcRoot.moduleId).toBe('base.body')
+    expect(vcRoot.children.length).toBe(1)
+
+    const clonedContainer = newVc.tree.nodes[vcRoot.children[0]]
+    expect(clonedContainer.moduleId).toBe('base.container')
+    expect(clonedContainer.children.length).toBe(2)
+    expect(clonedContainer.children).not.toContain(text1Id)
+    expect(clonedContainer.children).not.toContain(text2Id)
   })
 })
 
@@ -279,13 +291,22 @@ describe('Gate CNC-4 — node-scoped classes hoisted and scope rewritten', () =>
     // VC.classIds must include the hoisted class
     expect(newVc.classIds).toContain(classId)
 
-    // scope.nodeId must be the cloned root node's id (NOT the original containerId)
+    // The VC root is always a fresh `base.body` wrapper. The cloned source
+    // (the original container with its scoped class) is wrapper.children[0].
+    const vcRoot = newVc.tree.nodes[newVc.tree.rootNodeId]
+    expect(vcRoot.moduleId).toBe('base.body')
+    const clonedSourceId = vcRoot.children[0]
+    const clonedSource = newVc.tree.nodes[clonedSourceId]
+
+    // scope.nodeId must be the cloned source's id (NOT the original containerId,
+    // and NOT the wrapper's id).
     const updatedClass = site.classes[classId]
     expect(updatedClass.scope?.nodeId).not.toBe(containerId)
-    expect(updatedClass.scope?.nodeId).toBe(newVc.rootNode.id)
+    expect(updatedClass.scope?.nodeId).not.toBe(newVc.tree.rootNodeId)
+    expect(updatedClass.scope?.nodeId).toBe(clonedSourceId)
 
-    // The cloned root node's classIds must also include the class
-    expect(newVc.rootNode.classIds).toContain(classId)
+    // The cloned source's classIds must include the class
+    expect(clonedSource.classIds).toContain(classId)
   })
 })
 
@@ -330,9 +351,17 @@ describe('Gate CNC-5 — generic classes stay shared, not duplicated', () => {
     const site = getSite()
     const newVc = site.visualComponents.find((v) => v.id === newVcId)!
 
-    // The cloned child node must have the generic class id in its classIds
-    const clonedChild = newVc.rootNode.childNodes![0]
-    expect(clonedChild.classIds).toContain(genericClassId)
+    // The VC tree shape after always-wrap:
+    //   tree.rootNodeId → base.body (wrapper)
+    //     children[0]   → cloned base.container (the source)
+    //       children[0] → cloned base.text (carries the generic class)
+    const vcRoot = newVc.tree.nodes[newVc.tree.rootNodeId]
+    expect(vcRoot.moduleId).toBe('base.body')
+    const clonedContainer = newVc.tree.nodes[vcRoot.children[0]]
+    expect(clonedContainer.moduleId).toBe('base.container')
+    const clonedText = newVc.tree.nodes[clonedContainer.children[0]]
+    expect(clonedText.moduleId).toBe('base.text')
+    expect(clonedText.classIds).toContain(genericClassId)
 
     // The generic class must NOT be in VC.classIds (only node-scoped classes are hoisted)
     expect(newVc.classIds).not.toContain(genericClassId)
@@ -533,5 +562,82 @@ describe('Gate CNC-B — throws when called from inside a visual component', () 
 
     // State must NOT have been mutated
     expect(getSite().visualComponents.find((v) => v.name === 'ShouldFail')).toBeUndefined()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Gate CNC-C — VC root is ALWAYS base.body (invariant)
+// ---------------------------------------------------------------------------
+//
+// Every NodeTree in this codebase — page trees, VC trees — has `base.body` as
+// its root. Pages enforce this by construction; `createVisualComponent`
+// enforces it for new VCs; `convertNodeToComponent` enforces it by always
+// wrapping the cloned source under a fresh `base.body` root, regardless of
+// whether the source happens to be a container.
+
+describe('Gate CNC-C — VC root is always base.body', () => {
+  beforeEach(() => { setupSite() })
+
+  it('componentizing a base.text yields a VC root of base.body wrapping the cloned text', () => {
+    const textId = 'txt-solo'
+    const text = makePageNode(textId, 'base.text')
+    injectNodesIntoPage(textId, [text])
+    activatePage()
+
+    const newVcId = callAction<string>('convertNodeToComponent', textId, 'TextCard')
+    expect(newVcId).toBeTruthy()
+
+    const vc = getSite().visualComponents.find((v) => v.id === newVcId)
+    expect(vc).toBeDefined()
+
+    const rootNode = vc!.tree.nodes[vc!.tree.rootNodeId]
+    expect(rootNode.moduleId).toBe('base.body')
+    expect(rootNode.children).toHaveLength(1)
+
+    const childId = rootNode.children[0]
+    const child = vc!.tree.nodes[childId]
+    expect(child.moduleId).toBe('base.text')
+    // Cloned ID must NOT equal the original (clonePageSubtreeToFlatNodes always allocates fresh IDs).
+    expect(childId).not.toBe(textId)
+  })
+
+  it('componentizing a base.container ALSO wraps it in a base.body root (always-wrap invariant)', () => {
+    const containerId = 'ctr-real'
+    const textId = 'txt-inside'
+    const container = makePageNode(containerId, 'base.container', [textId])
+    const text = makePageNode(textId, 'base.text')
+    injectNodesIntoPage(containerId, [container, text])
+    activatePage()
+
+    const newVcId = callAction<string>('convertNodeToComponent', containerId, 'CardWithText')
+    const vc = getSite().visualComponents.find((v) => v.id === newVcId)
+    expect(vc).toBeDefined()
+
+    // Even though the source is a base.container (canHaveChildren: true),
+    // the always-wrap rule still applies. The VC root is base.body, with the
+    // cloned container as its only child, and the original text as the
+    // container's child. Consistent with createVisualComponent and Page trees.
+    const rootNode = vc!.tree.nodes[vc!.tree.rootNodeId]
+    expect(rootNode.moduleId).toBe('base.body')
+    expect(rootNode.children).toHaveLength(1)
+    const cloned = vc!.tree.nodes[rootNode.children[0]]
+    expect(cloned.moduleId).toBe('base.container')
+    expect(cloned.children).toHaveLength(1)
+    expect(vc!.tree.nodes[cloned.children[0]].moduleId).toBe('base.text')
+  })
+
+  it('componentizing a base.button (canHaveChildren: false) wraps it in base.body', () => {
+    const buttonId = 'btn-solo'
+    const button = makePageNode(buttonId, 'base.button')
+    injectNodesIntoPage(buttonId, [button])
+    activatePage()
+
+    const newVcId = callAction<string>('convertNodeToComponent', buttonId, 'ButtonCard')
+    const vc = getSite().visualComponents.find((v) => v.id === newVcId)
+    expect(vc).toBeDefined()
+    const rootNode = vc!.tree.nodes[vc!.tree.rootNodeId]
+    expect(rootNode.moduleId).toBe('base.body')
+    expect(rootNode.children).toHaveLength(1)
+    expect(vc!.tree.nodes[rootNode.children[0]].moduleId).toBe('base.button')
   })
 })

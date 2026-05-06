@@ -11,6 +11,10 @@
  */
 
 import { describe, it, expect } from 'bun:test'
+import {
+  frameworkColorClassId,
+  generateFrameworkColorUtilityClasses,
+} from '@core/framework/colors'
 import { buildSiteCssBundle } from '../../../server/cms/siteCssBundle'
 import { makeModule, makeRegistry, makePage, makeSite } from '../publisher/helpers'
 
@@ -24,6 +28,25 @@ describe('buildSiteCssBundle', () => {
     }),
   })
   const registry = makeRegistry({ 'base.text': styledTextDef })
+  const colorFramework = {
+    tokens: [
+      {
+        id: 'primary-token',
+        category: 'Brand',
+        slug: 'primary',
+        lightValue: 'hsla(238, 100%, 62%, 1)',
+        darkValue: 'hsla(238, 100%, 42%, 1)',
+        darkModeEnabled: false,
+        generateUtilities: { text: true, background: true, border: false, fill: false },
+        generateTransparent: false,
+        generateShades: { enabled: false, count: 0 },
+        generateTints: { enabled: false, count: 0 },
+        order: 0,
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    ],
+  }
 
   it('builds three files with sensible filenames + hashes', () => {
     const site = makeSite()
@@ -94,6 +117,45 @@ describe('buildSiteCssBundle', () => {
     expect(bundle.style.content).toContain('font-size: 48px')
   })
 
+  it('framework.css carries generated framework utilities while style.css excludes them', () => {
+    const textClassId = frameworkColorClassId('primary-token', 'base', 'text')
+    const site = makeSite({
+      settings: {
+        ...makeSite().settings,
+        framework: { colors: colorFramework },
+      },
+      classes: {
+        ...generateFrameworkColorUtilityClasses(colorFramework),
+        hero: {
+          id: 'hero',
+          name: 'hero',
+          styles: { fontSize: '48px' },
+          breakpointStyles: {},
+          createdAt: 0,
+          updatedAt: 0,
+        },
+      },
+      pages: [
+        makePage({
+          root: {
+            moduleId: 'base.text',
+            props: { text: 'Hi' },
+            classIds: [textClassId, 'hero'],
+          },
+        }),
+      ],
+    })
+
+    const bundle = buildSiteCssBundle(site, registry)
+
+    expect(bundle.framework.content).toContain('--primary: hsla(238, 100%, 62%, 1);')
+    expect(bundle.framework.content).toContain('.text-primary')
+    expect(bundle.framework.content).toContain('color: var(--primary);')
+    expect(bundle.framework.content).not.toContain('.bg-primary')
+    expect(bundle.style.content).toContain('.hero')
+    expect(bundle.style.content).not.toContain('.text-primary')
+  })
+
   it('is deterministic: identical sites produce identical hashes', () => {
     const site1 = makeSite()
     const site2 = makeSite()
@@ -138,5 +200,51 @@ describe('buildSiteCssBundle', () => {
     expect(after.reset.hash).toBe(before.reset.hash)
     expect(after.framework.hash).toBe(before.framework.hash)
     expect(after.style.hash).not.toBe(before.style.hash)
+  })
+
+  it('rotates the framework hash when generated framework utility output changes', () => {
+    const textClassId = frameworkColorClassId('primary-token', 'base', 'text')
+    const baseSite = makeSite({
+      settings: {
+        ...makeSite().settings,
+        framework: { colors: colorFramework },
+      },
+      classes: generateFrameworkColorUtilityClasses(colorFramework),
+      pages: [
+        makePage({
+          root: {
+            moduleId: 'base.text',
+            props: { text: 'X' },
+            classIds: [textClassId],
+          },
+        }),
+      ],
+    })
+    const before = buildSiteCssBundle(baseSite, registry)
+
+    const editedSite = makeSite({
+      settings: {
+        ...makeSite().settings,
+        framework: {
+          colors: colorFramework,
+          preferences: {
+            rootFontSize: 10,
+            minScreenWidth: 320,
+            maxScreenWidth: 1400,
+            isRem: true,
+            treeShakeGeneratedFrameworkUtilities: false,
+          },
+        },
+      },
+      classes: generateFrameworkColorUtilityClasses(colorFramework),
+      pages: baseSite.pages,
+    })
+    const after = buildSiteCssBundle(editedSite, registry)
+
+    expect(after.reset.hash).toBe(before.reset.hash)
+    expect(after.framework.hash).not.toBe(before.framework.hash)
+    expect(after.style.hash).toBe(before.style.hash)
+    expect(before.framework.content).not.toContain('.bg-primary')
+    expect(after.framework.content).toContain('.bg-primary')
   })
 })

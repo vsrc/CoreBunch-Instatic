@@ -17,14 +17,13 @@ import { resolveDynamicProps, type TemplateRenderDataContext } from '../template
 import { classNamesForClassIds } from '../page-tree/classNames'
 import { sanitizeModuleCSS, collectClassCSS } from './cssCollector'
 import { PUBLISHER_RESET_CSS } from './reset'
-import { buildSiteRootCss } from './rootCss'
+import { buildSiteFrameworkCss } from './frameworkCss'
 import type { SiteCssBundle } from './siteCssBundle'
 import { escapeHtml, isSafeUrl } from './utils'
 import type { PublishedPageRuntimeAssets } from '../site-runtime/schemas'
 import { hasPublishedRuntimeScripts, scriptTagsForRuntimeAssets } from '../site-runtime'
 import { sanitizeRichtext } from '../sanitize'
 import { instantiateVCAtRef, type InstantiatedVCNode } from '../visualComponents/instantiate'
-import type { VCNode } from '../visualComponents/schemas'
 import type { LoopFetchResult, LoopItem } from '../loops/types'
 
 // Re-export canonical utilities so existing imports from this file keep working
@@ -174,9 +173,7 @@ function injectClassIntoRootElement(html: string, classAttr: string): string {
  * VCNode is structurally compatible with PageNode for all fields the walker reads
  * (moduleId, props, breakpointOverrides, children, classIds). The extra
  * InstantiatedVCNode fields (_owningRefId, _fromSlotContent) are not part of
- * PageNode and are harmlessly ignored by the walker. childNodes is explicitly
- * cleared here because instantiateVCAtRef always sets it to undefined on all
- * emitted nodes — the flat map is the canonical representation.
+ * PageNode and are harmlessly ignored by the walker.
  * dynamicBindings is intentionally absent: VCNodes don't support template
  * bindings (those live only on page-level nodes).
  */
@@ -192,7 +189,6 @@ function instantiatedNodeToPageNode(node: InstantiatedVCNode): PageNode {
     hidden: node.hidden,
     classIds: node.classIds,
     propBindings: node.propBindings,
-    childNodes: undefined,
   }
 }
 
@@ -223,22 +219,30 @@ function renderVisualComponentRef(node: PageNode, ctx: RenderContext): string {
       ? (node.props.propOverrides as Record<string, unknown>)
       : {}
 
-  const rawSlotContent =
-    node.props.slotContent !== null &&
-    typeof node.props.slotContent === 'object' &&
-    !Array.isArray(node.props.slotContent)
-      ? (node.props.slotContent as Record<string, VCNode[]>)
-      : {}
-
   const vc = ctx.site.visualComponents.find((v) => v.id === componentId)
   if (!vc) {
     return `<!-- pb: unknown component "${escapeHtml(componentId)}" -->`
   }
 
+  // Build slotInstancesByName from this VC ref node's base.slot-instance children
+  // in the page tree. Each slot-instance's children are the user-authored slot content.
+  const slotInstancesByName: Record<string, string[]> = {}
+  for (const childId of node.children ?? []) {
+    const child = ctx.page.nodes[childId]
+    if (child?.moduleId === 'base.slot-instance') {
+      const slotName =
+        typeof child.props.slotName === 'string' && child.props.slotName
+          ? child.props.slotName
+          : 'children'
+      slotInstancesByName[slotName] = child.children ?? []
+    }
+  }
+
   const { nodes: instantiatedNodes, rootNodeId } = instantiateVCAtRef(
     vc,
     propOverrides,
-    rawSlotContent,
+    slotInstancesByName,
+    ctx.page.nodes,
     node.id,
   )
 
@@ -439,9 +443,10 @@ export function renderNode(nodeId: string, ctx: RenderContext): string {
   }
 
   // Special case: visual-component-ref nodes inline the VC tree recursively.
-  // This intercept happens BEFORE children rendering and render() dispatch because
-  // the ref node's children (none — canHaveChildren: false) are irrelevant; the
-  // VC body comes from instantiateVCAtRef, not from page.nodes children.
+  // This intercept happens BEFORE children rendering and render() dispatch.
+  // The ref node's children are base.slot-instance nodes (locked, user-authored
+  // slot content); they are consumed by renderVisualComponentRef via
+  // slotInstancesByName — not rendered directly as page children.
   if (node.moduleId === 'base.visual-component-ref') {
     return renderVisualComponentRef(node, ctx)
   }
@@ -524,8 +529,9 @@ export interface PublishPageOptions {
    * published HTML.
    *
    * - `'inline'` (default): one `<style>` block in `<head>` containing reset +
-   *   framework root CSS + module CSS + user class CSS. Best for self-contained
-   *   exports, the iframe runtime preview, and tests.
+   *   framework CSS (variables + generated utilities) + module CSS + user
+   *   class CSS. Best for self-contained exports, the iframe runtime preview,
+   *   and tests.
    * - `'external'`: emits three `<link rel="stylesheet">` tags pointing at the
    *   pre-built site CSS bundle (`/_pb/css/<filename>`). The HTML stays small,
    *   the bundles are content-hashed for `Cache-Control: immutable` reuse
@@ -554,9 +560,10 @@ export interface PublishPageOptions {
  * Build the `<style>` block (inline mode) or `<link>` tags (external mode)
  * that go into `<head>`.
  *
- * Cascade order is identical in both modes: reset → framework (root tokens +
- * module CSS) → user class CSS. User class CSS loads last so it wins
- * specificity ties — same behaviour as the previous in-`<style>` cascade.
+ * Cascade order is identical in both modes: reset → framework (tokens +
+ * generated utilities + module CSS) → user class CSS. User class CSS loads
+ * last so it wins specificity ties — same behaviour as the previous
+ * in-`<style>` cascade.
  */
 function buildStyleHead(
   cssEmission: 'inline' | 'external',
@@ -579,10 +586,10 @@ function buildStyleHead(
     return links ? `${links}\n` : ''
   }
 
-  const rootCss = buildSiteRootCss(site)
+  const frameworkCss = buildSiteFrameworkCss(site)
   const moduleCss = Array.from(cssMap.values()).join('\n')
   const classCss = collectClassCSS(site)
-  const allCss = [PUBLISHER_RESET_CSS, rootCss, moduleCss, classCss]
+  const allCss = [PUBLISHER_RESET_CSS, frameworkCss, moduleCss, classCss]
     .filter(Boolean)
     .join('\n')
   return `  <style>\n${allCss}\n  </style>\n`
@@ -659,9 +666,9 @@ export function publishPage(
 
   // Build CSS head content based on emission mode.
   //
-  // Cascade order (both modes): reset → framework (tokens + module CSS) →
-  // user class CSS. User classes load last so they win specificity ties on
-  // identically-specific selectors.
+  // Cascade order (both modes): reset → framework (tokens + generated
+  // utilities + module CSS) → user class CSS. User classes load last so they
+  // win specificity ties on identically-specific selectors.
   const styleHeadHtml = buildStyleHead(cssEmission, options, site, cssMap)
 
   const { settings } = site

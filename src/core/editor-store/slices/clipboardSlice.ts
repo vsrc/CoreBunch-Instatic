@@ -111,11 +111,7 @@ function collectSubtree(
     if (nodes[id]) continue
     const node = page.nodes[id]
     if (!node) continue
-    // Strip VC-mode `childNodes` (it shadows the flat `children` walk on Pages
-    // and would let stale tree state bleed into the clipboard).
-    const { childNodes: _ignored, ...flat } = node
-    void _ignored
-    nodes[id] = { ...flat, children: [...node.children] }
+    nodes[id] = { ...node, children: [...node.children] }
     stack.push(...node.children)
   }
   return { rootNodeId: nodeId, nodes }

@@ -10,16 +10,13 @@
  */
 
 import { useEditorStore } from '@core/editor-store/store'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Button } from '@ui/components/Button'
 import { cn } from '@ui/cn'
 import { CircleAlertIcon } from 'pixel-art-icons/icons/circle-alert'
 import { LoaderIcon } from 'pixel-art-icons/icons/loader'
 import { SaveIcon } from 'pixel-art-icons/icons/save'
-import {
-  readAutoSavePreference,
-  subscribeToEditorPrefsChanged,
-} from '../../preferences/editorPreferences'
+import { useEditorPreference } from '../../preferences/editorPreferences'
 import type { PersistenceSaveStatus } from '@editor/hooks/usePersistence'
 import styles from './Toolbar.module.css'
 
@@ -30,16 +27,10 @@ interface SaveIndicatorProps {
 
 export function SaveIndicator({ onSave, saveStatus }: SaveIndicatorProps) {
   const hasUnsaved = useEditorStore((s) => s.hasUnsavedChanges)
-  const [autoSaveEnabled, setAutoSaveEnabled] = useState(readAutoSavePreference)
+  const autoSaveEnabled = useEditorPreference('autoSave')
   const [isSaving, setIsSaving] = useState(false)
   const isStatusSaving = saveStatus?.state === 'saving'
   const saveError = saveStatus?.state === 'error' ? saveStatus.message ?? 'Save failed' : null
-
-  useEffect(() => {
-    return subscribeToEditorPrefsChanged(() => {
-      setAutoSaveEnabled(readAutoSavePreference())
-    })
-  }, [])
 
   async function handleManualSave() {
     if (!onSave || isSaving || isStatusSaving) return

@@ -32,10 +32,7 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import { useEditorStore, selectActiveCanvasPage } from '@core/editor-store/store'
-import {
-  readClassHoverPreviewPreference,
-  subscribeToEditorPrefsChanged,
-} from '../../preferences/editorPreferences'
+import { useEditorPreference } from '../../preferences/editorPreferences'
 import { Button } from '@ui/components/Button'
 import {
   ContextMenu,
@@ -54,6 +51,7 @@ import {
   isGeneratedClassLocked,
   isUserVisibleClass,
 } from '@core/page-tree/classUtils'
+import { pillAccent } from '../../ui/pillAccent'
 import type { CSSClass } from '@core/page-tree/schemas'
 import dialogStyles from '../SiteCreateDialog/SiteCreateDialog.module.css'
 import styles from './ClassPicker.module.css'
@@ -65,20 +63,10 @@ interface ClassContextMenuState {
 }
 
 // ---------------------------------------------------------------------------
-// Pill accent — deterministic hash from the class name.
-// Kept local: purely presentational, not shared logic.
+// pillAccent now lives in src/editor/ui/pillAccent.ts so the Layers panel can
+// share the exact same hash (so a "header" tag and a "header" class always
+// pick the same tint).
 // ---------------------------------------------------------------------------
-
-type PillAccent = 'mint' | 'lilac' | 'sky' | 'peach'
-const PILL_ACCENTS: readonly PillAccent[] = ['mint', 'lilac', 'sky', 'peach']
-
-function pillAccent(name: string): PillAccent {
-  let h = 0
-  for (let i = 0; i < name.length; i++) {
-    h = (Math.imul(h, 31) + name.charCodeAt(i)) | 0
-  }
-  return PILL_ACCENTS[Math.abs(h) % PILL_ACCENTS.length]!
-}
 
 function keyboardMenuPosition(element: HTMLElement) {
   const rect = element.getBoundingClientRect()
@@ -130,9 +118,11 @@ function ClassPickerInner({ nodeId, trailingAction }: ClassPickerProps, ref) {
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [contextMenu, setContextMenu] = useState<ClassContextMenuState | null>(null)
   const [renameTarget, setRenameTarget] = useState<CSSClass | null>(null)
-  const [classHoverPreviewEnabled, setClassHoverPreviewEnabled] = useState(
-    readClassHoverPreviewPreference,
-  )
+  // Shared "preview-on-hover" preference — also gates token + variable
+  // autocomplete previews in other property controls (e.g. SpacingBoxControl).
+  // Renamed from `classHoverPreview`; the toggle now covers every kind of
+  // transient hover preview the Properties panel exposes.
+  const hoverPreviewEnabled = useEditorPreference('hoverPreview')
 
   const inputRef = useRef<HTMLInputElement>(null)
   // The dropdown anchors to the input but takes the *row* width so search
@@ -207,10 +197,10 @@ function ClassPickerInner({ nodeId, trailingAction }: ClassPickerProps, ref) {
 
   const previewClass = useCallback(
     (classId: string) => {
-      if (!classHoverPreviewEnabled) return
+      if (!hoverPreviewEnabled) return
       setPreviewNodeClass(nodeId, classId)
     },
-    [classHoverPreviewEnabled, nodeId, setPreviewNodeClass],
+    [hoverPreviewEnabled, nodeId, setPreviewNodeClass],
   )
 
   const clearPreviewClass = useCallback(
@@ -221,14 +211,8 @@ function ClassPickerInner({ nodeId, trailingAction }: ClassPickerProps, ref) {
   )
 
   useEffect(() => {
-    return subscribeToEditorPrefsChanged(() => {
-      setClassHoverPreviewEnabled(readClassHoverPreviewPreference())
-    })
-  }, [])
-
-  useEffect(() => {
-    if (!classHoverPreviewEnabled) clearPreviewNodeClass(nodeId)
-  }, [classHoverPreviewEnabled, clearPreviewNodeClass, nodeId])
+    if (!hoverPreviewEnabled) clearPreviewNodeClass(nodeId)
+  }, [hoverPreviewEnabled, clearPreviewNodeClass, nodeId])
 
   useEffect(() => () => clearPreviewNodeClass(nodeId), [clearPreviewNodeClass, nodeId])
 

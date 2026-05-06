@@ -174,14 +174,15 @@ describe('Component System E2E smoke test', () => {
 
     // The flat nodes dict includes ALL VC nodes (root + cloned children)
     const vc = state.site!.visualComponents.find((v) => v.id === vcId)!
-    const vcRootId = vc.rootNode.id
+    const vcRootId = vc.tree.rootNodeId
     expect(canvasPage!.nodes[vcRootId]).toBeDefined()
     // VC rootNodeId is the virtual page's rootNodeId
     expect(canvasPage!.rootNodeId).toBe(vcRootId)
     // Cloned children are also in the flat map
-    const clonedChildren = vc.rootNode.childNodes ?? []
-    for (const child of clonedChildren) {
-      expect(canvasPage!.nodes[child.id]).toBeDefined()
+    const vcRootNode = vc.tree.nodes[vcRootId]
+    const childIds = vcRootNode?.children ?? []
+    for (const childId2 of childIds) {
+      expect(canvasPage!.nodes[childId2]).toBeDefined()
     }
   })
 
@@ -197,11 +198,21 @@ describe('Component System E2E smoke test', () => {
     const vcId = callAction<string>('convertNodeToComponent', containerId, 'StyledCard')
     const state = useEditorStore.getState()
 
-    // Identify the cloned child in the VC tree (it has a new ID after cloning)
+    // Identify the cloned child in the VC tree (it has a new ID after cloning).
+    // After always-wrap, the tree shape is:
+    //   tree.rootNodeId → base.body wrapper
+    //     children[0]   → cloned base.container
+    //       children    → cloned text(s)
     const vc = state.site!.visualComponents.find((v) => v.id === vcId)!
-    const clonedChild = vc.rootNode.childNodes?.find((n) => n.moduleId === 'base.text')
-    expect(clonedChild).toBeDefined()
-    const clonedChildId = clonedChild!.id
+    const vcRoot = vc.tree.nodes[vc.tree.rootNodeId]
+    expect(vcRoot.moduleId).toBe('base.body')
+    const clonedContainerId = vcRoot.children[0]
+    const clonedContainer = vc.tree.nodes[clonedContainerId]
+    expect(clonedContainer.moduleId).toBe('base.container')
+    const clonedChildId = clonedContainer.children.find(
+      (cId) => vc.tree.nodes[cId]?.moduleId === 'base.text',
+    )
+    expect(clonedChildId).toBeDefined()
 
     // Select the cloned child node
     useEditorStore.getState().selectNode(clonedChildId)
@@ -276,17 +287,24 @@ describe('Component System E2E smoke test', () => {
     expect(newVc).toBeDefined()
     expect(newVc!.name).toBe('TestCard')
 
-    // VC rootNode is a deep clone — different IDs, same structural content
-    expect(newVc!.rootNode.id).not.toBe(containerId)
-    expect(newVc!.rootNode.moduleId).toBe('base.container')
-    expect(newVc!.rootNode.childNodes).toBeDefined()
-    expect(newVc!.rootNode.childNodes!.length).toBe(2)
+    // VC tree shape after always-wrap:
+    //   tree.rootNodeId → fresh base.body wrapper (NOT the original container)
+    //     children[0]   → cloned base.container
+    //       children    → cloned text1, text2
+    const vcTreeRoot = newVc!.tree.nodes[newVc!.tree.rootNodeId]
+    expect(newVc!.tree.rootNodeId).not.toBe(containerId)
+    expect(vcTreeRoot.moduleId).toBe('base.body')
+    expect(vcTreeRoot.children.length).toBe(1)
 
-    const clonedChildIds = newVc!.rootNode.childNodes!.map((c) => c.id)
+    const clonedContainer = newVc!.tree.nodes[vcTreeRoot.children[0]]
+    expect(clonedContainer.moduleId).toBe('base.container')
+    expect(clonedContainer.children.length).toBe(2)
+
+    const clonedChildIds = clonedContainer.children
     expect(clonedChildIds).not.toContain(text1Id)
     expect(clonedChildIds).not.toContain(text2Id)
     // Child modules preserved
-    const clonedModules = newVc!.rootNode.childNodes!.map((c) => c.moduleId)
+    const clonedModules = clonedChildIds.map((id) => newVc!.tree.nodes[id]?.moduleId)
     expect(clonedModules).toContain('base.text')
 
     // Original location on the page now has a base.visual-component-ref
@@ -348,9 +366,10 @@ describe('Component System E2E smoke test', () => {
     // ── Step 7: Selection — clicking VC body node routes to the ref ────────────
     // Instantiate the VC at refNodeId to produce an annotated flat node map.
     // Each instantiated node carries _owningRefId = refNodeId and _fromSlotContent = false.
-    const innerVCNodeId = newVc!.rootNode.childNodes![0].id
+    const vcRootForStep7 = newVc!.tree.nodes[newVc!.tree.rootNodeId]
+    const innerVCNodeId = vcRootForStep7.children[0]
 
-    const instantiated = instantiateVCAtRef(newVc!, {}, {}, refNodeId)
+    const instantiated = instantiateVCAtRef(newVc!, {}, {}, {}, refNodeId)
     expect(instantiated.nodes[innerVCNodeId]).toBeDefined()
     expect(instantiated.nodes[innerVCNodeId]._owningRefId).toBe(refNodeId)
     expect(instantiated.nodes[innerVCNodeId]._fromSlotContent).toBe(false)
@@ -386,13 +405,14 @@ describe('Component System E2E smoke test', () => {
       classIds: [],
     }
     // Add the slot outlet as a child of the VC root node.
-    const vcWithSlotRootId = newVc!.rootNode.id
+    const vcWithSlotRootId = newVc!.tree.rootNodeId
     callAction<void>('addNodeToVc', newVcId, vcWithSlotRootId, slotOutletNode)
 
     // Verify the slot outlet was added to the VC tree.
     const vcWithSlot = getSite().visualComponents.find((v) => v.id === newVcId)!
-    expect(vcWithSlot.rootNode.children).toContain(slotOutletId)
-    expect(vcWithSlot.rootNode.childNodes?.find((c) => c.id === slotOutletId)).toBeDefined()
+    const vcWithSlotRoot = vcWithSlot.tree.nodes[vcWithSlot.tree.rootNodeId]
+    expect(vcWithSlotRoot.children).toContain(slotOutletId)
+    expect(vcWithSlot.tree.nodes[slotOutletId]).toBeDefined()
 
     // Create a slot content node (user-authored content placed into the slot).
     const slotContentNodeId = 'smoke-slot-content-node'
@@ -406,12 +426,16 @@ describe('Component System E2E smoke test', () => {
     }
 
     // Instantiate the VC with slot content injected into the 'children' slot.
+    // slotInstancesByName maps slotName → direct child IDs of the slot-instance;
+    // pageNodes provides the full subtree for recursive collection.
     // instantiateVCAtRef expands the base.slot-outlet with the provided content
     // and marks all slot content nodes _fromSlotContent = true.
+    const slotPageNodes = { [slotContentNodeId]: slotContentNode as unknown as import('@core/page-tree/baseNode').BaseNode }
     const instantiatedWithSlot = instantiateVCAtRef(
       vcWithSlot,
       {},
-      { children: [slotContentNode] },
+      { children: [slotContentNodeId] },
+      slotPageNodes,
       refNodeId,
     )
 

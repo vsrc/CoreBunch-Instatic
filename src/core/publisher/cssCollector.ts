@@ -19,38 +19,17 @@
  */
 
 import type { SiteDocument } from '../page-tree/schemas'
-import type { VCNode } from '../visualComponents/schemas'
+import { isGeneratedClass } from '../page-tree/classUtils'
 import { generateClassCSS } from './classCss'
 
 /**
- * Recursively collect all classIds from a VCNode tree (nested childNodes structure).
- *
- * VC trees use a nested representation (childNodes) rather than the flat-map
- * structure of Page.nodes. Both the node itself and its VC-level classIds are
- * collected so that any CSS class rules referenced inside a VC are included in
- * the published HTML `<style>` block.
- */
-function collectVCNodeClassIds(node: VCNode, ids: Set<string>): void {
-  if (node.classIds) {
-    for (const id of node.classIds) {
-      ids.add(id)
-    }
-  }
-  if (node.childNodes) {
-    for (const child of node.childNodes) {
-      collectVCNodeClassIds(child, ids)
-    }
-  }
-}
-
-/**
- * Collect all CSS class declarations for the classes referenced across a
- * site's pages and VC trees. Used by the publisher to include class styles
- * inline in the published HTML `<style>` block.
+ * Collect all user-authored CSS class declarations for the classes referenced
+ * across a site's pages and VC trees. Framework-generated utilities are
+ * emitted through `framework.css` by `generateFrameworkCss()` instead.
  *
  * Only emits CSS for classes actually used by at least one node (tree-shaking).
- * Traverses both page nodes (flat map) and VisualComponent rootNode trees
- * (nested childNodes) so that classes used inside VCs are also included.
+ * Traverses both page nodes (flat map) and VisualComponent flat tree nodes
+ * so that classes used inside VCs are also included.
  * Sanitised via sanitizeModuleCSS (Constraint #228).
  *
  * @param site The site containing the class registry, page nodes, and VCs.
@@ -83,8 +62,14 @@ export function collectClassCSS(site: SiteDocument): string {
           usedClassIds.add(id)
         }
       }
-      // Recursively collect from the VC node tree
-      collectVCNodeClassIds(vc.rootNode, usedClassIds)
+      // Collect from the VC's flat node tree
+      for (const node of Object.values(vc.tree.nodes)) {
+        if (node.classIds) {
+          for (const id of node.classIds) {
+            usedClassIds.add(id)
+          }
+        }
+      }
     }
   }
 
@@ -93,9 +78,9 @@ export function collectClassCSS(site: SiteDocument): string {
   // Build a filtered class map containing only classes that are actually used
   const usedClasses: SiteDocument['classes'] = {}
   for (const id of usedClassIds) {
-    if (site.classes[id]) {
-      usedClasses[id] = site.classes[id]
-    }
+    const cls = site.classes[id]
+    if (!cls || isGeneratedClass(cls)) continue
+    usedClasses[id] = cls
   }
 
   const css = generateClassCSS(usedClasses, site.breakpoints)

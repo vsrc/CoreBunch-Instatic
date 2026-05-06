@@ -66,7 +66,7 @@ export function ModulePickerDropdown({
           handleClose()
           return
         }
-        const parentId = selectedNodeId ?? vc.rootNode.id
+        const parentId = selectedNodeId ?? vc.tree.rootNodeId
         insertComponentRef(parentId, vcId)
       } else {
         // Page mode: mirror useInsertModule's parent resolution.

@@ -147,12 +147,12 @@ const DEFAULT_CSS_VALUES: Partial<Record<keyof CSSPropertyBag, string | number>>
   aspectRatio: '',     // free-form text (e.g. "16/9"); no sensible universal default
   boxSizing:   'border-box',
   // ── Spacing ───────────────────────────────────────────────────────────────
-  padding:       '0px',
+  // Per-side only — see CSSPropertyBagSchema for the rationale (publisher
+  // collapses 4 sides into the CSS shorthand at emission time).
   paddingTop:    '0px',
   paddingRight:  '0px',
   paddingBottom: '0px',
   paddingLeft:   '0px',
-  margin:        '0px',
   marginTop:     '0px',
   marginRight:   '0px',
   marginBottom:  '0px',
@@ -306,12 +306,10 @@ export const CLASS_STYLE_SECTIONS: ReadonlyArray<ClassStyleSectionDefinition> = 
     icon: RulerDimensionIcon,
     defaultOpen: true,
     properties: [
-      'padding',
       'paddingTop',
       'paddingRight',
       'paddingBottom',
       'paddingLeft',
-      'margin',
       'marginTop',
       'marginRight',
       'marginBottom',

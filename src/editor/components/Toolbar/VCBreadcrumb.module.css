@@ -62,7 +62,7 @@
 }
 
 .nameChip:focus-visible {
-    box-shadow: 0 0 0 2px var(--editor-focus-ring, var(--editor-border));
+    box-shadow: 0 0 0 2px var(--editor-border);
 }
 
 /* ── Name input (editing state) ───────────────────────────────────────────── */

@@ -1,16 +1,22 @@
 import { nanoid } from 'nanoid'
 import type { Page, PageNode, SiteDocument } from './schemas'
+import type { NodeTree } from './treeSchema'
 import { getParent, isAncestor } from './selectors'
 import { normalizePageSlug } from './slugs'
 
 /**
  * Pure Immer-compatible mutation helpers for the page tree.
  *
- * These are called inside Zustand's Immer middleware — they mutate a draft Page/SiteDocument directly.
- * Every function here is also safe to call as a pure function when given a structuredClone'd object.
+ * These are called inside Zustand's Immer middleware — they mutate a draft
+ * NodeTree/SiteDocument directly. Every function here is also safe to call as
+ * a pure function when given a structuredClone'd object.
  *
- * Naming convention: functions that mutate pages take a `Page` draft as first arg.
- * Functions that mutate the site take a `SiteDocument` draft.
+ * Naming convention:
+ *   - Node-level mutations take a `NodeTree<PageNode>` draft as first arg.
+ *   - Site-level mutations take a `SiteDocument` draft.
+ *
+ * Since `Page` IS a `NodeTree<PageNode>` (it has `nodes` and `rootNodeId` plus
+ * metadata fields), callers that pass a `Page` draft continue to work unchanged.
  */
 
 // ---------------------------------------------------------------------------
@@ -40,19 +46,19 @@ export function createNode(
  * If index is omitted, appends to the end.
  */
 export function insertNode(
-  page: Page,
+  tree: NodeTree<PageNode>,
   node: PageNode,
   parentId: string,
   index?: number
 ): void {
-  if (page.nodes[node.id]) {
-    throw new Error(`[PageTree] Node "${node.id}" already exists in page "${page.id}"`)
+  if (tree.nodes[node.id]) {
+    throw new Error(`[PageTree] Node "${node.id}" already exists in the tree`)
   }
-  const parent = page.nodes[parentId]
+  const parent = tree.nodes[parentId]
   if (!parent) {
     throw new Error(`[PageTree] Parent node "${parentId}" not found`)
   }
-  page.nodes[node.id] = node
+  tree.nodes[node.id] = node
   if (index === undefined || index >= parent.children.length) {
     parent.children.push(node.id)
   } else {
@@ -65,31 +71,31 @@ export function insertNode(
 // ---------------------------------------------------------------------------
 
 /**
- * Remove a node and ALL its descendants from the page.
+ * Remove a node and ALL its descendants from the tree.
  * Also removes the node's ID from its parent's children array.
  */
-export function deleteNode(page: Page, nodeId: string): void {
-  if (nodeId === page.rootNodeId) {
-    throw new Error(`[PageTree] Cannot delete the root node of a page.`)
+export function deleteNode(tree: NodeTree<PageNode>, nodeId: string): void {
+  if (nodeId === tree.rootNodeId) {
+    throw new Error(`[PageTree] Cannot delete the root node.`)
   }
   // Collect all descendant IDs to delete
   const toDelete = new Set<string>()
   const stack = [nodeId]
   while (stack.length > 0) {
     const id = stack.pop()!
-    const node = page.nodes[id]
+    const node = tree.nodes[id]
     if (!node) continue
     toDelete.add(id)
     stack.push(...node.children)
   }
   // Remove from parent's children array
-  const parent = getParent(page, nodeId)
+  const parent = getParent(tree, nodeId)
   if (parent) {
     parent.children = parent.children.filter((id) => id !== nodeId)
   }
   // Remove all collected nodes
   for (const id of toDelete) {
-    delete page.nodes[id]
+    delete tree.nodes[id]
   }
 }
 
@@ -99,23 +105,23 @@ export function deleteNode(page: Page, nodeId: string): void {
 
 /** Update one or more props on a node (shallow merge). */
 export function updateNodeProps(
-  page: Page,
+  tree: NodeTree<PageNode>,
   nodeId: string,
   patch: Partial<Record<string, unknown>>
 ): void {
-  const node = page.nodes[nodeId]
+  const node = tree.nodes[nodeId]
   if (!node) throw new Error(`[PageTree] Node "${nodeId}" not found`)
   Object.assign(node.props, patch)
 }
 
 /** Set a breakpoint override for one or more props. */
 export function setBreakpointOverride(
-  page: Page,
+  tree: NodeTree<PageNode>,
   nodeId: string,
   breakpointId: string,
   patch: Partial<Record<string, unknown>>
 ): void {
-  const node = page.nodes[nodeId]
+  const node = tree.nodes[nodeId]
   if (!node) throw new Error(`[PageTree] Node "${nodeId}" not found`)
   if (!node.breakpointOverrides[breakpointId]) {
     node.breakpointOverrides[breakpointId] = {}
@@ -125,11 +131,11 @@ export function setBreakpointOverride(
 
 /** Clear all breakpoint overrides for a specific breakpoint on a node. */
 export function clearBreakpointOverride(
-  page: Page,
+  tree: NodeTree<PageNode>,
   nodeId: string,
   breakpointId: string
 ): void {
-  const node = page.nodes[nodeId]
+  const node = tree.nodes[nodeId]
   if (!node) return
   delete node.breakpointOverrides[breakpointId]
 }
@@ -138,20 +144,20 @@ export function clearBreakpointOverride(
 // Node metadata
 // ---------------------------------------------------------------------------
 
-export function renameNode(page: Page, nodeId: string, label: string): void {
-  const node = page.nodes[nodeId]
+export function renameNode(tree: NodeTree<PageNode>, nodeId: string, label: string): void {
+  const node = tree.nodes[nodeId]
   if (!node) throw new Error(`[PageTree] Node "${nodeId}" not found`)
   node.label = label.trim() || undefined
 }
 
-export function toggleNodeLocked(page: Page, nodeId: string): void {
-  const node = page.nodes[nodeId]
+export function toggleNodeLocked(tree: NodeTree<PageNode>, nodeId: string): void {
+  const node = tree.nodes[nodeId]
   if (!node) throw new Error(`[PageTree] Node "${nodeId}" not found`)
   node.locked = !node.locked
 }
 
-export function toggleNodeHidden(page: Page, nodeId: string): void {
-  const node = page.nodes[nodeId]
+export function toggleNodeHidden(tree: NodeTree<PageNode>, nodeId: string): void {
+  const node = tree.nodes[nodeId]
   if (!node) throw new Error(`[PageTree] Node "${nodeId}" not found`)
   node.hidden = !node.hidden
 }
@@ -167,24 +173,24 @@ export function toggleNodeHidden(page: Page, nodeId: string): void {
  * @param newIndex     - Insertion index within the new parent's children
  */
 export function moveNode(
-  page: Page,
+  tree: NodeTree<PageNode>,
   nodeId: string,
   newParentId: string,
   newIndex: number
 ): void {
-  if (nodeId === page.rootNodeId) {
+  if (nodeId === tree.rootNodeId) {
     throw new Error(`[PageTree] Cannot move the root node.`)
   }
-  if (isAncestor(page, nodeId, newParentId)) {
+  if (isAncestor(tree, nodeId, newParentId)) {
     throw new Error(
       `[PageTree] Cannot move node "${nodeId}" into its own descendant "${newParentId}".`
     )
   }
-  const newParent = page.nodes[newParentId]
+  const newParent = tree.nodes[newParentId]
   if (!newParent) throw new Error(`[PageTree] New parent "${newParentId}" not found`)
 
   // Remove from old parent
-  const oldParent = getParent(page, nodeId)
+  const oldParent = getParent(tree, nodeId)
   if (oldParent) {
     oldParent.children = oldParent.children.filter((id) => id !== nodeId)
   }
@@ -203,7 +209,7 @@ export function moveNode(
  * Inserts the clone immediately after the source node in the same parent.
  * Returns the ID of the new root clone node.
  */
-export function duplicateNode(page: Page, nodeId: string): string {
+export function duplicateNode(tree: NodeTree<PageNode>, nodeId: string): string {
   const idMap = new Map<string, string>() // old ID → new ID
 
   // Build id mapping for entire subtree
@@ -211,7 +217,7 @@ export function duplicateNode(page: Page, nodeId: string): string {
   const toClone: string[] = []
   while (stack.length > 0) {
     const id = stack.pop()!
-    const node = page.nodes[id]
+    const node = tree.nodes[id]
     if (!node) continue
     toClone.push(id)
     idMap.set(id, nanoid())
@@ -220,9 +226,9 @@ export function duplicateNode(page: Page, nodeId: string): string {
 
   // Clone all nodes with remapped IDs and children
   for (const id of toClone) {
-    const original = page.nodes[id]
+    const original = tree.nodes[id]
     const newId = idMap.get(id)!
-    page.nodes[newId] = {
+    tree.nodes[newId] = {
       ...original,
       id: newId,
       props: { ...original.props },
@@ -235,7 +241,7 @@ export function duplicateNode(page: Page, nodeId: string): string {
 
   // Insert the new root clone after the original in its parent
   const newRootId = idMap.get(nodeId)!
-  const parent = getParent(page, nodeId)
+  const parent = getParent(tree, nodeId)
   if (parent) {
     const idx = parent.children.indexOf(nodeId)
     parent.children.splice(idx + 1, 0, newRootId)
@@ -251,7 +257,7 @@ export function duplicateNode(page: Page, nodeId: string): string {
 /**
  * Build a map of fresh node IDs for every node reachable from `rootNodeId`
  * inside `nodes`. Each entry maps the source-side ID to a freshly minted
- * `nanoid()` ID, suitable for inserting the subtree into the target page
+ * `nanoid()` ID, suitable for inserting the subtree into the target tree
  * without collisions.
  *
  * Exposed separately from `pasteSubtree` because the clipboard slice needs
@@ -280,7 +286,7 @@ export function buildSubtreeNodeIdMap(
  *
  * The payload comes from the clipboard slice and may originate from any page
  * (or even any site). All node IDs are regenerated on insert so collisions
- * with the target page are impossible.
+ * with the target tree are impossible.
  *
  * `options.nodeIdMap` accepts a precomputed map (typically built via
  * `buildSubtreeNodeIdMap`); if omitted, one is built locally. Callers that
@@ -293,10 +299,10 @@ export function buildSubtreeNodeIdMap(
  * in the target). Return `null` from the mapper to drop a classId, or a
  * string to remap it.
  *
- * Returns the new root node ID inside the target page.
+ * Returns the new root node ID inside the target tree.
  */
 export function pasteSubtree(
-  page: Page,
+  tree: NodeTree<PageNode>,
   payload: { rootNodeId: string; nodes: Record<string, PageNode> },
   parentId: string,
   index?: number,
@@ -305,7 +311,7 @@ export function pasteSubtree(
     classIdRemap?: (classId: string) => string | null
   } = {}
 ): string {
-  const parent = page.nodes[parentId]
+  const parent = tree.nodes[parentId]
   if (!parent) {
     throw new Error(`[PageTree] Parent node "${parentId}" not found`)
   }
@@ -326,7 +332,7 @@ export function pasteSubtree(
         })
       : [...original.classIds]
 
-    page.nodes[newId] = {
+    tree.nodes[newId] = {
       ...original,
       id: newId,
       props: { ...original.props },
@@ -363,22 +369,22 @@ export function pasteSubtree(
  * The new container takes the node's position; the node becomes the container's first child.
  */
 export function wrapNode(
-  page: Page,
+  tree: NodeTree<PageNode>,
   nodeId: string,
   containerModuleId: string,
   containerDefaults: Record<string, unknown> = {}
 ): string {
-  if (nodeId === page.rootNodeId) {
+  if (nodeId === tree.rootNodeId) {
     throw new Error(`[PageTree] Cannot wrap the root node.`)
   }
-  const parent = getParent(page, nodeId)
+  const parent = getParent(tree, nodeId)
   if (!parent) throw new Error(`[PageTree] Node "${nodeId}" has no parent and cannot be wrapped.`)
 
   const wrapper = createNode(containerModuleId, containerDefaults)
   const idx = parent.children.indexOf(nodeId)
 
   // Insert wrapper at the node's position
-  page.nodes[wrapper.id] = wrapper
+  tree.nodes[wrapper.id] = wrapper
   parent.children[idx] = wrapper.id
 
   // Make the original node the wrapper's first child
@@ -422,4 +428,59 @@ export function reorderPages(site: SiteDocument, fromIndex: number, toIndex: num
   const pages = site.pages
   const [moved] = pages.splice(fromIndex, 1)
   pages.splice(toIndex, 0, moved)
+}
+
+/**
+ * Deep-clone a page (every node + its children, props, classIds,
+ * breakpointOverrides) under a new title and slug. The cloned nodes get
+ * fresh nanoid IDs so they don't collide with the source page. Returns
+ * the new Page; caller is responsible for activating it if desired.
+ */
+export function duplicatePage(
+  site: SiteDocument,
+  sourcePageId: string,
+  title: string,
+  slug?: string,
+): Page {
+  const source = site.pages.find((p) => p.id === sourcePageId)
+  if (!source) throw new Error(`[PageTree] Page "${sourcePageId}" not found`)
+
+  // Build a fresh-id map for every node in the source page.
+  const idMap = new Map<string, string>()
+  for (const oldId of Object.keys(source.nodes)) {
+    idMap.set(oldId, nanoid())
+  }
+
+  // Clone each node with remapped IDs and remapped child references.
+  const newNodes: Record<string, PageNode> = {}
+  for (const [oldId, oldNode] of Object.entries(source.nodes)) {
+    const newId = idMap.get(oldId)!
+    newNodes[newId] = {
+      ...oldNode,
+      id: newId,
+      props: { ...oldNode.props },
+      breakpointOverrides: Object.fromEntries(
+        Object.entries(oldNode.breakpointOverrides).map(([k, v]) => [k, { ...v }]),
+      ),
+      children: oldNode.children
+        .map((childId) => idMap.get(childId))
+        .filter((cid): cid is string => typeof cid === 'string'),
+      classIds: [...oldNode.classIds],
+    }
+  }
+
+  const newRootId = idMap.get(source.rootNodeId)
+  if (!newRootId) {
+    throw new Error('[PageTree] Source page root node missing from page.nodes')
+  }
+
+  const newPage: Page = {
+    id: nanoid(),
+    title,
+    slug: normalizePageSlug(slug ?? title),
+    rootNodeId: newRootId,
+    nodes: newNodes,
+  }
+  site.pages.push(newPage)
+  return newPage
 }

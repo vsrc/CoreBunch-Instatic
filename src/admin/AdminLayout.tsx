@@ -37,6 +37,8 @@ import { Toolbar } from '@editor/components/Toolbar'
 import { LeftSidebar } from '@editor/components/LeftSidebar'
 import { RightSidebar } from '@editor/components/RightSidebar'
 import { SettingsModal } from '@editor/components/Settings'
+import { ConfirmDeleteProvider } from '@editor/components/shared/ConfirmDeleteDialog'
+import { useEditorSelectPreference } from '@editor/preferences/editorPreferences'
 import { usePersistence } from '@editor/hooks/usePersistence'
 import { useEditorLayoutPersistence } from '@editor/hooks/useEditorLayoutPersistence'
 import { selectActiveCanvasPage, selectRightSidebarExpanded, useEditorStore } from '@core/editor-store/store'
@@ -125,6 +127,16 @@ export default function AdminLayout({
     }
   }, [])
 
+  // UI density preference — `data-editor-density` on the editor root drives
+  // CSS variables consumed by tree rows, toolbar buttons, and other density-
+  // sensitive surfaces. Reading the preference here keeps the attribute in
+  // sync with the Settings toggle without per-component subscriptions.
+  //
+  // Read BEFORE the `!site` early return so the hook order stays stable across
+  // the hydration gate (React rules-of-hooks: hooks must run in the same order
+  // on every render).
+  const density = useEditorSelectPreference('density')
+
   if (!site) {
     if (persistence.saveStatus.state === 'error') {
       return (
@@ -139,7 +151,7 @@ export default function AdminLayout({
   }
 
   return (
-    <div className={styles.shell}>
+    <div className={styles.shell} data-editor-density={density}>
       {/* ── Top toolbar (z-60, Guideline #374) ───────────────────────────── */}
       <Toolbar
         onSave={persistence.saveSite}
@@ -165,6 +177,11 @@ export default function AdminLayout({
         context is isolated; nested DndContexts are fully supported by dnd-kit.
       */}
       <DndContext sensors={canvasDndSensors} onDragEnd={handleCanvasDragEnd}>
+      {/* ConfirmDeleteProvider wraps the entire editor body so any descendant
+          (CanvasRoot Delete-key handler, Layers panel context menu, future
+          panel actions) can call useConfirmDelete() to gate destructive
+          operations on the confirmBeforeDelete preference. */}
+      <ConfirmDeleteProvider>
       <div className={styles.editorBody}>
         {workspace === 'site' ? (
           <LeftSidebar workspace={workspace} contentPanel={contentLeftPanel} />
@@ -193,6 +210,7 @@ export default function AdminLayout({
           suppressDefaultPanel={workspace !== 'site'}
         />
       </div>
+      </ConfirmDeleteProvider>
       </DndContext>
 
       {/* Code editor/media preview: viewport overlay, not constrained by the

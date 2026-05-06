@@ -1,6 +1,7 @@
 import { memo, useEffect, useRef, useState, type FormEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { Button } from '@ui/components/Button'
+import { Checkbox } from '@ui/components/Checkbox'
 import { Input } from '@ui/components/Input'
 import { CloseIcon } from 'pixel-art-icons/icons/close'
 import type { CreateContentCollectionInput } from '@core/content/schemas'
@@ -213,26 +214,23 @@ export const ContentCollectionCreateDialog = memo(function ContentCollectionCrea
           <fieldset className={styles.collectionFields}>
             <legend>Fields</legend>
             <label>
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={bodyField}
-                onChange={(event) => setBodyField(event.target.checked)}
+                onCheckedChange={setBodyField}
               />
               <span>Body</span>
             </label>
             <label>
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={featuredMediaField}
-                onChange={(event) => setFeaturedMediaField(event.target.checked)}
+                onCheckedChange={setFeaturedMediaField}
               />
               <span>Featured media</span>
             </label>
             <label>
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={seoField}
-                onChange={(event) => setSeoField(event.target.checked)}
+                onCheckedChange={setSeoField}
               />
               <span>SEO fields</span>
             </label>

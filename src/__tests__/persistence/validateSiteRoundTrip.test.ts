@@ -50,11 +50,16 @@ describe('validateSite — round-trip with representative fixture', () => {
     })
   })
 
-  it('preserves the VC rootNode childNodes tree', () => {
+  it('preserves the VC flat tree (tree.nodes + rootNodeId)', () => {
     const result = validateSite(loadFixture())
-    const rootNode = result.visualComponents[0].rootNode
-    expect(rootNode.childNodes).toHaveLength(1)
-    expect((rootNode.childNodes as Array<{ id: string }>)[0].id).toBe('vc-child-1')
+    const vc = result.visualComponents[0]
+    expect(vc.tree.rootNodeId).toBe('vc-root')
+    // Both the root and its child must be in the flat map
+    expect(vc.tree.nodes['vc-root']).toBeDefined()
+    expect(vc.tree.nodes['vc-child-1']).toBeDefined()
+    expect((vc.tree.nodes['vc-child-1'] as { id: string }).id).toBe('vc-child-1')
+    // Root node lists the child in its children array
+    expect((vc.tree.nodes['vc-root'] as { children: string[] }).children).toContain('vc-child-1')
   })
 
   it('preserves the page template config including conditions', () => {
@@ -91,6 +96,7 @@ describe('validateSite — round-trip with representative fixture', () => {
     const result = validateSite(loadFixture())
     expect(result.settings.framework?.preferences?.rootFontSize).toBe(10)
     expect(result.settings.framework?.preferences?.isRem).toBe(true)
+    expect(result.settings.framework?.preferences?.treeShakeGeneratedFrameworkUtilities).toBe(true)
   })
 })
 

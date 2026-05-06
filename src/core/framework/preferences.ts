@@ -32,6 +32,10 @@ export function resolveFrameworkPreferences(
         ? raw.maxScreenWidth
         : DEFAULT_FRAMEWORK_PREFERENCES.maxScreenWidth,
     isRem: typeof raw.isRem === 'boolean' ? raw.isRem : DEFAULT_FRAMEWORK_PREFERENCES.isRem,
+    treeShakeGeneratedFrameworkUtilities:
+      typeof raw.treeShakeGeneratedFrameworkUtilities === 'boolean'
+        ? raw.treeShakeGeneratedFrameworkUtilities
+        : DEFAULT_FRAMEWORK_PREFERENCES.treeShakeGeneratedFrameworkUtilities,
   }
 }
 

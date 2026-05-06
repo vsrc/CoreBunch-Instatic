@@ -17,7 +17,6 @@
  */
 
 import type { SiteDocument } from '@core/page-tree/schemas'
-import type { VCNode } from '@core/visualComponents/schemas'
 
 /**
  * One spot in the site where a soon-to-be-removed framework class is
@@ -64,7 +63,7 @@ export interface FrameworkChangeImpact {
  *   - Page assignments come from `site.pages[].nodes[].classIds`.
  *   - Visual-component assignments come from each VisualComponent's
  *     own top-level `classIds` (rare but possible) and from every node
- *     in its `rootNode` tree, walked via `childNodes`.
+ *     in its flat `tree.nodes` map.
  *   - Node-scoped instance classes (module-style layers) carry a
  *     `scope.type === 'node'` marker; they are framework-namespace-free
  *     and won't appear here.
@@ -105,9 +104,8 @@ export function previewFrameworkClassRemovals(
 
   // Walk VCs (top-level + every node in the tree)
   for (const vc of beforeSite.visualComponents) {
-    const vcClassIds = (vc as { classIds?: string[] }).classIds
-    if (vcClassIds) {
-      for (const classId of vcClassIds) {
+    if (vc.classIds) {
+      for (const classId of vc.classIds) {
         if (!removedSet.has(classId)) continue
         usages.push({
           classId,
@@ -116,14 +114,14 @@ export function previewFrameworkClassRemovals(
             kind: 'visualComponent',
             vcId: vc.id,
             vcName: vc.name,
-            nodeId: vc.rootNode.id,
+            nodeId: vc.tree.rootNodeId,
             nodeLabel: '(component-level)',
           },
         })
       }
     }
-    walkVCNodeTreeImpact(vc.rootNode, (node) => {
-      if (!node.classIds) return
+    for (const node of Object.values(vc.tree.nodes)) {
+      if (!node.classIds) continue
       for (const classId of node.classIds) {
         if (!removedSet.has(classId)) continue
         usages.push({
@@ -138,7 +136,7 @@ export function previewFrameworkClassRemovals(
           },
         })
       }
-    })
+    }
   }
 
   if (usages.length === 0) return null
@@ -150,8 +148,3 @@ export function previewFrameworkClassRemovals(
   return { removedClasses, usages }
 }
 
-function walkVCNodeTreeImpact(node: VCNode, fn: (node: VCNode) => void): void {
-  fn(node)
-  if (!node.childNodes) return
-  for (const child of node.childNodes) walkVCNodeTreeImpact(child, fn)
-}

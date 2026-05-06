@@ -169,9 +169,10 @@ describe('Task #414 — source code guard (siteSlice)', () => {
     expect(src).toContain('registry.get(containerModuleId)')
     expect(src).toContain('mod?.defaults')
 
-    // The old broken pattern (passing empty defaults directly) must not be present.
     // The mutation call must use resolvedDefaults, not a bare empty object.
-    const wrapCallMatch = src.match(/mutatePage\(\(page\)\s*=>\s*\{\s*wrapperId\s*=\s*wrapNode\(page,\s*nodeId,\s*containerModuleId,\s*(\w+)\)/)
+    // After the tree-unification refactor (Task 2) the helper is mutateActiveTree,
+    // not mutatePage — update the pattern accordingly.
+    const wrapCallMatch = src.match(/mutateActiveTree\(\(tree\)\s*=>\s*\{\s*wrapperId\s*=\s*wrapNode\(tree,\s*nodeId,\s*containerModuleId,\s*(\w+)\)/)
     expect(wrapCallMatch).not.toBeNull()
     // Ensure it's passing resolvedDefaults (not {} or undefined)
     expect(wrapCallMatch?.[1]).toBe('resolvedDefaults')

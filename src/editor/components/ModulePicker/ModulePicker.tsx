@@ -83,6 +83,16 @@ export function ModulePicker({
       const visible = mods.filter((m) => {
         if (m.id === 'base.body') return false
         if (m.id === 'base.visual-component-ref') return false
+        // `base.slot-instance` is auto-materialized as a VC ref's child on the
+        // page tree by `syncSlotInstances`. It is NEVER user-insertable from
+        // the picker — surfacing it here causes a duplicate "Slot" entry next
+        // to `base.slot-outlet` in VC mode (both modules are named "Slot")
+        // and lets users insert orphan slot-instance nodes that the lock-down
+        // then refuses to delete.
+        if (m.id === 'base.slot-instance') return false
+        // `base.slot-outlet` is the VC author's marker that says "consumer
+        // content goes here". Only meaningful inside a VC definition — hide
+        // it from page mode where it has no consumer.
         if (m.id === 'base.slot-outlet') return isVCMode
         return true
       })

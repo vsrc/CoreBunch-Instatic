@@ -26,7 +26,7 @@ import type { SiteDocument } from '@core/page-tree/schemas'
 import type { IModuleRegistry } from '@core/module-engine/types'
 import { PUBLISHER_RESET_CSS } from '@core/publisher/reset'
 import { collectClassCSS } from '@core/publisher/cssCollector'
-import { buildSiteRootCss } from '@core/publisher/rootCss'
+import { buildSiteFrameworkCss } from '@core/publisher/frameworkCss'
 import { renderNode, type RenderContext } from '@core/publisher/render'
 import type { CssBundleFile, SiteCssBundle } from '@core/publisher/siteCssBundle'
 
@@ -53,9 +53,9 @@ export function buildSiteCssBundle(
  * module CSS used anywhere on the site.
  */
 function buildFrameworkCss(site: SiteDocument, registry: IModuleRegistry): string {
-  const rootCss = buildSiteRootCss(site)
+  const frameworkCss = buildSiteFrameworkCss(site)
   const moduleCss = collectAllModuleCss(site, registry)
-  return [rootCss, moduleCss].filter(Boolean).join('\n')
+  return [frameworkCss, moduleCss].filter(Boolean).join('\n')
 }
 
 /**

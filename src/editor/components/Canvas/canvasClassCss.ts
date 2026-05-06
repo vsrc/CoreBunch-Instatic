@@ -1,9 +1,6 @@
 import { bagToCSS } from '@core/publisher/classCss'
 import { scopedPublisherResetCss } from '@core/publisher/reset'
-import { generateFrameworkColorRootCss } from '@core/framework/colors'
-import { generateFrameworkTypographyRootCss } from '@core/framework/typography'
-import { generateFrameworkSpacingRootCss } from '@core/framework/spacing'
-import { resolveFrameworkPreferences } from '@core/framework/preferences'
+import { generateFrameworkRootCss } from '@core/framework/generate'
 import { generateFontsCss } from '@core/fonts/css'
 import { cssClassSelector } from '@core/page-tree/classNames'
 import type { CSSClass } from '@core/page-tree/schemas'
@@ -25,7 +22,6 @@ export function generateCanvasClassCSS(
   fonts?: SiteFontsSettings | null,
 ): string {
   const blocks: string[] = []
-  const preferences = resolveFrameworkPreferences(frameworkPreferences)
 
   // Publisher reset, scoped to the breakpoint frame viewports. Mirrors what
   // `publishPage()` injects into the published HTML so the design canvas and
@@ -40,12 +36,13 @@ export function generateCanvasClassCSS(
   // but the ordering keeps generated CSS easier to inspect.
   const fontsCss = generateFontsCss(fonts)
   if (fontsCss) blocks.push(fontsCss)
-  const frameworkColorCss = generateFrameworkColorRootCss(frameworkColors)
-  if (frameworkColorCss) blocks.push(frameworkColorCss)
-  const frameworkTypographyCss = generateFrameworkTypographyRootCss(frameworkTypography, preferences)
-  if (frameworkTypographyCss) blocks.push(frameworkTypographyCss)
-  const frameworkSpacingCss = generateFrameworkSpacingRootCss(frameworkSpacing, preferences)
-  if (frameworkSpacingCss) blocks.push(frameworkSpacingCss)
+  const frameworkCss = generateFrameworkRootCss({
+    colors: frameworkColors,
+    typography: frameworkTypography,
+    spacing: frameworkSpacing,
+    preferences: frameworkPreferences,
+  })
+  if (frameworkCss) blocks.push(frameworkCss)
 
   for (const cls of Object.values(classes)) {
     const baseDecls = bagToCSS(cls.styles)

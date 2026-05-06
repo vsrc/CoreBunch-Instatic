@@ -184,8 +184,10 @@ describe('site runtime build', () => {
       page,
       target: 'publish',
       assetBasePath: '/_pb/assets/runtime/',
-      // 0ms forces the timeout race to win on the next tick, regardless of
-      // how fast esbuild is on this host.
+      // bundleTimeoutMs <= 0 short-circuits to a synchronous timeout error
+      // before esbuild runs. This is deterministic — a real `setTimeout(0)`
+      // race against esbuild's promise can be won by either side depending
+      // on host speed.
       bundleTimeoutMs: 0,
     })
 

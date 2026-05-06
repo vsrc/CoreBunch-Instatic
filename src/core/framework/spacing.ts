@@ -20,13 +20,20 @@ import type {
 } from './schemas'
 import { createFrameworkScaleModule } from './scaleModule'
 
-const PROPERTY_KEYMAP: Record<string, keyof CSSPropertyBag> = {
-  padding: 'padding',
+// Property keymap — translates a class generator's CSS-style property name
+// (kebab-case, as it appears in `FrameworkSpacingClassGenerator.property`)
+// to the corresponding `CSSPropertyBag` key (camelCase). The `padding` and
+// `margin` shorthand names are intentionally absent: per CSSPropertyBagSchema,
+// only the per-side keys exist in storage. The `padding-*` / `margin-*` class
+// generators expand to all four sides via this keymap; the publisher then
+// collapses them back into a CSS shorthand at emission time.
+const PROPERTY_KEYMAP = {
+  padding: ['paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft'],
   'padding-top': 'paddingTop',
   'padding-right': 'paddingRight',
   'padding-bottom': 'paddingBottom',
   'padding-left': 'paddingLeft',
-  margin: 'margin',
+  margin: ['marginTop', 'marginRight', 'marginBottom', 'marginLeft'],
   'margin-top': 'marginTop',
   'margin-right': 'marginRight',
   'margin-bottom': 'marginBottom',
@@ -34,7 +41,7 @@ const PROPERTY_KEYMAP: Record<string, keyof CSSPropertyBag> = {
   gap: 'gap',
   'row-gap': 'rowGap',
   'column-gap': 'columnGap',
-}
+} satisfies Record<string, keyof CSSPropertyBag | readonly (keyof CSSPropertyBag)[]>
 
 const spacingModule = createFrameworkScaleModule<FrameworkSpacingGroup, FrameworkSpacingClassGenerator>({
   family: 'spacing',

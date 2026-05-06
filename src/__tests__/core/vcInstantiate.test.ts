@@ -14,8 +14,8 @@
  *  IT-8  Slot outlet replaced with param defaultValue content
  *  IT-9  Empty slot content array falls back to param defaultValue
  *  IT-10 base.visual-component-ref nodes pass through unchanged
- *  IT-11 Root node ID is vc.rootNode.id
- *  IT-12 Nested child nodes are flattened correctly
+ *  IT-11 Root node ID is vc.tree.rootNodeId
+ *  IT-12 All nodes appear in the flat output map
  *  IT-13 All emitted nodes carry _owningRefId annotation
  *  IT-14 VC body nodes are _fromSlotContent = false
  *  IT-15 Slot content nodes are _fromSlotContent = true
@@ -38,7 +38,6 @@ function node(
   opts: {
     propBindings?: Record<string, { paramId: string }>
     children?: string[]
-    childNodes?: VCNode[]
     hidden?: boolean
   } = {},
 ): VCNode {
@@ -50,27 +49,26 @@ function node(
     children: opts.children ?? [],
     classIds: [],
     propBindings: opts.propBindings,
-    childNodes: opts.childNodes,
     hidden: opts.hidden,
   }
 }
 
-/** Build a minimal VisualComponent for tests */
+/** Build a flat-tree VisualComponent for tests. Pass ALL nodes (root + descendants). */
 function vc(
   id: string,
-  rootNode: VCNode,
+  nodes: VCNode[],
+  rootId: string,
   params: VisualComponent['params'] = [],
 ): VisualComponent {
+  const nodesMap: Record<string, VCNode> = {}
+  for (const n of nodes) nodesMap[n.id] = n
   return {
     id,
     name: 'TestVC',
-    rootNode,
+    tree: { nodes: nodesMap, rootNodeId: rootId },
     params,
     breakpoints: [],
     classIds: [],
-    filePath: `src/components/TestVC.tsx`,
-    generated: true,
-    ejected: false,
     createdAt: 1000,
   }
 }
@@ -84,8 +82,8 @@ const TEST_REF_ID = 'page-ref-node-id'
 describe('IT-1 — plain prop pass-through', () => {
   it('produces the same props when there are no propBindings', () => {
     const root = node('root', 'base.container', { text: 'hello', count: 42 })
-    const component = vc('vc-1', root)
-    const { nodes, rootNodeId } = instantiateVCAtRef(component, {}, {}, TEST_REF_ID)
+    const component = vc('vc-1', [root], 'root')
+    const { nodes, rootNodeId } = instantiateVCAtRef(component, {}, {}, {}, TEST_REF_ID)
 
     expect(rootNodeId).toBe('root')
     expect(nodes['root'].props).toEqual({ text: 'hello', count: 42 })
@@ -104,11 +102,11 @@ describe('IT-2 — single propBinding with override', () => {
       { content: 'default text' },
       { propBindings: { content: { paramId: 'param-1' } } },
     )
-    const component = vc('vc-1', root, [
+    const component = vc('vc-1', [root], 'root', [
       { id: 'param-1', name: 'label', type: 'string', defaultValue: 'default text', required: false },
     ])
 
-    const { nodes } = instantiateVCAtRef(component, { 'param-1': 'overridden text' }, {}, TEST_REF_ID)
+    const { nodes } = instantiateVCAtRef(component, { 'param-1': 'overridden text' }, {}, {}, TEST_REF_ID)
 
     expect(nodes['root'].props.content).toBe('overridden text')
   })
@@ -126,11 +124,11 @@ describe('IT-3 — propBinding fallback to defaultValue', () => {
       { content: '' },
       { propBindings: { content: { paramId: 'param-1' } } },
     )
-    const component = vc('vc-1', root, [
+    const component = vc('vc-1', [root], 'root', [
       { id: 'param-1', name: 'label', type: 'string', defaultValue: 'fallback value', required: false },
     ])
 
-    const { nodes } = instantiateVCAtRef(component, {}, {}, TEST_REF_ID)
+    const { nodes } = instantiateVCAtRef(component, {}, {}, {}, TEST_REF_ID)
 
     expect(nodes['root'].props.content).toBe('fallback value')
   })
@@ -153,12 +151,12 @@ describe('IT-4 — multiple propBindings on one node', () => {
         },
       },
     )
-    const component = vc('vc-1', root, [
+    const component = vc('vc-1', [root], 'root', [
       { id: 'p-label', name: 'buttonLabel', type: 'string', defaultValue: 'default', required: false },
       { id: 'p-href', name: 'buttonHref', type: 'url', defaultValue: '#', required: false },
     ])
 
-    const { nodes } = instantiateVCAtRef(component, { 'p-label': 'Buy Now', 'p-href': '/checkout' }, {}, TEST_REF_ID)
+    const { nodes } = instantiateVCAtRef(component, { 'p-label': 'Buy Now', 'p-href': '/checkout' }, {}, {}, TEST_REF_ID)
 
     expect(nodes['root'].props.label).toBe('Buy Now')
     expect(nodes['root'].props.href).toBe('/checkout')
@@ -177,15 +175,12 @@ describe('IT-5 — propBindings on non-root (child) node', () => {
       { content: '' },
       { propBindings: { content: { paramId: 'p-text' } } },
     )
-    const root = node('root', 'base.container', {}, {
-      children: ['child-1'],
-      childNodes: [child],
-    })
-    const component = vc('vc-1', root, [
+    const root = node('root', 'base.container', {}, { children: ['child-1'] })
+    const component = vc('vc-1', [root, child], 'root', [
       { id: 'p-text', name: 'bodyText', type: 'string', defaultValue: 'default body', required: false },
     ])
 
-    const { nodes } = instantiateVCAtRef(component, { 'p-text': 'injected body' }, {}, TEST_REF_ID)
+    const { nodes } = instantiateVCAtRef(component, { 'p-text': 'injected body' }, {}, {}, TEST_REF_ID)
 
     expect(nodes['child-1'].props.content).toBe('injected body')
   })
@@ -198,14 +193,12 @@ describe('IT-5 — propBindings on non-root (child) node', () => {
 describe('IT-6 — slot outlet replaced with slot content', () => {
   it('replaces a base.slot-outlet node with slot content nodes', () => {
     const slotOutlet = node('slot-outlet', 'base.slot-outlet', { slotName: 'body' })
-    const root = node('root', 'base.container', {}, {
-      children: ['slot-outlet'],
-      childNodes: [slotOutlet],
-    })
-    const component = vc('vc-1', root)
+    const root = node('root', 'base.container', {}, { children: ['slot-outlet'] })
+    const component = vc('vc-1', [root, slotOutlet], 'root')
 
     const contentNode = node('content-1', 'base.text', { content: 'slot content' })
-    const { nodes, rootNodeId } = instantiateVCAtRef(component, {}, { body: [contentNode] }, TEST_REF_ID)
+    const pageNodes = { 'content-1': contentNode }
+    const { nodes, rootNodeId } = instantiateVCAtRef(component, {}, { body: ['content-1'] }, pageNodes, TEST_REF_ID)
 
     expect(rootNodeId).toBe('root')
     // Root's children should now point to the content node, not the slot outlet
@@ -225,13 +218,10 @@ describe('IT-6 — slot outlet replaced with slot content', () => {
 describe('IT-7 — slot outlet kept as placeholder', () => {
   it('keeps the slot outlet node when no slot content is provided', () => {
     const slotOutlet = node('slot-outlet', 'base.slot-outlet', { slotName: 'header' })
-    const root = node('root', 'base.container', {}, {
-      children: ['slot-outlet'],
-      childNodes: [slotOutlet],
-    })
-    const component = vc('vc-1', root)
+    const root = node('root', 'base.container', {}, { children: ['slot-outlet'] })
+    const component = vc('vc-1', [root, slotOutlet], 'root')
 
-    const { nodes } = instantiateVCAtRef(component, {}, {}, TEST_REF_ID)
+    const { nodes } = instantiateVCAtRef(component, {}, {}, {}, TEST_REF_ID)
 
     expect(nodes['slot-outlet']).toBeDefined()
     expect(nodes['slot-outlet'].moduleId).toBe('base.slot-outlet')
@@ -246,12 +236,9 @@ describe('IT-7 — slot outlet kept as placeholder', () => {
 describe('IT-8 — slot outlet uses param defaultValue when no instance content', () => {
   it('falls back to a slot param defaultValue if no slotContent is provided', () => {
     const slotOutlet = node('slot-outlet', 'base.slot-outlet', { slotName: 'footer' })
-    const root = node('root', 'base.container', {}, {
-      children: ['slot-outlet'],
-      childNodes: [slotOutlet],
-    })
+    const root = node('root', 'base.container', {}, { children: ['slot-outlet'] })
     const defaultSlotNode = node('default-footer', 'base.text', { content: 'default footer' })
-    const component = vc('vc-1', root, [
+    const component = vc('vc-1', [root, slotOutlet], 'root', [
       {
         id: 'p-footer',
         name: 'footer',
@@ -261,7 +248,7 @@ describe('IT-8 — slot outlet uses param defaultValue when no instance content'
       },
     ])
 
-    const { nodes } = instantiateVCAtRef(component, {}, {}, TEST_REF_ID)
+    const { nodes } = instantiateVCAtRef(component, {}, {}, {}, TEST_REF_ID)
 
     // Should use the param's defaultValue as slot content
     expect(nodes['default-footer']).toBeDefined()
@@ -277,12 +264,9 @@ describe('IT-8 — slot outlet uses param defaultValue when no instance content'
 describe('IT-9 — empty slot content falls back to param defaultValue', () => {
   it('uses param defaultValue when slotContent array is empty', () => {
     const slotOutlet = node('slot-outlet', 'base.slot-outlet', { slotName: 'sidebar' })
-    const root = node('root', 'base.container', {}, {
-      children: ['slot-outlet'],
-      childNodes: [slotOutlet],
-    })
+    const root = node('root', 'base.container', {}, { children: ['slot-outlet'] })
     const defaultNode = node('default-sidebar', 'base.text', { content: 'default sidebar' })
-    const component = vc('vc-1', root, [
+    const component = vc('vc-1', [root, slotOutlet], 'root', [
       {
         id: 'p-sidebar',
         name: 'sidebar',
@@ -293,7 +277,7 @@ describe('IT-9 — empty slot content falls back to param defaultValue', () => {
     ])
 
     // Passing empty array → should fall back to param defaultValue
-    const { nodes } = instantiateVCAtRef(component, {}, { sidebar: [] }, TEST_REF_ID)
+    const { nodes } = instantiateVCAtRef(component, {}, { sidebar: [] }, {}, TEST_REF_ID)
 
     expect(nodes['default-sidebar']).toBeDefined()
     expect(nodes['root'].children).toEqual(['default-sidebar'])
@@ -311,13 +295,10 @@ describe('IT-10 — nested base.visual-component-ref passes through', () => {
       propOverrides: {},
       slotContent: {},
     })
-    const root = node('root', 'base.container', {}, {
-      children: ['nested-ref'],
-      childNodes: [nestedRef],
-    })
-    const component = vc('vc-1', root)
+    const root = node('root', 'base.container', {}, { children: ['nested-ref'] })
+    const component = vc('vc-1', [root, nestedRef], 'root')
 
-    const { nodes } = instantiateVCAtRef(component, {}, {}, TEST_REF_ID)
+    const { nodes } = instantiateVCAtRef(component, {}, {}, {}, TEST_REF_ID)
 
     expect(nodes['nested-ref']).toBeDefined()
     expect(nodes['nested-ref'].moduleId).toBe('base.visual-component-ref')
@@ -326,38 +307,32 @@ describe('IT-10 — nested base.visual-component-ref passes through', () => {
 })
 
 // ---------------------------------------------------------------------------
-// IT-11 — rootNodeId matches vc.rootNode.id
+// IT-11 — rootNodeId matches vc.tree.rootNodeId
 // ---------------------------------------------------------------------------
 
-describe('IT-11 — rootNodeId matches vc.rootNode.id', () => {
+describe('IT-11 — rootNodeId matches vc.tree.rootNodeId', () => {
   it('returns the root node ID from the VC definition', () => {
     const root = node('my-root-id', 'base.body')
-    const component = vc('vc-1', root)
+    const component = vc('vc-1', [root], 'my-root-id')
 
-    const { rootNodeId } = instantiateVCAtRef(component, {}, {}, TEST_REF_ID)
+    const { rootNodeId } = instantiateVCAtRef(component, {}, {}, {}, TEST_REF_ID)
 
     expect(rootNodeId).toBe('my-root-id')
   })
 })
 
 // ---------------------------------------------------------------------------
-// IT-12 — Nested child nodes are flattened correctly
+// IT-12 — All nodes appear in the flat output map
 // ---------------------------------------------------------------------------
 
-describe('IT-12 — nested children are flattened into the output map', () => {
+describe('IT-12 — all nodes appear in the flat output map', () => {
   it('all descendant nodes appear in the flat nodes map', () => {
     const grandchild = node('grandchild', 'base.text', { content: 'deep' })
-    const child = node('child', 'base.container', {}, {
-      children: ['grandchild'],
-      childNodes: [grandchild],
-    })
-    const root = node('root', 'base.container', {}, {
-      children: ['child'],
-      childNodes: [child],
-    })
-    const component = vc('vc-1', root)
+    const child = node('child', 'base.container', {}, { children: ['grandchild'] })
+    const root = node('root', 'base.container', {}, { children: ['child'] })
+    const component = vc('vc-1', [root, child, grandchild], 'root')
 
-    const { nodes } = instantiateVCAtRef(component, {}, {}, TEST_REF_ID)
+    const { nodes } = instantiateVCAtRef(component, {}, {}, {}, TEST_REF_ID)
 
     expect(nodes['root']).toBeDefined()
     expect(nodes['child']).toBeDefined()
@@ -365,9 +340,6 @@ describe('IT-12 — nested children are flattened into the output map', () => {
     // Verify tree structure is preserved
     expect(nodes['root'].children).toEqual(['child'])
     expect(nodes['child'].children).toEqual(['grandchild'])
-    // childNodes are NOT in the flat map (removed during flattening)
-    expect(nodes['root'].childNodes).toBeUndefined()
-    expect(nodes['child'].childNodes).toBeUndefined()
   })
 })
 
@@ -378,10 +350,10 @@ describe('IT-12 — nested children are flattened into the output map', () => {
 describe('IT-13 — all nodes carry _owningRefId annotation', () => {
   it('sets _owningRefId to the provided refId on every node', () => {
     const child = node('child', 'base.text', { content: 'hello' })
-    const root = node('root', 'base.container', {}, { children: ['child'], childNodes: [child] })
-    const component = vc('vc-1', root)
+    const root = node('root', 'base.container', {}, { children: ['child'] })
+    const component = vc('vc-1', [root, child], 'root')
 
-    const { nodes } = instantiateVCAtRef(component, {}, {}, 'my-ref-id')
+    const { nodes } = instantiateVCAtRef(component, {}, {}, {}, 'my-ref-id')
 
     expect(nodes['root']._owningRefId).toBe('my-ref-id')
     expect(nodes['child']._owningRefId).toBe('my-ref-id')
@@ -395,10 +367,10 @@ describe('IT-13 — all nodes carry _owningRefId annotation', () => {
 describe('IT-14 — VC body nodes have _fromSlotContent = false', () => {
   it('marks nodes from the VC body as _fromSlotContent = false', () => {
     const child = node('child', 'base.text', { content: 'body content' })
-    const root = node('root', 'base.container', {}, { children: ['child'], childNodes: [child] })
-    const component = vc('vc-1', root)
+    const root = node('root', 'base.container', {}, { children: ['child'] })
+    const component = vc('vc-1', [root, child], 'root')
 
-    const { nodes } = instantiateVCAtRef(component, {}, {}, TEST_REF_ID)
+    const { nodes } = instantiateVCAtRef(component, {}, {}, {}, TEST_REF_ID)
 
     expect(nodes['root']._fromSlotContent).toBe(false)
     expect(nodes['child']._fromSlotContent).toBe(false)
@@ -412,18 +384,18 @@ describe('IT-14 — VC body nodes have _fromSlotContent = false', () => {
 describe('IT-15 — slot content nodes have _fromSlotContent = true', () => {
   it('marks slot content nodes (and their descendants) as _fromSlotContent = true', () => {
     const slotOutlet = node('slot-outlet', 'base.slot-outlet', { slotName: 'body' })
-    const root = node('root', 'base.container', {}, { children: ['slot-outlet'], childNodes: [slotOutlet] })
-    const component = vc('vc-1', root)
+    const root = node('root', 'base.container', {}, { children: ['slot-outlet'] })
+    const component = vc('vc-1', [root, slotOutlet], 'root')
 
+    // Slot content nodes come from the page tree (Task 4 Tree Unification).
+    // slotInstancesByName maps slotName → direct child IDs of the slot-instance node;
+    // pageNodes provides the full subtree for recursive collection.
     const contentChild = node('content-child', 'base.text', { content: 'child content' })
-    const contentRoot = node('content-root', 'base.container', {}, {
-      children: ['content-child'],
-      childNodes: [contentChild],
-    })
-    const { nodes } = instantiateVCAtRef(component, {}, { body: [contentRoot] }, TEST_REF_ID)
+    const contentRoot = node('content-root', 'base.container', {}, { children: ['content-child'] })
+    const pageNodes = { 'content-root': contentRoot, 'content-child': contentChild }
+    const { nodes } = instantiateVCAtRef(component, {}, { body: ['content-root'] }, pageNodes, TEST_REF_ID)
 
     expect(nodes['content-root']._fromSlotContent).toBe(true)
-    expect(nodes['content-child']._fromSlotContent).toBe(true)
   })
 })
 
@@ -434,10 +406,10 @@ describe('IT-15 — slot content nodes have _fromSlotContent = true', () => {
 describe('IT-16 — slot outlet placeholder has _fromSlotContent = false', () => {
   it('slot outlet kept as placeholder is part of VC body, not slot content', () => {
     const slotOutlet = node('slot-outlet', 'base.slot-outlet', { slotName: 'header' })
-    const root = node('root', 'base.container', {}, { children: ['slot-outlet'], childNodes: [slotOutlet] })
-    const component = vc('vc-1', root)
+    const root = node('root', 'base.container', {}, { children: ['slot-outlet'] })
+    const component = vc('vc-1', [root, slotOutlet], 'root')
 
-    const { nodes } = instantiateVCAtRef(component, {}, {}, TEST_REF_ID)
+    const { nodes } = instantiateVCAtRef(component, {}, {}, {}, TEST_REF_ID)
 
     expect(nodes['slot-outlet']).toBeDefined()
     expect(nodes['slot-outlet']._fromSlotContent).toBe(false)

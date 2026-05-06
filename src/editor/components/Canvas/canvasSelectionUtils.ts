@@ -27,7 +27,7 @@ export type AnnotatedPageNode = PageNode & {
   /** ID of the page-level base.visual-component-ref that owns this inlined node */
   _owningRefId?: string
   /**
-   * True if this node came from the ref's slotContent (user-authored, editable
+   * True if this node came from a slot-instance's children (user-authored, editable
    * in page context). False if it came from the VC body (template-owned).
    */
   _fromSlotContent?: boolean

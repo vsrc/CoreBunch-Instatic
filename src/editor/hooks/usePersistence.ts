@@ -36,12 +36,11 @@ import type { IPersistenceAdapter } from '@core/persistence/types'
 import { cmsAdapter } from '@core/persistence/cms'
 import { validateSite, SiteValidationError } from '@core/persistence/validate'
 import {
+  readAutoSaveDelayMs,
   readAutoSavePreference,
+  readEditorSelectPreference,
   subscribeToEditorPrefsChanged,
 } from '@editor/preferences/editorPreferences'
-
-/** Auto-save debounce interval in milliseconds */
-const AUTO_SAVE_DELAY_MS = 30_000
 
 export interface PersistenceSaveStatus {
   state: 'loading' | 'saved' | 'unsaved' | 'saving' | 'error'
@@ -56,6 +55,20 @@ interface PersistenceController {
 
 function errorMessage(err: unknown, fallback: string): string {
   return err instanceof Error && err.message.trim() ? err.message : fallback
+}
+
+/**
+ * Apply the user's `defaultBreakpoint` preference if the loaded site declares
+ * a matching breakpoint id. Falls back silently when the preference points to
+ * a breakpoint the current site doesn't have (e.g. user previously edited a
+ * site with a custom 'wide' breakpoint, then opened a site without it).
+ */
+function applyDefaultBreakpointPreference(
+  breakpoints: ReadonlyArray<{ id: string }>,
+): void {
+  const preferredId = readEditorSelectPreference('defaultBreakpoint')
+  if (!breakpoints.some((bp) => bp.id === preferredId)) return
+  useEditorStore.getState().setActiveBreakpoint(preferredId)
 }
 
 export function usePersistence(
@@ -121,6 +134,7 @@ export function usePersistence(
             // Constraint #230 — validate before hydrating the store
             const validated = validateSite(raw)
             loadSite(validated)
+            applyDefaultBreakpointPreference(validated.breakpoints)
             loadedRef.current = true
             setSaveStatus({ state: 'saved', lastSavedAt: Date.now() })
             return
@@ -142,6 +156,7 @@ export function usePersistence(
       // but no page-builder document yet.
       if (!cancelled) {
         const created = createSite('My Site')
+        applyDefaultBreakpointPreference(created.breakpoints)
         loadedRef.current = true
         try {
           await adapterRef.current.saveSite(created)
@@ -174,11 +189,14 @@ export function usePersistence(
       if (!useEditorStore.getState().hasUnsavedChanges) return
       if (!readAutoSavePreference()) return
 
+      // Read the delay each time auto-save is scheduled — toggling the
+      // preference re-fires `subscribeToEditorPrefsChanged` which calls back
+      // into this scheduler, so the next scheduled tick uses the fresh value.
       timer = setTimeout(() => {
         void saveCurrentSite().catch((err) => {
           console.error('[persistence] Auto-save failed:', err)
         })
-      }, AUTO_SAVE_DELAY_MS)
+      }, readAutoSaveDelayMs())
     }
 
     const unsub = useEditorStore.subscribe(

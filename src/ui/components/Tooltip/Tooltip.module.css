@@ -17,7 +17,10 @@
     position: fixed;
     top: 0;
     left: 0;
-    transform: translate3d(var(--tooltip-x, 0px), var(--tooltip-y, 0px), 0);
+    --tooltip-x: 0px;
+    --tooltip-y: 0px;
+    --tooltip-arrow-offset: 50%;
+    transform: translate3d(var(--tooltip-x), var(--tooltip-y), 0);
     z-index: var(--tooltip-z-index);
 
     padding: 6px 9px;
@@ -65,7 +68,7 @@
 /* Tooltip above trigger → arrow at bottom, pointing down */
 .bubble[data-side='top'] .arrow {
     bottom: -3px;
-    left: calc(var(--tooltip-arrow-offset, 50%) - 3px);
+    left: calc(var(--tooltip-arrow-offset) - 3px);
     border-right: 1px solid var(--tooltip-border);
     border-bottom: 1px solid var(--tooltip-border);
 }
@@ -73,7 +76,7 @@
 /* Tooltip below trigger → arrow at top, pointing up */
 .bubble[data-side='bottom'] .arrow {
     top: -3px;
-    left: calc(var(--tooltip-arrow-offset, 50%) - 3px);
+    left: calc(var(--tooltip-arrow-offset) - 3px);
     border-top: 1px solid var(--tooltip-border);
     border-left: 1px solid var(--tooltip-border);
 }
@@ -81,7 +84,7 @@
 /* Tooltip left of trigger → arrow at right edge, pointing right */
 .bubble[data-side='left'] .arrow {
     right: -3px;
-    top: calc(var(--tooltip-arrow-offset, 50%) - 3px);
+    top: calc(var(--tooltip-arrow-offset) - 3px);
     border-top: 1px solid var(--tooltip-border);
     border-right: 1px solid var(--tooltip-border);
 }
@@ -89,7 +92,7 @@
 /* Tooltip right of trigger → arrow at left edge, pointing left */
 .bubble[data-side='right'] .arrow {
     left: -3px;
-    top: calc(var(--tooltip-arrow-offset, 50%) - 3px);
+    top: calc(var(--tooltip-arrow-offset) - 3px);
     border-bottom: 1px solid var(--tooltip-border);
     border-left: 1px solid var(--tooltip-border);
 }

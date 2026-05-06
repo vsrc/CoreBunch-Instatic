@@ -4,6 +4,7 @@ import type {
   FrameworkColorToken,
   FrameworkColorUtilityType,
 } from './schemas'
+import { formatCssVariableBlock } from './cssVariables'
 
 export type {
   FrameworkColorSettings,
@@ -82,19 +83,31 @@ export function generateFrameworkColorRootCss(
   settings: FrameworkColorSettings | null | undefined,
 ): string {
   const sets = generateFrameworkColorVariableSets(settings)
-  if (sets.light.length === 0 && sets.dark.length === 0) return ''
+  return [
+    formatCssVariableBlock(':root', sets.light),
+    formatFrameworkColorThemeCss(sets),
+  ]
+    .filter(Boolean)
+    .join('\n\n')
+}
 
-  const blocks: string[] = []
+export function generateFrameworkColorThemeCss(
+  settings: FrameworkColorSettings | null | undefined,
+): string {
+  return formatFrameworkColorThemeCss(generateFrameworkColorVariableSets(settings))
+}
 
-  if (sets.light.length > 0) {
-    blocks.push(`${DEFAULT_THEME_SELECTOR} {\n${formatVariableDeclarations(sets.light)}\n}`)
-  }
+export function formatFrameworkColorThemeCss(sets: FrameworkColorVariableSets): string {
+  if (sets.dark.length === 0) return ''
 
-  if (sets.dark.length > 0) {
-    blocks.push(`${ALT_THEME_SELECTOR} {\n${formatVariableDeclarations(sets.dark)}\n}`)
-  }
-
-  return blocks.join('\n\n')
+  return [
+    sets.light.length > 0
+      ? formatCssVariableBlock(DEFAULT_THEME_OVERRIDE_SELECTOR, sets.light)
+      : '',
+    formatCssVariableBlock(ALT_THEME_SELECTOR, sets.dark),
+  ]
+    .filter(Boolean)
+    .join('\n\n')
 }
 
 export function generateDefaultDarkColor(lightValue: string): string {
@@ -254,12 +267,6 @@ function utilityStyles(
   }
 }
 
-function formatVariableDeclarations(variables: FrameworkColorVariable[]): string {
-  return variables
-    .map((variable) => `  ${variable.name}: ${sanitizeCssTokenValue(variable.value)};`)
-    .join('\n')
-}
-
 function normalizeColorValue(value: string): string {
   const channels = parseColor(value)
   return channels ? formatHsla(channels) : value.trim()
@@ -358,14 +365,7 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value))
 }
 
-function sanitizeCssTokenValue(value: string): string {
-  return value
-    .replace(/<\/style\s*>/gi, '')
-    .replace(/[{}]/g, '')
-}
-
-const DEFAULT_THEME_SELECTOR = [
-  ':root',
+const DEFAULT_THEME_OVERRIDE_SELECTOR = [
   ':root.theme-alt .theme-inverted',
   ':root.theme-alt .theme-always-default',
   ':root.theme-default .theme-inverted .theme-always-default',

@@ -1,9 +1,15 @@
-import type { Page, PageNode } from './schemas'
+import type { BaseNode } from './baseNode'
+import type { NodeTree } from './treeSchema'
+import type { PageNode } from './schemas'
 
 /**
  * Pure selector functions for the page tree.
  * No side effects — safe to call in Zustand selectors, unit tests, and React renders.
- * All lookups are O(1) because the flat map structure is Page.nodes: Record<string, PageNode>.
+ *
+ * All functions accept a generic `NodeTree<TNode>` so they work with both
+ * page trees (NodeTree<PageNode>) and VC trees (NodeTree<VCNode>).
+ * Callers that pass a `Page` (which IS a NodeTree<PageNode>) continue to work
+ * unchanged thanks to TypeScript's structural typing.
  */
 
 // ---------------------------------------------------------------------------
@@ -11,24 +17,24 @@ import type { Page, PageNode } from './schemas'
 // ---------------------------------------------------------------------------
 
 /** Get a node by ID — O(1). Returns undefined if not found. */
-export function getNode(page: Page, id: string): PageNode | undefined {
-  return page.nodes[id]
+export function getNode<TNode extends BaseNode>(tree: NodeTree<TNode>, id: string): TNode | undefined {
+  return tree.nodes[id]
 }
 
 /** Get a node by ID, throwing if not found. */
-export function getNodeOrThrow(page: Page, id: string): PageNode {
-  const node = page.nodes[id]
-  if (!node) throw new Error(`[PageTree] Node "${id}" not found in page "${page.id}"`)
+export function getNodeOrThrow<TNode extends BaseNode>(tree: NodeTree<TNode>, id: string): TNode {
+  const node = tree.nodes[id]
+  if (!node) throw new Error(`[PageTree] Node "${id}" not found`)
   return node
 }
 
-/** Get all direct children of a node as PageNode objects. */
-export function getChildren(page: Page, nodeId: string): PageNode[] {
-  const node = page.nodes[nodeId]
+/** Get all direct children of a node as TNode objects. */
+export function getChildren<TNode extends BaseNode>(tree: NodeTree<TNode>, nodeId: string): TNode[] {
+  const node = tree.nodes[nodeId]
   if (!node) return []
   return node.children
-    .map((id) => page.nodes[id])
-    .filter((n): n is PageNode => n !== undefined)
+    .map((id) => tree.nodes[id])
+    .filter((n): n is TNode => n !== undefined)
 }
 
 // ---------------------------------------------------------------------------
@@ -39,23 +45,23 @@ export function getChildren(page: Page, nodeId: string): PageNode[] {
  * Find the parent of a node.
  * O(n) — use sparingly on hot paths (prefer caching or denormalising parentId if needed).
  */
-export function getParent(page: Page, nodeId: string): PageNode | undefined {
-  for (const node of Object.values(page.nodes)) {
+export function getParent<TNode extends BaseNode>(tree: NodeTree<TNode>, nodeId: string): TNode | undefined {
+  for (const node of Object.values(tree.nodes)) {
     if (node.children.includes(nodeId)) return node
   }
   return undefined
 }
 
 /** Get ordered ancestor chain from root down to (but not including) nodeId. */
-export function getAncestors(page: Page, nodeId: string): PageNode[] {
-  const ancestors: PageNode[] = []
+export function getAncestors<TNode extends BaseNode>(tree: NodeTree<TNode>, nodeId: string): TNode[] {
+  const ancestors: TNode[] = []
   let current = nodeId
   const visited = new Set<string>()
 
   while (true) {
     if (visited.has(current)) break // cycle guard
     visited.add(current)
-    const parent = getParent(page, current)
+    const parent = getParent(tree, current)
     if (!parent) break
     ancestors.unshift(parent)
     current = parent.id
@@ -67,7 +73,7 @@ export function getAncestors(page: Page, nodeId: string): PageNode[] {
  * Return all node IDs in depth-first pre-order starting at nodeId.
  * Useful for virtual-scroll flattening in the DOM tree panel.
  */
-export function flattenSubtree(page: Page, nodeId: string): string[] {
+export function flattenSubtree<TNode extends BaseNode>(tree: NodeTree<TNode>, nodeId: string): string[] {
   const result: string[] = []
   const stack: string[] = [nodeId]
   const visited = new Set<string>()
@@ -76,7 +82,7 @@ export function flattenSubtree(page: Page, nodeId: string): string[] {
     const id = stack.pop()!
     if (visited.has(id)) continue
     visited.add(id)
-    const node = page.nodes[id]
+    const node = tree.nodes[id]
     if (!node) continue
     result.push(id)
     // Push children in reverse so leftmost child is processed first (stack is LIFO)
@@ -91,14 +97,14 @@ export function flattenSubtree(page: Page, nodeId: string): string[] {
  * Check whether ancestorId is an ancestor of nodeId.
  * Used to prevent illegal moves in drag-to-reorder (cannot drop a node inside itself).
  */
-export function isAncestor(page: Page, ancestorId: string, nodeId: string): boolean {
+export function isAncestor<TNode extends BaseNode>(tree: NodeTree<TNode>, ancestorId: string, nodeId: string): boolean {
   if (ancestorId === nodeId) return true
   let current = nodeId
   const visited = new Set<string>()
   while (true) {
     if (visited.has(current)) return false
     visited.add(current)
-    const parent = getParent(page, current)
+    const parent = getParent(tree, current)
     if (!parent) return false
     if (parent.id === ancestorId) return true
     current = parent.id

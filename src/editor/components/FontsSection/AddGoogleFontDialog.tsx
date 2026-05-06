@@ -25,6 +25,7 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import { Button } from '@ui/components/Button'
+import { Checkbox } from '@ui/components/Checkbox'
 import { FilterBar } from '@ui/components/FilterBar'
 import { SearchBar } from '@ui/components/SearchBar'
 import { CloseIcon } from 'pixel-art-icons/icons/close'
@@ -511,10 +512,9 @@ function VariantsAndSubsetsStep({
                   className={styles.variantRow}
                   data-checked={checked ? 'true' : undefined}
                 >
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     checked={checked}
-                    onChange={() => toggleVariant(variant)}
+                    onCheckedChange={() => toggleVariant(variant)}
                     aria-label={variantLabel(variant)}
                   />
                   <span

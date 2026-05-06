@@ -275,7 +275,7 @@ describe('ClassPicker — suggestion hover preview', () => {
   })
 
   it('does not preview suggestion hovers when the preference is disabled', () => {
-    localStorage.setItem('pb-editor-prefs', JSON.stringify({ classHoverPreview: false }))
+    localStorage.setItem('pb-editor-prefs', JSON.stringify({ hoverPreview: false }))
     const { nodeId } = loadSiteWithHeading()
     useEditorStore.getState().createClass('no-preview')
     selectNode(nodeId)

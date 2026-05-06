@@ -374,7 +374,11 @@ describe('usePersistence — subscription selector is primitive, not inline obje
   it('auto-save timer is gated by the stored autoSave preference', () => {
     const src = readFileSync(persistencePath, 'utf-8')
     expect(src).toContain('readAutoSavePreference')
-    expect(src).toMatch(/readAutoSavePreference\(\)[\s\S]{0,220}setTimeout/)
+    // Bumped to 600 chars so the gate test still passes after auto-save
+    // moved to a user-configurable delay (catalog `autoSaveDelay`) — the
+    // setTimeout is now further from the preference check because the
+    // surrounding comments document the per-tick delay re-read.
+    expect(src).toMatch(/readAutoSavePreference\(\)[\s\S]{0,600}setTimeout/)
   })
 
   it('auto-save reacts to editor preference changes', () => {

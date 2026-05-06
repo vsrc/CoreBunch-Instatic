@@ -53,6 +53,11 @@ export const ButtonModule: ModuleDefinition<ButtonProps> = {
 
   component: ButtonEditor,
 
+  htmlTag: (props) => {
+    const href = safeUrl(props.href)
+    return href && href !== '#' ? 'a' : 'button'
+  },
+
   render: (props) => {
     const href = safeUrl(props.href)
     const label = String(props.label ?? '')

@@ -110,21 +110,26 @@ export function buildDefaultSpacingClassGenerators(tabId: string): FrameworkSpac
     name,
     property,
   })
+  // The `padding-*` / `margin-*` generators expand to all four sides — there
+  // is no shorthand `padding`/`margin` key in CSSPropertyBag, so a "set
+  // padding on every side" utility class writes the four per-side keys. The
+  // publisher then collapses them back into a `padding: var(--space-md);`
+  // shorthand at emission time.
   return [
-    make('padding-*',           ['padding']),
-    make('padding-left-*',      ['padding-left']),
-    make('padding-right-*',     ['padding-right']),
-    make('padding-top-*',       ['padding-top']),
-    make('padding-bottom-*',    ['padding-bottom']),
+    make('padding-*',            ['padding-top', 'padding-right', 'padding-bottom', 'padding-left']),
+    make('padding-left-*',       ['padding-left']),
+    make('padding-right-*',      ['padding-right']),
+    make('padding-top-*',        ['padding-top']),
+    make('padding-bottom-*',     ['padding-bottom']),
     make('padding-horizontal-*', ['padding-left', 'padding-right']),
     make('padding-vertical-*',   ['padding-top', 'padding-bottom']),
-    make('margin-*',           ['margin']),
-    make('margin-left-*',      ['margin-left']),
-    make('margin-right-*',     ['margin-right']),
-    make('margin-top-*',       ['margin-top']),
-    make('margin-bottom-*',    ['margin-bottom']),
-    make('margin-horizontal-*', ['margin-left', 'margin-right']),
-    make('margin-vertical-*',   ['margin-top', 'margin-bottom']),
+    make('margin-*',             ['margin-top', 'margin-right', 'margin-bottom', 'margin-left']),
+    make('margin-left-*',        ['margin-left']),
+    make('margin-right-*',       ['margin-right']),
+    make('margin-top-*',         ['margin-top']),
+    make('margin-bottom-*',      ['margin-bottom']),
+    make('margin-horizontal-*',  ['margin-left', 'margin-right']),
+    make('margin-vertical-*',    ['margin-top', 'margin-bottom']),
     make('gap-*', ['gap']),
   ]
 }

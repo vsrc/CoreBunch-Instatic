@@ -126,6 +126,27 @@ const addPageSchema = Type.Object({
   slug: Type.Optional(Type.String()),
 })
 
+const deletePageSchema = Type.Object({
+  pageId: Type.String({ minLength: 1 }),
+})
+
+const renamePageSchema = Type.Object({
+  pageId: Type.String({ minLength: 1 }),
+  title: Type.String({ minLength: 1 }),
+  slug: Type.Optional(Type.String()),
+})
+
+const duplicatePageSchema = Type.Object({
+  pageId: Type.String({ minLength: 1 }),
+  title: Type.String({ minLength: 1 }),
+  slug: Type.Optional(Type.String()),
+})
+
+const duplicateNodeSchema = Type.Object({
+  nodeId: Type.String({ minLength: 1 }),
+  count: Type.Optional(Type.Integer({ minimum: 1, maximum: 50 })),
+})
+
 const renderSnapshotSchema = Type.Object({
   breakpointId: Type.Optional(Type.String({ minLength: 1 })),
 })
@@ -454,8 +475,67 @@ function runRemoveClass(input: Static<typeof removeClassSchema>): AgentActionRes
 }
 
 function runAddPage(input: Static<typeof addPageSchema>): AgentActionResult {
-  getStoreState().addPage(input.title, input.slug)
+  const page = getStoreState().addPage(input.title, input.slug)
+  return { success: true, nodeId: page.id }
+}
+
+function runDeletePage(input: Static<typeof deletePageSchema>): AgentActionResult {
+  const store = getStoreState()
+  const site = store.site
+  if (!site) return { success: false, error: 'No active site.' }
+  if (!site.pages.some((p) => p.id === input.pageId)) {
+    return { success: false, error: `Page not found: ${input.pageId}` }
+  }
+  if (site.pages.length <= 1) {
+    return { success: false, error: 'Cannot delete the last page in a site.' }
+  }
+  store.deletePage(input.pageId)
   return { success: true }
+}
+
+function runRenamePage(input: Static<typeof renamePageSchema>): AgentActionResult {
+  const store = getStoreState()
+  const site = store.site
+  if (!site) return { success: false, error: 'No active site.' }
+  if (!site.pages.some((p) => p.id === input.pageId)) {
+    return { success: false, error: `Page not found: ${input.pageId}` }
+  }
+  store.renamePage(input.pageId, input.title, input.slug)
+  return { success: true }
+}
+
+function runDuplicatePage(input: Static<typeof duplicatePageSchema>): AgentActionResult {
+  const store = getStoreState()
+  const site = store.site
+  if (!site) return { success: false, error: 'No active site.' }
+  if (!site.pages.some((p) => p.id === input.pageId)) {
+    return { success: false, error: `Page not found: ${input.pageId}` }
+  }
+  const newPage = store.duplicatePage(input.pageId, input.title, input.slug)
+  return { success: true, nodeId: newPage.id }
+}
+
+function runDuplicateNode(input: Static<typeof duplicateNodeSchema>): AgentActionResult {
+  const store = getStoreState()
+  const count = input.count ?? 1
+  const newIds: string[] = []
+  // Chain — clone the latest, not the source — so the resulting order is
+  // [source, clone1, clone2, …, cloneN] rather than reverse-stacked.
+  let lastId = input.nodeId
+  for (let i = 0; i < count; i++) {
+    const newId = store.duplicateNode(lastId)
+    if (!newId) {
+      return {
+        success: false,
+        error: i === 0
+          ? `Could not duplicate node: ${input.nodeId}`
+          : `Duplicated ${i} of ${count} nodes before failing.`,
+      }
+    }
+    newIds.push(newId)
+    lastId = newId
+  }
+  return { success: true, nodeId: newIds[0] }
 }
 
 async function runRenderSnapshot(
@@ -513,6 +593,14 @@ export async function executeAgentTool(
         return runRemoveClass(parseValue(removeClassSchema, rawInput))
       case 'addPage':
         return runAddPage(parseValue(addPageSchema, rawInput))
+      case 'deletePage':
+        return runDeletePage(parseValue(deletePageSchema, rawInput))
+      case 'renamePage':
+        return runRenamePage(parseValue(renamePageSchema, rawInput))
+      case 'duplicatePage':
+        return runDuplicatePage(parseValue(duplicatePageSchema, rawInput))
+      case 'duplicateNode':
+        return runDuplicateNode(parseValue(duplicateNodeSchema, rawInput))
       case 'render_snapshot':
         return await runRenderSnapshot(parseValue(renderSnapshotSchema, rawInput))
       default:

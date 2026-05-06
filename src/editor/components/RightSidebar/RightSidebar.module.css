@@ -2,8 +2,9 @@
     position: relative;
     z-index: 55;
     display: flex;
-    flex: 0 0 var(--right-sidebar-panel-width, 0px);
-    width: var(--right-sidebar-panel-width, 0px);
+    --right-sidebar-panel-width: 0px;
+    flex: 0 0 var(--right-sidebar-panel-width);
+    width: var(--right-sidebar-panel-width);
     min-width: 0;
     min-height: 0;
     overflow: hidden;

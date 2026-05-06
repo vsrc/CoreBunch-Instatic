@@ -452,7 +452,12 @@ describe('SettingsModal — PreferencesSection toggles', () => {
     openModal('preferences')
     render(<SettingsModal />)
     const switches = screen.getAllByRole('switch')
-    expect(switches.length).toBe(2) // autosave, class hover preview
+    // Catalog-driven count — see editor/preferences/catalog.ts.
+    // Boolean preferences: autoSave, hoverPreview, confirmBeforeDelete,
+    // layersShowIcon, layersShowTag, layersShowClasses,
+    // layersAutoExpandSelected, layersSmoothScroll, dimInactiveBreakpoints,
+    // propertiesSmoothScroll.
+    expect(switches.length).toBe(10)
   })
 
   it('Auto-save toggle has aria-checked="true" by default', () => {
@@ -480,26 +485,27 @@ describe('SettingsModal — PreferencesSection toggles', () => {
     expect(autoSaveToggle.getAttribute('aria-checked')).toBe('false')
   })
 
-  it('class hover preview toggle is enabled by default and can be disabled', () => {
+  it('hover preview toggle is enabled by default and can be disabled', () => {
     openModal('preferences')
     render(<SettingsModal />)
-    const previewToggle = screen.getByRole('switch', { name: /preview classes on hover/i })
+    const previewToggle = screen.getByRole('switch', { name: /preview suggestions on hover/i })
     expect(previewToggle.getAttribute('aria-checked')).toBe('true')
 
     fireEvent.click(previewToggle)
 
     expect(previewToggle.getAttribute('aria-checked')).toBe('false')
-    expect(JSON.parse(localStorage.getItem('pb-editor-prefs') ?? '{}').classHoverPreview).toBe(false)
+    expect(JSON.parse(localStorage.getItem('pb-editor-prefs') ?? '{}').hoverPreview).toBe(false)
   })
 
   it('toggle labels are linked via htmlFor / id (label accessibility)', () => {
     openModal('preferences')
     render(<SettingsModal />)
-    // The toggle <button> carries the id — label htmlFor should match
-    const autoSaveToggle = document.getElementById('pref-autosave')
+    // Each toggle id is `pref-${catalogId}` — see PreferencesSection. The
+    // catalog id for the auto-save preference is `autoSave`, so the DOM id
+    // is `pref-autoSave`.
+    const autoSaveToggle = document.getElementById('pref-autoSave')
     expect(autoSaveToggle).not.toBeNull()
-    // label element exists that points to pref-autosave
-    const label = document.querySelector('label[for="pref-autosave"]')
+    const label = document.querySelector('label[for="pref-autoSave"]')
     expect(label).not.toBeNull()
     expect(label!.textContent).toContain('Auto-save')
   })

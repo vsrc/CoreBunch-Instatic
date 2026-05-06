@@ -55,6 +55,8 @@ export const ListModule: ModuleDefinition<ListProps> = {
 
   component: ListEditor,
 
+  htmlTag: (props) => (props.listType === 'ordered' ? 'ol' : 'ul'),
+
   render: (props) => {
     const tag = props.listType === 'ordered' ? 'ol' : 'ul'
     const items = parseItems(String(props.items || ''))
