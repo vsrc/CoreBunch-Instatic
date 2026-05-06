@@ -12,6 +12,7 @@ import type { CSSClass, CSSPropertyBag } from '@core/page-tree/schemas'
 import { ClassPropertyRow } from './ClassPropertyRow'
 import { Section } from './Section'
 import { SpacingBoxControl } from './SpacingBoxControl/SpacingBoxControl'
+import { LayoutSection } from './LayoutSection'
 import {
   CLASS_STYLE_SECTIONS,
   cssPropertyLabel,
@@ -23,6 +24,7 @@ import styles from './ClassComposer.module.css'
 import sectionStyles from './Section.module.css'
 
 const SPACING_SECTION_ID = 'spacing'
+const LAYOUT_SECTION_ID = 'layout-position'
 
 // ---------------------------------------------------------------------------
 // Props
@@ -49,6 +51,7 @@ export function ClassComposer({
   const activeBreakpointId = useEditorStore((s) => s.activeBreakpointId)
   const updateClassStyles = useEditorStore((s) => s.updateClassStyles)
   const setClassBreakpointStyles = useEditorStore((s) => s.setClassBreakpointStyles)
+  const removeClassStyleProperty = useEditorStore((s) => s.removeClassStyleProperty)
   const setPreviewClassStyles = useEditorStore((s) => s.setPreviewClassStyles)
   const clearPreviewClassStyles = useEditorStore((s) => s.clearPreviewClassStyles)
 
@@ -82,6 +85,20 @@ export function ClassComposer({
     [handleChange],
   )
 
+  /**
+   * Fully clear a property — used by visual switchers (LayoutSection) where
+   * the X / clear affordance must really make a property go away regardless
+   * of whether the value at the active tab is stored or inherited from base.
+   * Routes through `removeClassStyleProperty` which removes the key from
+   * base styles AND every breakpoint override in a single history entry.
+   */
+  const handleClearProperty = useCallback(
+    (key: keyof CSSPropertyBag) => {
+      removeClassStyleProperty(classId, key)
+    },
+    [classId, removeClassStyleProperty],
+  )
+
   // Preview a transient style patch on the canvas while a property
   // control's hover-suggestion menu is open. The preview lives entirely
   // in store UI state — no class document mutation, no history entry.
@@ -111,6 +128,7 @@ export function ClassComposer({
             activeTab={activeTab}
             onChange={handleChange}
             onRemove={handleRemoveProperty}
+            onClearProperty={handleClearProperty}
             onPreview={handlePreview}
             onClearPreview={handleClearPreview}
           />
@@ -134,6 +152,7 @@ interface ClassStyleSectionProps {
   activeTab: string
   onChange: (property: keyof CSSPropertyBag, value: string | number | undefined) => void
   onRemove: (property: keyof CSSPropertyBag) => void
+  onClearProperty: (property: keyof CSSPropertyBag) => void
   onPreview: (patch: Partial<CSSPropertyBag>) => void
   onClearPreview: () => void
 }
@@ -145,6 +164,7 @@ function ClassStyleSection({
   activeTab,
   onChange,
   onRemove,
+  onClearProperty,
   onPreview,
   onClearPreview,
 }: ClassStyleSectionProps) {
@@ -172,6 +192,20 @@ function ClassStyleSection({
             onRemove={onRemove}
             onPreview={onPreview}
             onClearPreview={onClearPreview}
+          />
+        ) : section.id === LAYOUT_SECTION_ID ? (
+          // Layout & Position uses a task-shaped editor: an unlabeled
+          // segmented Display switcher with a dropdown trail, plus icon
+          // switchers for flex direction / wrap / alignment. Generic rows
+          // for the long-tail layout properties still appear below.
+          <LayoutSection
+            key={activeTab}
+            storedStyles={storedStyles}
+            currentStyles={currentStyles}
+            activeTab={activeTab}
+            onChange={onChange}
+            onRemove={onRemove}
+            onClearProperty={onClearProperty}
           />
         ) : (
           section.properties.map((prop) => {

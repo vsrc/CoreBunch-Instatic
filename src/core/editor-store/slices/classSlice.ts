@@ -76,6 +76,15 @@ export interface ClassSlice {
     patch: Partial<CSSPropertyBag>,
   ): void
 
+  /**
+   * Fully remove a CSS property from a class — both from base styles and
+   * from every breakpoint override. Used by the X / clear affordances on
+   * visual switchers (LayoutSection) where "clear this property" must mean
+   * "make it disappear" regardless of which breakpoint tab is active.
+   * No-ops (and does NOT push history) if the property isn't set anywhere.
+   */
+  removeClassStyleProperty(classId: string, property: keyof CSSPropertyBag): void
+
   /** Ensure a hidden node-scoped class exists for module instance style fields. */
   ensureNodeStyleClass(nodeId: string, moduleName?: string): CSSClass | null
 
@@ -296,6 +305,34 @@ export const createClassSlice: EditorStoreSliceCreator<ClassSlice> = (set, get) 
           if (v === undefined || v === null) {
             delete draftClass.breakpointStyles[breakpointId][k]
           }
+        }
+        draftClass.updatedAt = Date.now()
+        state.site.updatedAt = Date.now()
+        state.hasUnsavedChanges = true
+      })
+  },
+
+  removeClassStyleProperty(classId, property) {
+    const { site } = get()
+    const cls = site?.classes[classId]
+    if (!cls) return
+    if (isGeneratedClassLocked(cls)) return
+
+    const propKey = property as string
+    const isInBase = propKey in cls.styles
+    const breakpointIdsWithProperty = Object.entries(cls.breakpointStyles)
+      .filter(([, bpStyles]) => propKey in (bpStyles ?? {}))
+      .map(([id]) => id)
+    if (!isInBase && breakpointIdsWithProperty.length === 0) return
+
+    get().pushHistory()
+    set((state) => {
+        if (!state.site?.classes[classId]) return
+        const draftClass = state.site.classes[classId]
+        delete (draftClass.styles as Record<string, unknown>)[propKey]
+        for (const bpId of breakpointIdsWithProperty) {
+          const bp = draftClass.breakpointStyles[bpId]
+          if (bp) delete (bp as Record<string, unknown>)[propKey]
         }
         draftClass.updatedAt = Date.now()
         state.site.updatedAt = Date.now()

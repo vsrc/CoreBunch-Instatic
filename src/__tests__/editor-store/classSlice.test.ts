@@ -30,6 +30,7 @@ function freshStore() {
     canUndo: false,
     canRedo: false,
     selectedNodeId: null,
+    selectedNodeIds: [],
     hoveredNodeId: null,
     activeClassId: null,
     previewClassAssignment: null,
@@ -182,6 +183,66 @@ describe('classSlice.setClassBreakpointStyles', () => {
     getStore().updateClassStyles(cls.id, { fontSize: '14px' })
     getStore().setClassBreakpointStyles(cls.id, 'mobile', { fontSize: '12px' })
     expect(useEditorStore.getState().site!.classes[cls.id].styles.fontSize).toBe('14px')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// removeClassStyleProperty
+// ---------------------------------------------------------------------------
+
+describe('classSlice.removeClassStyleProperty', () => {
+  it('removes the property from base styles', () => {
+    setupSite()
+    const cls = getStore().createClass('btn')
+    getStore().updateClassStyles(cls.id, { display: 'flex' })
+    getStore().removeClassStyleProperty(cls.id, 'display')
+    expect(useEditorStore.getState().site!.classes[cls.id].styles.display).toBeUndefined()
+  })
+
+  it('removes the property from every breakpoint override', () => {
+    setupSite()
+    const cls = getStore().createClass('btn')
+    getStore().setClassBreakpointStyles(cls.id, 'mobile', { display: 'block' })
+    getStore().setClassBreakpointStyles(cls.id, 'tablet', { display: 'inline' })
+    getStore().removeClassStyleProperty(cls.id, 'display')
+    const c = useEditorStore.getState().site!.classes[cls.id]
+    expect(c.breakpointStyles['mobile']?.display).toBeUndefined()
+    expect(c.breakpointStyles['tablet']?.display).toBeUndefined()
+  })
+
+  it('removes the property from base AND all breakpoints in a single history entry', () => {
+    setupSite()
+    const cls = getStore().createClass('btn')
+    getStore().updateClassStyles(cls.id, { display: 'grid' })
+    getStore().setClassBreakpointStyles(cls.id, 'mobile', { display: 'block' })
+    getStore().removeClassStyleProperty(cls.id, 'display')
+    const c = useEditorStore.getState().site!.classes[cls.id]
+    expect(c.styles.display).toBeUndefined()
+    expect(c.breakpointStyles['mobile']?.display).toBeUndefined()
+    // One undo brings BOTH base and breakpoint back at once — confirms the
+    // remove operation pushed exactly one history entry, not two.
+    getStore().undo()
+    const after = useEditorStore.getState().site!.classes[cls.id]
+    expect(after.styles.display).toBe('grid')
+    expect(after.breakpointStyles['mobile']?.display).toBe('block')
+  })
+
+  it('preserves other properties when removing one', () => {
+    setupSite()
+    const cls = getStore().createClass('btn')
+    getStore().updateClassStyles(cls.id, { display: 'flex', gap: '8px' })
+    getStore().removeClassStyleProperty(cls.id, 'display')
+    expect(useEditorStore.getState().site!.classes[cls.id].styles.display).toBeUndefined()
+    expect(useEditorStore.getState().site!.classes[cls.id].styles.gap).toBe('8px')
+  })
+
+  it('is a no-op when the property is not set anywhere — updatedAt unchanged', () => {
+    setupSite()
+    const cls = getStore().createClass('btn')
+    const before = useEditorStore.getState().site!.classes[cls.id].updatedAt
+    getStore().removeClassStyleProperty(cls.id, 'display')
+    const after = useEditorStore.getState().site!.classes[cls.id].updatedAt
+    expect(after).toBe(before)
   })
 })
 

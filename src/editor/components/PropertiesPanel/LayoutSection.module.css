@@ -1,0 +1,148 @@
+/* LayoutSection — visual editor for the layout-position CSS section.
+ *
+ * Hosts the DisplaySwitcher, FlexDirection / FlexWrap controls, alignment
+ * controls, and the leftover ClassPropertyRow rows. Reuses the same
+ * vertical rhythm as Section.module.css's .sectionBody (8px gap).
+ */
+
+.layoutSection {
+    display: grid;
+    gap: 8px;
+}
+
+/* Display row holds either the SegmentedControl (unset / flex / grid) or
+ * the full-width chip + close-button group (other values). Both layouts
+ * occupy the same row height so toggling between them doesn't shift the
+ * surrounding rows. */
+.displayRow {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+}
+
+/* "Other value" layout — a full-width chip + a square close button,
+ * fused into a single track that mirrors the SegmentedControl's chrome
+ * (same 2px-padded background, same internal radius). Lets users see
+ * the current display value at a glance and clear it without opening
+ * the dropdown. */
+.displayChipGroup {
+    display: flex;
+    width: 100%;
+    align-items: stretch;
+    gap: 2px;
+    padding: 2px;
+    border-radius: 10px;
+    background: var(--editor-surface-2);
+}
+
+/* Doubled `.displayChipGroup .displayChip.displayChip` selector lifts
+ * specificity above Button.module.css's `.btn.variant-secondary` (0,2,0)
+ * so this rule wins regardless of stylesheet load order. */
+.displayChipGroup .displayChip.displayChip {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 0 8px;
+    border-radius: 6px;
+    background: var(--editor-surface);
+    color: var(--editor-text);
+    text-align: left;
+    overflow: hidden;
+}
+
+.displayChipGroup .displayChip.displayChip:hover {
+    background: var(--editor-surface-3);
+}
+
+.displayChipKicker {
+    color: var(--editor-text-muted);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.displayChipValue {
+    color: var(--editor-text);
+    font-size: 12px;
+    font-weight: 700;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+/* Close button — square, fixed-width to match SegmentedControl's
+ * trailing slot (26px = sm Button intrinsic height). */
+.displayChipGroup .displayChipClear.displayChipClear {
+    flex: 0 0 26px;
+    width: 26px;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--editor-text-secondary);
+}
+
+.displayChipGroup .displayChipClear.displayChipClear:hover {
+    background: var(--editor-surface-3);
+    color: var(--editor-text);
+}
+
+/* Sub-field block for flex-only / grid-only controls. Just a vertical
+ * stack — no inset chrome. The reveal/hide animation keyed off the
+ * display value is enough of a "this group belongs to flex/grid" cue
+ * without painting a frame around the rows. */
+.flexBlock {
+    display: grid;
+    gap: 8px;
+}
+
+/* Mini label + control row used by the flex / grid sub-fields. Matches the
+ * 100px label column + 4px gap from controls.module.css's .controlWrapper
+ * so the labels align vertically with the fallback ClassPropertyRow rows
+ * rendered below the visual block. */
+.labeledRow {
+    display: grid;
+    grid-template-columns: 100px 1fr;
+    align-items: center;
+    gap: 4px;
+    min-height: 28px;
+}
+
+/* Default (no state hint) keeps the secondary-text colour used by
+ * controls.module.css's .labelRow. The data-state attribute toggles
+ * between brighter (set) and muted (unset) tones, mirroring the
+ * ClassPropertyRow.module.css `.propertyRowUnset` treatment so visual
+ * switchers and generic property rows share a single language for
+ * "this property is/isn't set". */
+.labeledLabel {
+    color: var(--editor-text-secondary);
+    font-size: 11px;
+    font-weight: 620;
+}
+
+.labeledRow[data-state="set"] .labeledLabel {
+    color: var(--editor-text);
+}
+
+.labeledRow[data-state="unset"] .labeledLabel {
+    color: var(--editor-text-muted);
+}
+
+.labeledControl {
+    min-width: 0;
+}
+
+/* Grid-specific edit row — wraps a full-width text input that replaces
+ * the segmented control while the user types a custom track template.
+ *
+ * Pinned to 30px (the SegmentedControl's outer track height: 26px sm-Button
+ * + 2px×2 chrome padding) so toggling between preset and custom modes
+ * doesn't jolt the surrounding rows. `align-items: stretch` on the row
+ * combined with the Input's own `min-height` lets the field grow to the
+ * row height instead of staying at its 28px default — keeping the visible
+ * field flush with the segmented track height it replaces. */
+.gridEditRow {
+    display: flex;
+    width: 100%;
+    align-items: stretch;
+    min-height: 30px;
+}
