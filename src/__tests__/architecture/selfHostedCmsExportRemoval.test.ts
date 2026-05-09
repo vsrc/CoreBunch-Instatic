@@ -88,7 +88,7 @@ describe('Self-hosted CMS pivot — static ZIP export removal', () => {
 
   it('uses CMS media only, without site-vs-CMS media mode branching', () => {
     for (const path of [
-      'admin/AdminLayout.tsx',
+      'admin/layouts/AdminCanvasLayout/AdminCanvasLayout.tsx',
       'admin/pages/site/sidebars/LeftSidebar/LeftSidebar.tsx',
       'admin/pages/site/sidebars/RightSidebar/RightSidebar.tsx',
       'admin/pages/site/panels/MediaExplorerPanel/MediaExplorerPanel.tsx',

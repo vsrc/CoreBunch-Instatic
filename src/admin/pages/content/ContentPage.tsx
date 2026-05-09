@@ -10,7 +10,7 @@ import { useEditorStore } from '@site/store/store'
 import { HeadingIcon } from 'pixel-art-icons/icons/heading'
 import { ImagesIcon } from 'pixel-art-icons/icons/images'
 import { TextPlusIcon } from 'pixel-art-icons/icons/text-plus'
-import AdminLayout from '@admin/AdminLayout'
+import { AdminCanvasLayout } from '@admin/layouts'
 import { MediaExplorerPanel } from '@site/panels/MediaExplorerPanel'
 import type { CanvasNotchAction } from '@site/canvas/CanvasNotch'
 import { ContentDocumentCanvas } from './components/ContentDocumentCanvas/ContentDocumentCanvas'
@@ -373,7 +373,7 @@ export function ContentPage() {
 
   return (
     <>
-      <AdminLayout
+      <AdminCanvasLayout
         workspace="content"
         toolbarRightSlot={(
           <ContentToolbar

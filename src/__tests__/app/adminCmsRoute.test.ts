@@ -19,7 +19,7 @@ describe('admin CMS route wiring', () => {
   })
 
   it('uses the server CMS adapter without local site mode branching', () => {
-    const editor = readFileSync(join(root, 'src/admin/AdminLayout.tsx'), 'utf8')
+    const editor = readFileSync(join(root, 'src/admin/layouts/AdminCanvasLayout/AdminCanvasLayout.tsx'), 'utf8')
 
     expect(editor).toContain('cmsAdapter')
     expect(editor).not.toContain('localAdapter')

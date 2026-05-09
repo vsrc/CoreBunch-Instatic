@@ -10,7 +10,7 @@ import { ContentPage } from '@content/ContentPage'
 import { useEditorStore } from '@site/store/store'
 import { makeSite } from '../fixtures'
 import { Toolbar } from '@site/toolbar'
-import { AdminSectionNavigation } from '@admin/AdminLayout'
+import { AdminSectionNavigation } from '@admin/shared/AdminSectionNavigation'
 
 const originalFetch = globalThis.fetch
 
@@ -354,14 +354,14 @@ describe('ContentPage', () => {
     expect(screen.getByLabelText('current route').textContent).toBe('/admin/content')
     expect(screen.getByText('content controls')).toBeDefined()
 
-    const layoutSource = readFileSync(join(process.cwd(), 'src/admin/AdminLayout.tsx'), 'utf8')
+    const layoutSource = readFileSync(join(process.cwd(), 'src/admin/layouts/AdminCanvasLayout/AdminCanvasLayout.tsx'), 'utf8')
     expect(layoutSource).not.toContain('setLeftSidebarPanel(null)')
     expect(layoutSource).not.toContain('setPropertiesPanel({ collapsed: true })')
     expect(layoutSource).not.toContain('onBeforeWorkspaceExit')
   })
 
   it('does not fade or view-transition the central canvas surface during admin navigation', () => {
-    const layoutCss = readFileSync(join(process.cwd(), 'src/admin/AdminLayout.module.css'), 'utf8')
+    const layoutCss = readFileSync(join(process.cwd(), 'src/admin/layouts/AdminCanvasLayout/AdminCanvasLayout.module.css'), 'utf8')
 
     expect(layoutCss).not.toContain('admin-canvas-content')
     expect(layoutCss).not.toMatch(/\.canvasContent\s*\{[^}]*animation:/s)

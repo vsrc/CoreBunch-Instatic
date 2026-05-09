@@ -53,7 +53,7 @@ const EMPTY_BREAKPOINTS: Breakpoint[] = []
 
 /**
  * B2 — dnd-kit droppable ID for the canvas root.
- * The AdminLayout's canvas-level DndContext uses this to detect when a
+ * The AdminCanvasLayout's canvas-level DndContext uses this to detect when a
  * visualComponentRef drag is released over the canvas.
  */
 export const CANVAS_ROOT_DROPPABLE_ID = 'canvas-root'
@@ -68,7 +68,7 @@ export function CanvasRoot({ editable = true }: CanvasRootProps) {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; nodeId: string } | null>(null)
 
   // B2 — Register canvas root as a drop target for visualComponentRef drags.
-  // The AdminLayout DndContext's onDragEnd checks event.over.id against CANVAS_ROOT_DROPPABLE_ID.
+  // The AdminCanvasLayout DndContext's onDragEnd checks event.over.id against CANVAS_ROOT_DROPPABLE_ID.
   const { setNodeRef: setCanvasDropRef } = useDroppable({
     id: CANVAS_ROOT_DROPPABLE_ID,
     disabled: !editable,

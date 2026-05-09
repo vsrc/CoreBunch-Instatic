@@ -11,9 +11,9 @@
  *
  * PLACEMENT FLOWS (Phase 4):
  * 1. ModulePickerDropdown.tsx — Components category click in the toolbar picker.
- * 2. SiteExplorerPanel.tsx + AdminLayout.tsx — drag from site-explorer onto the
+ * 2. SiteExplorerPanel.tsx + AdminCanvasLayout.tsx — drag from site-explorer onto the
  *    canvas; the explorer registers the drag source with the `visualComponentRef`
- *    payload kind, and AdminLayout's `onDragEnd` calls `insertComponentRef`.
+ *    payload kind, and AdminCanvasLayout's `onDragEnd` calls `insertComponentRef`.
  * 3. LayerNodeContextMenu.tsx — 'Insert module here' submenu click (which
  *    opens the shared ModulePickerMenu; picking a Visual Component flows
  *    through this file via the onSelectVC callback).
@@ -21,7 +21,7 @@
  * ENFORCED CONSTRAINTS:
  * G1 — ModulePickerDropdown must call insertComponentRef for VC insertion.
  * G2 — SiteExplorerPanel must register the drag payload with kind 'visualComponentRef'.
- * G3 — AdminLayout must call insertComponentRef inside the visualComponentRef drag handler.
+ * G3 — AdminCanvasLayout must call insertComponentRef inside the visualComponentRef drag handler.
  * G4 — LayerNodeContextMenu must call insertComponentRef for VC insertion.
  * G5 — No placement file may call insertNode with 'base.visual-component-ref' directly.
  * G6 — No placement file may call addNodeToVc with 'base.visual-component-ref' directly.
@@ -51,7 +51,7 @@ const CONTEXT_MENU_PATH = resolve(
 )
 const ADMIN_LAYOUT_PATH = resolve(
   PROJECT_ROOT,
-  'src/admin/AdminLayout.tsx',
+  'src/admin/layouts/AdminCanvasLayout/AdminCanvasLayout.tsx',
 )
 
 // ---------------------------------------------------------------------------
@@ -114,7 +114,7 @@ describe('G1 — ModulePickerDropdown calls insertComponentRef for VC insertion 
 // Gate 2 — SiteExplorerPanel must register the correct drag payload kind
 //
 // The explorer is the drag *source*. It does not call insertComponentRef
-// directly — that happens in AdminLayout's onDragEnd (Gate 3). However,
+// directly — that happens in AdminCanvasLayout's onDragEnd (Gate 3). However,
 // the drag payload MUST use kind 'visualComponentRef' so the handler can
 // identify and dispatch the insert correctly.
 // ---------------------------------------------------------------------------
@@ -127,7 +127,7 @@ describe("G2 — SiteExplorerPanel drag source uses 'visualComponentRef' payload
         "[Phase 4 / G2] SiteExplorerPanel.tsx drag payload does not use kind: 'visualComponentRef'.\n" +
         "The DraggableComponentRow must register the dnd-kit draggable with:\n" +
         "  data: { kind: 'visualComponentRef', componentId: component.id }\n" +
-        "Without this, AdminLayout's onDragEnd cannot identify the drag as a VC insertion.\n" +
+        "Without this, AdminCanvasLayout's onDragEnd cannot identify the drag as a VC insertion.\n" +
         'File: src/admin/pages/site/components/SiteExplorerPanel/SiteExplorerPanel.tsx',
       )
     }
@@ -136,22 +136,22 @@ describe("G2 — SiteExplorerPanel drag source uses 'visualComponentRef' payload
 })
 
 // ---------------------------------------------------------------------------
-// Gate 3 — AdminLayout onDragEnd must call insertComponentRef
+// Gate 3 — AdminCanvasLayout onDragEnd must call insertComponentRef
 //
-// AdminLayout is the DndContext host for canvas-level VC drops. Its
+// AdminCanvasLayout is the DndContext host for canvas-level VC drops. Its
 // handleCanvasDragEnd handler is the single insertion point for the
 // SiteExplorerPanel drag flow. It must delegate to insertComponentRef.
 // ---------------------------------------------------------------------------
 
-describe('G3 — AdminLayout onDragEnd calls insertComponentRef for visualComponentRef drops (Phase 4)', () => {
-  test('AdminLayout.tsx must reference insertComponentRef inside the drag handler', () => {
+describe('G3 — AdminCanvasLayout onDragEnd calls insertComponentRef for visualComponentRef drops (Phase 4)', () => {
+  test('AdminCanvasLayout.tsx must reference insertComponentRef inside the drag handler', () => {
     const src = readSource(ADMIN_LAYOUT_PATH)
     if (!src.includes('insertComponentRef')) {
       throw new Error(
-        '[Phase 4 / G3] AdminLayout.tsx does not reference insertComponentRef.\n' +
+        '[Phase 4 / G3] AdminCanvasLayout.tsx does not reference insertComponentRef.\n' +
         "The handleCanvasDragEnd function must call state.insertComponentRef(parentId, componentId)\n" +
         "after resolving the drop target from the 'visualComponentRef' drag payload.\n" +
-        'File: src/admin/AdminLayout.tsx',
+        'File: src/admin/layouts/AdminCanvasLayout/AdminCanvasLayout.tsx',
       )
     }
     expect(src).toContain('insertComponentRef')
@@ -191,7 +191,7 @@ describe("G5 — No placement file calls insertNode with 'base.visual-component-
     ['ModulePickerDropdown.tsx', PICKER_PATH],
     ['SiteExplorerPanel.tsx', EXPLORER_PATH],
     ['LayerNodeContextMenu.tsx', CONTEXT_MENU_PATH],
-    ['AdminLayout.tsx', ADMIN_LAYOUT_PATH],
+    ['AdminCanvasLayout.tsx', ADMIN_LAYOUT_PATH],
   ]
 
   for (const [label, filePath] of FILES) {
@@ -225,7 +225,7 @@ describe("G6 — No placement file calls addNodeToVc with 'base.visual-component
     ['ModulePickerDropdown.tsx', PICKER_PATH],
     ['SiteExplorerPanel.tsx', EXPLORER_PATH],
     ['LayerNodeContextMenu.tsx', CONTEXT_MENU_PATH],
-    ['AdminLayout.tsx', ADMIN_LAYOUT_PATH],
+    ['AdminCanvasLayout.tsx', ADMIN_LAYOUT_PATH],
   ]
 
   for (const [label, filePath] of FILES) {

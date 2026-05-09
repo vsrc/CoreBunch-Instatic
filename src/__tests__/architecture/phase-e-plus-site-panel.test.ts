@@ -12,7 +12,7 @@
  *    removeDependency, packageJson) but no longer carries dead panel-toggle
  *    state (isSitePanelOpen, activeSitePanelTab, setSitePanelOpen,
  *    setSitePanelTab) — removed in Task #441.
- * 3. AdminLayout.tsx has no SitePanel import (migration regression guard).
+ * 3. AdminCanvasLayout.tsx has no SitePanel import (migration regression guard).
  * 4. DepsSection retains SAFE_PACKAGE_NAME validation (Constraint #361 Rule 5).
  * 5. Dead panel-toggle state absent from sitePanelSlice (Task #441 sweep).
  *
@@ -31,7 +31,7 @@ const SRC_ROOT = join(import.meta.dir, '../../')
 
 const DEPS_SECTION_PATH = join(SRC_ROOT, 'admin/pages/site/panels/DependenciesPanel/DepsSection.tsx')
 const PROJECT_PANEL_SLICE_PATH = join(SRC_ROOT, 'admin/pages/site/store/slices/sitePanelSlice.ts')
-const EDITOR_LAYOUT_PATH = join(SRC_ROOT, 'admin/AdminLayout.tsx')
+const EDITOR_LAYOUT_PATH = join(SRC_ROOT, 'admin/layouts/AdminCanvasLayout/AdminCanvasLayout.tsx')
 const PROJECT_PANEL_DIR = join(SRC_ROOT, 'editor/components/SitePanel')
 
 // ---------------------------------------------------------------------------
@@ -163,17 +163,17 @@ describe('Post-#434 Gate 3 — Dead panel-toggle state removed from sitePanelSli
 })
 
 // ---------------------------------------------------------------------------
-// Gate 4 — AdminLayout.tsx has no SitePanel import (regression guard)
+// Gate 4 — AdminCanvasLayout.tsx has no SitePanel import (regression guard)
 //
-// SitePanel was removed from AdminLayout in Task #434. This gate catches
+// SitePanel was removed from AdminCanvasLayout in Task #434. This gate catches
 // accidental re-introduction (e.g. merge conflict, revert, stale import).
 //
-// AdminLayout must render the current panel architecture:
+// AdminCanvasLayout must render the current panel architecture:
 //   LeftSidebar | PropertiesPanel | CodeEditorPanel
 // ---------------------------------------------------------------------------
 
-describe('Post-#434 Gate 4 — AdminLayout has no SitePanel import (regression guard / Guideline #410)', () => {
-  it('AdminLayout.tsx must not import from SitePanel', () => {
+describe('Post-#434 Gate 4 — AdminCanvasLayout has no SitePanel import (regression guard / Guideline #410)', () => {
+  it('AdminCanvasLayout.tsx must not import from SitePanel', () => {
     const src = readFileSync(EDITOR_LAYOUT_PATH, 'utf8')
     const hasSitePanelImport = src
       .split('\n')
@@ -182,15 +182,15 @@ describe('Post-#434 Gate 4 — AdminLayout has no SitePanel import (regression g
 
     if (hasSitePanelImport) {
       throw new Error(
-        '[Post-#434 regression / Guideline #410] SitePanel import found in AdminLayout.tsx.\n' +
+        '[Post-#434 regression / Guideline #410] SitePanel import found in AdminCanvasLayout.tsx.\n' +
         '\n' +
         'SitePanel was deleted in Task #434 (Contribution #627).\n' +
-        'AdminLayout must render the current panel architecture:\n' +
+        'AdminCanvasLayout must render the current panel architecture:\n' +
         '  <LeftSidebar />\n' +
         '  <PropertiesPanel />\n' +
         '  <CodeEditorPanel />\n' +
         '\n' +
-        'Remove the SitePanel import and its JSX from AdminLayout.tsx.'
+        'Remove the SitePanel import and its JSX from AdminCanvasLayout.tsx.'
       )
     }
     expect(hasSitePanelImport).toBe(false)

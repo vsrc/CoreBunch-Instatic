@@ -9,7 +9,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import React from 'react'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import AdminLayout from '@admin/AdminLayout'
+import { AdminCanvasLayout } from '@admin/layouts'
 import { AdminSessionProvider } from '@admin/session'
 import { useEditorStore } from '@site/store/store'
 import { makeNode, makePage, makeSite } from '../fixtures'
@@ -88,10 +88,10 @@ function renderEditorLayout({
   }
   render(user ? (
     <AdminSessionProvider user={user}>
-      <AdminLayout />
+      <AdminCanvasLayout />
     </AdminSessionProvider>
   ) : (
-    <AdminLayout />
+    <AdminCanvasLayout />
   ))
 }
 
@@ -120,7 +120,7 @@ function loadSiteWithSelectedHeading() {
 
 beforeEach(resetStore)
 
-describe('AdminLayout — CMS site hydration gate', () => {
+describe('AdminCanvasLayout — CMS site hydration gate', () => {
   it('does not render editor chrome with an empty store while the CMS site hydrates', async () => {
     const loaded = makeSite({ name: 'Hydrated Site' })
     const originalFetch = globalThis.fetch
@@ -143,7 +143,7 @@ describe('AdminLayout — CMS site hydration gate', () => {
     }
   })
 
-  it('does not overwrite an existing in-memory site when AdminLayout remounts during HMR', async () => {
+  it('does not overwrite an existing in-memory site when AdminCanvasLayout remounts during HMR', async () => {
     const existing = makeSite({ name: 'Existing HMR Site' })
     useEditorStore.setState({
       site: existing,
@@ -171,7 +171,7 @@ describe('AdminLayout — CMS site hydration gate', () => {
   })
 })
 
-describe('AdminLayout — persisted panel layout', () => {
+describe('AdminCanvasLayout — persisted panel layout', () => {
   it('restores panel visibility from localStorage on mount', async () => {
     localStorage.setItem(
       LAYOUT_STORAGE_KEY,
@@ -235,7 +235,7 @@ describe('AdminLayout — persisted panel layout', () => {
   })
 })
 
-describe('AdminLayout — permanent panel rail', () => {
+describe('AdminCanvasLayout — permanent panel rail', () => {
   it('renders site-read users in a read-only editor shell', () => {
     renderEditorLayout({ user: currentUser(['site.read']) })
 

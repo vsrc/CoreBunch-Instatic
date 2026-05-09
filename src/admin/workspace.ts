@@ -1,8 +1,14 @@
 /**
  * AdminWorkspace — top-level admin section identifier.
  *
- * Defined here (not in AdminLayout.tsx) so editor chrome (e.g. Toolbar) can
- * reference the type without creating a cycle through AdminLayout.tsx, which
- * itself imports the editor chrome.
+ * Defined here (not in AdminCanvasLayout.tsx) so editor chrome (e.g.
+ * Toolbar) can reference the type without creating a cycle through
+ * AdminCanvasLayout, which itself imports the editor chrome.
  */
-export type AdminWorkspace = 'site' | 'content' | 'plugins' | 'users' | 'pluginPage'
+/**
+ * `'account'` is the user's own settings page (profile, devices, security,
+ * activity). Self-targeted — no capability gate; every authenticated user
+ * can access their own. The avatar dropdown in the toolbar is the primary
+ * entry point.
+ */
+export type AdminWorkspace = 'site' | 'content' | 'plugins' | 'users' | 'pluginPage' | 'account'

@@ -1,4 +1,4 @@
-import AdminLayout from '@admin/AdminLayout'
+import { AdminCanvasLayout } from '@admin/layouts'
 
 /**
  * SitePage — the visual page-builder workspace.
@@ -22,5 +22,5 @@ import AdminLayout from '@admin/AdminLayout'
  *   - ui/            — editor-shared building blocks (Tree, ModuleIcon)
  */
 export function SitePage() {
-  return <AdminLayout workspace="site" />
+  return <AdminCanvasLayout workspace="site" />
 }

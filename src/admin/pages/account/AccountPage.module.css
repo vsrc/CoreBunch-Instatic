@@ -1,0 +1,307 @@
+/* AccountPage — self-targeted user settings page (profile + devices +
+ * security + activity). Shape mirrors UsersPage so density/layout feel
+ * consistent across the admin shell.
+ *
+ * Layout chrome (scroll container, max-width, page header) lives in
+ * `AdminPageLayout`. This file only styles the per-tab body content.
+ */
+
+.body {
+    display: grid;
+    gap: 28px;
+}
+
+.sectionHeader p,
+.secondaryText {
+    margin: 0;
+    color: var(--editor-text-muted);
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+.tabsRow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.section {
+    display: grid;
+    gap: 16px;
+}
+
+.sectionHeader {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 18px;
+}
+
+.sectionHeader h2 {
+    margin: 0;
+    color: var(--editor-text-bright);
+    font-size: 18px;
+    line-height: 1.25;
+}
+
+.cards {
+    display: grid;
+    gap: 1px;
+}
+
+.card {
+    display: grid;
+    gap: 8px;
+    padding: 16px;
+    border-radius: var(--panel-radius);
+    background: var(--editor-surface-2);
+    transition: background 0.3s;
+}
+
+.card:hover {
+    background: var(--editor-surface-3);
+}
+
+.cardHeader {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+}
+
+.cardTitle {
+    margin: 0;
+    color: var(--editor-text-bright);
+    font-size: 14px;
+    font-weight: 800;
+    line-height: 1.2;
+}
+
+.cardDesc {
+    margin: 0;
+    color: var(--editor-text-muted);
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+.cardActions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.cardStatus {
+    margin: 0;
+    color: var(--editor-text-muted);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.4;
+}
+
+.cardStatusActive {
+    color: var(--editor-success-green);
+}
+
+.identity {
+    display: grid;
+    gap: 5px;
+    min-width: 0;
+}
+
+.identity strong {
+    color: var(--editor-text-bright);
+    font-size: 14px;
+    font-weight: 800;
+    line-height: 1.2;
+}
+
+.identity span {
+    color: var(--editor-text-muted);
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+.badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.badge,
+.badgeMuted {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    min-height: 18px;
+    padding: 1px 6px;
+    border-radius: var(--editor-radius);
+    --badge-bg: var(--editor-surface-2);
+    --badge-color: var(--editor-text-muted);
+    background: linear-gradient(0deg, var(--badge-bg), transparent);
+    color: var(--badge-color);
+    font-size: 10px;
+    font-weight: 620;
+    line-height: 1.4;
+}
+
+.badgeMuted {
+    --badge-bg: var(--editor-bg-subtle);
+    --badge-color: var(--editor-text);
+}
+
+.profileGrid {
+    display: grid;
+    grid-template-columns: 96px minmax(0, 1fr);
+    gap: 20px;
+    align-items: start;
+}
+
+.avatarCircle {
+    width: 96px;
+    height: 96px;
+    border-radius: 999px;
+    border: 1px solid var(--editor-border);
+    background: var(--editor-surface-2);
+    color: var(--editor-text-bright);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 36px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+.profileFields {
+    display: grid;
+    gap: 10px;
+}
+
+.profileField {
+    display: grid;
+    grid-template-columns: 100px minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
+}
+
+.profileFieldLabel {
+    color: var(--editor-text-muted);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+.profileFieldValue {
+    color: var(--editor-text-bright);
+    font-size: 13px;
+    font-weight: 600;
+    word-break: break-word;
+}
+
+.error {
+    margin: 0;
+    color: var(--editor-danger);
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.45;
+}
+
+.emptyState {
+    margin: 0;
+    color: var(--editor-text-muted);
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.45;
+}
+
+.suspiciousBanner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border-radius: var(--editor-radius);
+    background: var(--editor-bg-subtle);
+    border: 1px solid var(--editor-border);
+    color: var(--editor-warning);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.actionsHeader,
+.actionsCell {
+    text-align: right;
+}
+
+.actionsCell {
+    justify-content: flex-end;
+}
+
+.deviceLabel {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+}
+
+.deviceLabel strong {
+    color: var(--editor-text-bright);
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.deviceLabel span {
+    color: var(--editor-text-muted);
+    font-size: 11px;
+    line-height: 1.4;
+}
+
+.activityRow {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--editor-text);
+}
+
+.activityResult {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+.activityResultSuccess {
+    color: var(--editor-success-green);
+}
+
+.activityResultBad {
+    color: var(--editor-warning);
+}
+
+.activityResultLocked {
+    color: var(--editor-danger);
+}
+
+@media (max-width: 760px) {
+    .profileGrid {
+        grid-template-columns: 1fr;
+    }
+
+    .sectionHeader {
+        grid-template-columns: 1fr;
+        align-items: start;
+    }
+
+    .actionsHeader,
+    .actionsCell {
+        text-align: left;
+    }
+
+    .actionsCell {
+        justify-content: flex-start;
+    }
+
+    .profileField {
+        grid-template-columns: 1fr;
+    }
+}

@@ -36,10 +36,10 @@ import {
 } from '@core/persistence'
 import type { CoreCapability } from '@core/capabilities'
 import dialogStyles from '../../shared/dialogs/SiteCreateDialog/SiteCreateDialog.module.css'
-import AdminLayout from '@admin/AdminLayout'
+import { AdminPageLayout } from '@admin/layouts'
 import { hasCapability } from '@admin/access'
 import { useCurrentAdminUser } from '@admin/sessionContext'
-import { SettingsButton } from '@site/toolbar/SettingsButton'
+import { StepUpCancelledMessage, useStepUp } from '@admin/shared/StepUp'
 import styles from './UsersPage.module.css'
 
 type Tab = 'users' | 'roles' | 'audit'
@@ -315,6 +315,7 @@ function auditDetails(event: CmsAuditEvent, rolesById: Map<string, CmsRole>): st
 
 export function UsersPage() {
   const currentUser = useCurrentAdminUser()
+  const { runStepUp } = useStepUp()
   const unrestricted = !currentUser
   const canManageUsers = unrestricted || hasCapability(currentUser, 'users.manage')
   const canManageRoles = unrestricted || hasCapability(currentUser, 'roles.manage')
@@ -502,10 +503,14 @@ export function UsersPage() {
     setBusy(true)
     setError(null)
     try {
-      await deleteCmsUser(user.id)
+      // Step-up gated server-side; the runner re-prompts for password
+      // when the session has no fresh window. Cancelling the dialog
+      // resolves silently without surfacing an error.
+      await runStepUp(() => deleteCmsUser(user.id))
       setUsers((current) => current.filter((candidate) => candidate.id !== user.id))
       void load()
     } catch (err) {
+      if (err instanceof Error && err.message === StepUpCancelledMessage) return
       setError(err instanceof Error ? err.message : 'Could not delete user')
     } finally {
       setBusy(false)
@@ -611,33 +616,31 @@ export function UsersPage() {
     })
   }
 
-  return (
-    <AdminLayout
-      workspace="users"
-      toolbarRightSlot={<SettingsButton />}
-      contentCanvas={
-        <main className={styles.usersCanvas}>
-          <section className={styles.shell} aria-labelledby="users-title">
-            <header className={styles.header}>
-              <div>
-                <h1 id="users-title">Users</h1>
-                <p>Manage admin access, custom roles, and security audit events.</p>
-              </div>
-              <div className={styles.tabs} role="tablist" aria-label="Users sections">
-                {availableTabs.map((item) => (
-                  <Button
-                    key={item}
-                    type="button"
-                    variant={activeTab === item ? 'primary' : 'secondary'}
-                    size="sm"
-                    onClick={() => setTab(item)}
-                  >
-                    <span>{tabLabel(item)}</span>
-                  </Button>
-                ))}
-              </div>
-            </header>
+  const tabs = (
+    <div role="tablist" aria-label="Users sections" className={styles.tabsRow}>
+      {availableTabs.map((item) => (
+        <Button
+          key={item}
+          type="button"
+          variant={activeTab === item ? 'primary' : 'secondary'}
+          size="sm"
+          onClick={() => setTab(item)}
+        >
+          <span>{tabLabel(item)}</span>
+        </Button>
+      ))}
+    </div>
+  )
 
+  return (
+    <AdminPageLayout
+      workspace="users"
+      title="Users"
+      titleId="users-title"
+      description="Manage admin access, custom roles, and security audit events."
+      tabs={tabs}
+    >
+      <div className={styles.body}>
             {error && <p className={styles.error} role="alert">{error}</p>}
 
             {activeTab === 'users' && (
@@ -862,7 +865,6 @@ export function UsersPage() {
                 )}
               </section>
             )}
-          </section>
 
           {canManageUsers && userDialogMode && (
             <UserDialog
@@ -891,9 +893,8 @@ export function UsersPage() {
               onSetCapabilityGroup={setCapabilityGroup}
             />
           )}
-        </main>
-      }
-    />
+      </div>
+    </AdminPageLayout>
   )
 }
 

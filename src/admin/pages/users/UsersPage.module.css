@@ -1,50 +1,26 @@
-.usersCanvas {
-    position: absolute;
-    inset: 0;
-    overflow: auto;
-    padding: 96px 28px 48px;
-    background: var(--editor-bg);
-    color: var(--editor-text);
-    user-select: text;
-}
-
-.shell {
+/* Users page body — sits inside AdminPageLayout, which provides the
+   scroll container, max-width, and page header. We just stack the
+   per-section blocks (Users / Roles / Audit) and the inline dialogs. */
+.body {
     display: grid;
     gap: 28px;
-    width: min(1220px, 100%);
-    margin: 0 auto;
 }
 
-.header,
 .sectionHeader {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
-    align-items: end;
+    align-items: center;
     gap: 18px;
 }
 
-.sectionHeader {
-    align-items: center;
-}
-
-.header h1,
 .sectionHeader h2 {
     margin: 0;
     color: var(--editor-text-bright);
     letter-spacing: 0;
-}
-
-.header h1 {
-    font-size: 30px;
-    line-height: 1.05;
-}
-
-.sectionHeader h2 {
     font-size: 18px;
     line-height: 1.25;
 }
 
-.header p,
 .sectionHeader p,
 .identity span,
 .identity small,
@@ -55,7 +31,7 @@
     line-height: 1.45;
 }
 
-.tabs,
+.tabsRow,
 .badges,
 .auditDetails,
 .groupActions {
@@ -212,11 +188,6 @@
 }
 
 @media (max-width: 960px) {
-    .usersCanvas {
-        padding-inline: 18px;
-    }
-
-    .header,
     .sectionHeader {
         grid-template-columns: 1fr;
         align-items: start;

@@ -441,7 +441,7 @@ describe('SiteExplorerPanel', () => {
 
   it('mounts editor previews as viewport overlays above sidebars', () => {
     const editorLayoutSource = readFileSync(
-      new URL('../../admin/AdminLayout.tsx', import.meta.url),
+      new URL('../../admin/layouts/AdminCanvasLayout/AdminCanvasLayout.tsx', import.meta.url),
       'utf-8',
     )
     const codeEditorMountIndex = editorLayoutSource.indexOf('<CodeEditorPanel />')

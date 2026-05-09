@@ -1,5 +1,18 @@
 /**
- * AdminLayout — root layout for the self-hosted CMS admin.
+ * AdminCanvasLayout — the canvas-bearing admin shell.
+ *
+ * One of the two top-level admin layouts in `src/admin/layouts/`:
+ *   - AdminCanvasLayout (this file) — used by the Site editor and the
+ *     Content workspace. Carries the floating editor panels, the page
+ *     canvas, the DnD context that wires the SiteExplorer drag-to-canvas
+ *     flow, and the per-workspace sidebars.
+ *   - AdminPageLayout — used by Plugins, Users, Account, and plugin admin
+ *     pages. Strips the canvas / sidebar / DnD chrome and renders a
+ *     simple centered page body with a unified header.
+ *
+ * Pick AdminCanvasLayout when the page IS the editor canvas. Pick
+ * AdminPageLayout when the page is a regular admin page (lists, forms,
+ * settings) that doesn't need the editor machinery.
  *
  * Editor Overlay Layout (Guideline #410 — motion-editor style):
  *   ┌─────────────────────────────── Toolbar ──────────────────────────────────┐  z-60
@@ -30,38 +43,40 @@ import {
   useSensors,
   type DragEndEvent,
 } from '@dnd-kit/core'
-import { CanvasRoot, CANVAS_ROOT_DROPPABLE_ID } from './pages/site/canvas'
-import { PropertiesPanel } from './pages/site/panels/PropertiesPanel'
-import { CodeEditorPanel } from './pages/site/code-editor'
-import { Toolbar } from './pages/site/toolbar'
-import { LeftSidebar } from './pages/site/sidebars/LeftSidebar'
-import { RightSidebar } from './pages/site/sidebars/RightSidebar'
-import { SettingsModal } from './modals/Settings'
-import { ConfirmDeleteProvider } from './shared/dialogs/ConfirmDeleteDialog'
-import { useEditorSelectPreference } from './pages/site/preferences/editorPreferences'
-import { usePersistence } from './pages/site/hooks/usePersistence'
-import { useEditorLayoutPersistence } from './pages/site/hooks/useEditorLayoutPersistence'
-import { selectActiveCanvasPage, selectRightSidebarExpanded, useEditorStore } from './pages/site/store/store'
+import { CanvasRoot, CANVAS_ROOT_DROPPABLE_ID } from '@admin/pages/site/canvas'
+import { PropertiesPanel } from '@admin/pages/site/panels/PropertiesPanel'
+import { CodeEditorPanel } from '@admin/pages/site/code-editor'
+import { Toolbar } from '@admin/pages/site/toolbar'
+import { LeftSidebar } from '@admin/pages/site/sidebars/LeftSidebar'
+import { RightSidebar } from '@admin/pages/site/sidebars/RightSidebar'
+import { SettingsModal } from '@admin/modals/Settings'
+import { ConfirmDeleteProvider } from '@admin/shared/dialogs/ConfirmDeleteDialog'
+import { useEditorSelectPreference } from '@admin/pages/site/preferences/editorPreferences'
+import { usePersistence } from '@admin/pages/site/hooks/usePersistence'
+import { useEditorLayoutPersistence } from '@admin/pages/site/hooks/useEditorLayoutPersistence'
+import { selectActiveCanvasPage, selectRightSidebarExpanded, useEditorStore } from '@admin/pages/site/store/store'
 import { cmsAdapter } from '@core/persistence'
-import { listCmsPlugins } from '@core/persistence/cmsPlugins'
-import type { PluginAdminPageRoute } from '@core/plugin-sdk'
 import { cn } from '@ui/cn'
-import { useInstalledEditorPlugins } from './pages/plugins/hooks/useInstalledEditorPlugins'
-import { CMS_PLUGINS_CHANGED_EVENT } from './pages/plugins/utils/pluginEvents'
-import { AppLoadingScreen } from './AppLoadingScreen'
-import styles from './AdminLayout.module.css'
-import { useCallback, useEffect, useState, type MouseEvent, type ReactNode } from 'react'
-import { flushSync } from 'react-dom'
-import { Link } from './lib/routing'
-import { useInRouterContext, useLocation, useNavigate } from './lib/routing'
-import toolbarStyles from './pages/site/toolbar/Toolbar.module.css'
-import type { AdminWorkspace } from './workspace'
-import { useCurrentAdminUser } from './sessionContext'
-import { canAccessWorkspace, hasAllCapabilities, hasCapability } from './access'
-import type { CmsCurrentUser } from '@core/persistence'
+import { useInstalledEditorPlugins } from '@admin/pages/plugins/hooks/useInstalledEditorPlugins'
+import { usePluginEventBridge } from '@admin/pages/plugins/hooks/usePluginEventBridge'
+import { AppLoadingScreen } from '@admin/AppLoadingScreen'
+import { AdminSectionNavigation } from '@admin/shared/AdminSectionNavigation'
+import styles from './AdminCanvasLayout.module.css'
+import { useCallback, type ReactNode } from 'react'
+import type { AdminWorkspace } from '@admin/workspace'
+import { useCurrentAdminUser } from '@admin/sessionContext'
+import { hasAllCapabilities, hasCapability } from '@admin/access'
 
-interface AdminLayoutProps {
-  workspace?: AdminWorkspace
+/**
+ * AdminCanvasLayout is the canvas-bearing shell — used by the Site editor
+ * and the Content workspace. Other admin pages (Plugins, Users, Account,
+ * plugin pages) render through `AdminPageLayout` instead, which skips the
+ * canvas / sidebar / DnD chrome they don't need.
+ */
+type AdminCanvasWorkspace = Extract<AdminWorkspace, 'site' | 'content'>
+
+interface AdminCanvasLayoutProps {
+  workspace?: AdminCanvasWorkspace
   contentSidebar?: ReactNode
   contentLeftPanel?: ReactNode
   contentCanvas?: ReactNode
@@ -69,14 +84,14 @@ interface AdminLayoutProps {
   toolbarRightSlot?: ReactNode
 }
 
-export default function AdminLayout({
+export function AdminCanvasLayout({
   workspace = 'site',
   contentSidebar,
   contentLeftPanel,
   contentCanvas,
   contentRightPanel,
   toolbarRightSlot,
-}: AdminLayoutProps) {
+}: AdminCanvasLayoutProps) {
   const site = useEditorStore((s) => s.site)
   const propertiesPanelMode = useEditorStore((s) => s.propertiesPanelMode)
   const rightSidebarExpanded = useEditorStore(selectRightSidebarExpanded)
@@ -88,12 +103,25 @@ export default function AdminLayout({
   const requiresSiteDocument = workspace === 'site'
 
   // J12 — wire persistence: load, auto-save, toolbar Save, Cmd+S.
+  //
+  // We load the site on EVERY workspace (not just `'site'`) because the
+  // toolbar reads its title from `useEditorStore((s) => s.site?.name)` —
+  // hard-refreshing on `/admin/account` or `/admin/users` would otherwise
+  // show the "Untitled Site" fallback until the user navigated to the
+  // editor canvas at least once. Auto-save side-effects don't fire on
+  // non-site workspaces because nothing dirties the store there
+  // (`hasUnsavedChanges` stays false), so the only behaviour we add to
+  // those workspaces is the read-only hydrate.
   const persistence = usePersistence('default', cmsAdapter, {
     markNewSiteUnsaved: true,
-    enabled: requiresSiteDocument,
+    enabled: true,
   })
   useEditorLayoutPersistence()
   useInstalledEditorPlugins()
+  // Mount the SSE bridge ONCE per admin tab — gives toasts on plugin
+  // crashes from any route, drives the red dot on the Plugins nav link,
+  // and keeps the open Plugins page list refreshed.
+  usePluginEventBridge()
 
   // ── Canvas-level DnD (B2 — visualComponentRef drop from SiteExplorer) ──────
   // Handles drops of { kind: 'visualComponentRef', componentId: string } payloads
@@ -238,175 +266,3 @@ export default function AdminLayout({
   )
 }
 
-interface AdminSectionNavigationProps {
-  section: AdminWorkspace
-  currentUser?: CmsCurrentUser | null
-  onWorkspaceNavigateStart?: () => void
-}
-
-export function AdminSectionNavigation({
-  section,
-  currentUser,
-  onWorkspaceNavigateStart,
-}: AdminSectionNavigationProps) {
-  const [pluginPages, setPluginPages] = useState<PluginAdminPageRoute[]>([])
-  const sessionUser = useCurrentAdminUser()
-  const effectiveUser = currentUser ?? sessionUser ?? null
-  const unrestricted = !effectiveUser
-  const canAccess = (workspace: AdminWorkspace) => unrestricted || canAccessWorkspace(effectiveUser, workspace)
-  const canAccessPlugins = canAccess('plugins')
-
-  useEffect(() => {
-    let cancelled = false
-
-    async function loadPluginPages() {
-      if (!canAccessPlugins) {
-        setPluginPages([])
-        return
-      }
-      try {
-        const payload = await listCmsPlugins()
-        if (!cancelled) {
-          setPluginPages((current) => {
-            const next = payload.adminPages
-            const unchanged =
-              current.length === next.length &&
-              current.every((page, index) => page.route === next[index]?.route)
-            return unchanged ? current : next
-          })
-        }
-      } catch {
-        // Navigation remains usable when plugins cannot be loaded.
-      }
-    }
-
-    function refreshPluginPages() {
-      void loadPluginPages()
-    }
-
-    refreshPluginPages()
-    window.addEventListener(CMS_PLUGINS_CHANGED_EVENT, refreshPluginPages)
-    return () => {
-      cancelled = true
-      window.removeEventListener(CMS_PLUGINS_CHANGED_EVENT, refreshPluginPages)
-    }
-  }, [canAccessPlugins])
-
-  return (
-    <>
-      {canAccess('site') && (
-        section === 'site' ? (
-          <span className={toolbarStyles.activeSection}>Site</span>
-        ) : (
-          <AdminRouteLink to="/admin/site" onNavigateStart={onWorkspaceNavigateStart}>Site</AdminRouteLink>
-        )
-      )}
-      {canAccess('content') && (
-        section === 'content' ? (
-          <span className={toolbarStyles.activeSection}>Content</span>
-        ) : (
-          <AdminRouteLink to="/admin/content" onNavigateStart={onWorkspaceNavigateStart}>Content</AdminRouteLink>
-        )
-      )}
-      {canAccess('plugins') && (
-        section === 'plugins' ? (
-          <span className={toolbarStyles.activeSection}>Plugins</span>
-        ) : (
-          <AdminRouteLink to="/admin/plugins" onNavigateStart={onWorkspaceNavigateStart}>Plugins</AdminRouteLink>
-        )
-      )}
-      {canAccess('users') && (
-        section === 'users' ? (
-          <span className={toolbarStyles.activeSection}>Users</span>
-        ) : (
-          <AdminRouteLink to="/admin/users" onNavigateStart={onWorkspaceNavigateStart}>Users</AdminRouteLink>
-        )
-      )}
-      {canAccessPlugins && pluginPages.map((page) => (
-        <AdminRouteLink
-          key={`${page.pluginId}:${page.id}`}
-          to={page.route}
-          onNavigateStart={onWorkspaceNavigateStart}
-        >
-          {page.navLabel ?? page.title}
-        </AdminRouteLink>
-      ))}
-    </>
-  )
-}
-
-function AdminRouteLink({
-  to,
-  children,
-  onNavigateStart,
-}: {
-  to: string
-  children: ReactNode
-  onNavigateStart?: () => void
-}) {
-  const inRouter = useInRouterContext()
-
-  if (inRouter) {
-    return (
-      <RouterAdminRouteLink to={to} onNavigateStart={onNavigateStart}>
-        {children}
-      </RouterAdminRouteLink>
-    )
-  }
-
-  return (
-    <a className={toolbarStyles.adminLink} href={to}>
-      {children}
-    </a>
-  )
-}
-
-function RouterAdminRouteLink({
-  to,
-  children,
-  onNavigateStart,
-}: {
-  to: string
-  children: ReactNode
-  onNavigateStart?: () => void
-}) {
-  const navigate = useNavigate()
-  const location = useLocation()
-
-  function handleClick(event: MouseEvent<HTMLAnchorElement>) {
-    if (
-      event.defaultPrevented ||
-      event.button !== 0 ||
-      event.metaKey ||
-      event.altKey ||
-      event.ctrlKey ||
-      event.shiftKey ||
-      event.currentTarget.target
-    ) {
-      return
-    }
-
-    if (location.pathname === to) return
-
-    event.preventDefault()
-    onNavigateStart?.()
-
-    const startViewTransition = document.startViewTransition
-    if (typeof startViewTransition !== 'function') {
-      void navigate(to)
-      return
-    }
-
-    startViewTransition.call(document, () => {
-      flushSync(() => {
-        void navigate(to)
-      })
-    })
-  }
-
-  return (
-    <Link className={toolbarStyles.adminLink} to={to} onClick={handleClick}>
-      {children}
-    </Link>
-  )
-}

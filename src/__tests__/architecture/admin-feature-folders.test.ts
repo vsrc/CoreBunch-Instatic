@@ -10,7 +10,8 @@ function read(path: string) {
 
 describe('admin feature folders', () => {
   it('keeps admin page entry points in src/admin feature folders', () => {
-    expect(existsSync(join(root, 'src/admin/AdminLayout.tsx'))).toBe(true)
+    expect(existsSync(join(root, 'src/admin/layouts/AdminCanvasLayout/AdminCanvasLayout.tsx'))).toBe(true)
+    expect(existsSync(join(root, 'src/admin/layouts/AdminPageLayout/AdminPageLayout.tsx'))).toBe(true)
     expect(existsSync(join(root, 'src/admin/AdminEntry.tsx'))).toBe(true)
     expect(existsSync(join(root, 'src/admin/router.tsx'))).toBe(true)
     expect(existsSync(join(root, 'src/admin/pages/site/SitePage.tsx'))).toBe(true)

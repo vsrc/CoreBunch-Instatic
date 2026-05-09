@@ -350,7 +350,8 @@ describe('Gate 4 — No Unicode/emoji characters used as visual icons (user dire
   // Scan src/admin/pages/site/ and src/admin/.
   const APP_DIR = join(PROJECT_ROOT, 'src/admin')
   const ACTIVE_APP_FILES = [
-    join(APP_DIR, 'AdminLayout.tsx'),
+    join(APP_DIR, 'layouts/AdminCanvasLayout/AdminCanvasLayout.tsx'),
+    join(APP_DIR, 'layouts/AdminPageLayout/AdminPageLayout.tsx'),
     join(APP_DIR, 'router.tsx'),
   ]
 

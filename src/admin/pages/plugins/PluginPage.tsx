@@ -2,12 +2,23 @@ import { useEffect, useMemo, useState } from 'react'
 import { useParams } from '@admin/lib/routing'
 import type { CmsPluginsPayload, PluginAdminPageRoute } from '@core/plugin-sdk'
 import { listCmsPlugins } from '@core/persistence'
-import AdminLayout from '@admin/AdminLayout'
-import { SettingsButton } from '@site/toolbar/SettingsButton'
+import { AdminPageLayout } from '@admin/layouts'
 import { PluginPageRenderer } from './components/PluginPageRenderer/PluginPageRenderer'
 import styles from './PluginsPage.module.css'
 
 const emptyPayload: CmsPluginsPayload = { plugins: [], adminPages: [] }
+
+function pageHeading(page: PluginAdminPageRoute): string {
+  if (page.content.kind === 'map') return page.content.heading
+  if (page.content.kind === 'app') return page.content.heading
+  if (page.content.kind === 'resource') return page.content.heading
+  return page.content.heading ?? page.title
+}
+
+function pageDescription(page: PluginAdminPageRoute): string | undefined {
+  if (page.content.kind === 'map' && page.content.body) return page.content.body
+  return undefined
+}
 
 export function PluginPage() {
   const { pluginId = '', pageId = '' } = useParams()
@@ -41,26 +52,43 @@ export function PluginPage() {
     ) ?? null
   }, [pageId, payload.adminPages, pluginId])
 
+  if (loading) {
+    return (
+      <AdminPageLayout workspace="pluginPage" title="Plugin page" titleId="plugin-page-title">
+        <p className={styles.emptyState}>Loading plugin page...</p>
+      </AdminPageLayout>
+    )
+  }
+
+  if (error) {
+    return (
+      <AdminPageLayout workspace="pluginPage" title="Plugin page" titleId="plugin-page-title">
+        <p className={styles.error} role="alert">{error}</p>
+      </AdminPageLayout>
+    )
+  }
+
+  if (!page) {
+    return (
+      <AdminPageLayout
+        workspace="pluginPage"
+        title="Plugin page unavailable"
+        titleId="plugin-page-title"
+        description="The plugin may be disabled, removed, or using a page that no longer exists."
+      />
+    )
+  }
+
   return (
-    <AdminLayout
+    <AdminPageLayout
       workspace="pluginPage"
-      toolbarRightSlot={<SettingsButton />}
-      contentCanvas={(
-        <main className={styles.pluginsCanvas} data-testid="plugin-page-admin-canvas">
-          {loading ? (
-            <p className={styles.emptyState}>Loading plugin page...</p>
-          ) : error ? (
-            <p className={styles.error} role="alert">{error}</p>
-          ) : page ? (
-            <PluginPageRenderer page={page} />
-          ) : (
-            <section className={styles.emptyPluginPage} aria-labelledby="plugin-page-missing">
-              <h1 id="plugin-page-missing">Plugin page unavailable</h1>
-              <p>The plugin may be disabled, removed, or using a page that no longer exists.</p>
-            </section>
-          )}
-        </main>
-      )}
-    />
+      title={pageHeading(page)}
+      titleId="plugin-page-title"
+      description={pageDescription(page) ?? page.pluginName}
+    >
+      <div className={styles.pluginPageBody} data-testid="plugin-page-admin-canvas">
+        <PluginPageRenderer page={page} />
+      </div>
+    </AdminPageLayout>
   )
 }

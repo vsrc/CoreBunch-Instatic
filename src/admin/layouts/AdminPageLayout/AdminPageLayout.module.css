@@ -1,0 +1,125 @@
+/* AdminPageLayout — styles for the lightweight admin-page shell.
+ *
+ * Used by Plugins, Users, Account, and plugin admin pages. Companion to
+ * AdminCanvasLayout (the editor-canvas shell) — see the layouts/ index for
+ * the picking guide. This file just lays out toolbar + a scrollable,
+ * centered page body with a unified header; the heavy editor chrome lives
+ * in AdminCanvasLayout's stylesheet.
+ */
+
+.shell {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+    background: var(--editor-bg);
+    color: var(--editor-text);
+}
+
+.body {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    padding: 56px 28px 48px;
+    user-select: text;
+    background: var(--editor-surface);
+    border-top-left-radius: 16px;
+    border-top-right-radius: 16px;
+}
+
+.container {
+    display: grid;
+    gap: 28px;
+    width: min(1220px, 100%);
+    margin: 0 auto;
+}
+
+.header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    gap: 18px;
+    padding-bottom: 24px;
+    border-bottom: 1px solid var(--panel-border);
+}
+
+.titleGroup {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+}
+
+.titleGroup h1 {
+    margin: 0;
+    color: var(--editor-text-bright);
+    font-size: 50px;
+    line-height: 1.05;
+    letter-spacing: 0;
+}
+
+.titleGroup p {
+    margin: 0;
+    color: var(--editor-text-muted);
+    font-size: 16px;
+    line-height: 1.45;
+}
+
+.headerEnd {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+}
+
+.tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.bootstrapError {
+    display: grid;
+    min-height: 100vh;
+    place-content: center;
+    gap: 10px;
+    padding: 32px;
+    background: var(--editor-bg);
+    color: var(--editor-text);
+    text-align: center;
+}
+
+.bootstrapError h1 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 650;
+}
+
+.bootstrapError p {
+    max-width: 460px;
+    margin: 0;
+    color: var(--editor-text-muted);
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+@media (max-width: 760px) {
+    .body {
+        padding: 56px 18px 32px;
+    }
+
+    .header {
+        grid-template-columns: 1fr;
+        align-items: start;
+    }
+
+    .headerEnd {
+        justify-content: flex-start;
+    }
+}

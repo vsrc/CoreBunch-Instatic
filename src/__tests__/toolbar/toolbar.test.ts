@@ -164,19 +164,19 @@ describe('SaveIndicator — state display', () => {
     expect(src).toContain('role="alert"')
   })
 
-  it('AdminLayout passes persistence save status into the toolbar', () => {
+  it('AdminCanvasLayout passes persistence save status into the toolbar', () => {
     const { readFileSync } = require('fs')
     const src = readFileSync(
-      new URL('../../admin/AdminLayout.tsx', import.meta.url),
+      new URL('../../admin/layouts/AdminCanvasLayout/AdminCanvasLayout.tsx', import.meta.url),
       'utf-8',
     )
     expect(src).toContain('saveStatus={persistence.saveStatus}')
   })
 
-  it('AdminLayout marks a fresh cms site as unsaved until the first save', () => {
+  it('AdminCanvasLayout marks a fresh cms site as unsaved until the first save', () => {
     const { readFileSync } = require('fs')
     const src = readFileSync(
-      new URL('../../admin/AdminLayout.tsx', import.meta.url),
+      new URL('../../admin/layouts/AdminCanvasLayout/AdminCanvasLayout.tsx', import.meta.url),
       'utf-8',
     )
     expect(src).toContain('markNewSiteUnsaved: true')
@@ -509,11 +509,9 @@ describe('Toolbar — structural requirements', () => {
     // the same focus treatment. We assert on the primitive's stylesheet.
     const cssPath = new URL('../../ui/components/SearchBar/SearchBar.module.css', import.meta.url)
     const cssSrc = existsSync(cssPath.pathname) ? readFileSync(cssPath, 'utf-8') : ''
-    // Accept: Tailwind focus:ring-* / focus-visible:ring-* (legacy) OR
-    //         CSS module :focus / :focus-visible selector.
-    const hasTailwindRingApproach = /focus:ring-|focus-visible:ring-/.test(cssSrc)
+    // Assert CSS module :focus / :focus-visible selector (no Tailwind).
     const hasCssModuleFocus = /:focus[-\s{]|:focus-visible/.test(cssSrc)
-    expect(hasTailwindRingApproach || hasCssModuleFocus).toBe(true)
+    expect(hasCssModuleFocus).toBe(true)
   })
 
   it('PublishButton uses ref to track status timer (no useState leak on unmount)', () => {
@@ -573,10 +571,10 @@ describe('Toolbar — structural requirements', () => {
     expect(src).toContain('zIndex={10000}')
   })
 
-  it('AdminLayout imports and renders Toolbar', () => {
+  it('AdminCanvasLayout imports and renders Toolbar', () => {
     const { readFileSync } = require('fs')
     const src = readFileSync(
-      new URL('../../admin/AdminLayout.tsx', import.meta.url),
+      new URL('../../admin/layouts/AdminCanvasLayout/AdminCanvasLayout.tsx', import.meta.url),
       'utf-8',
     )
     expect(src).toContain("import { Toolbar }")
@@ -588,9 +586,8 @@ describe('Toolbar — structural requirements', () => {
 
   it('touch targets: all toolbar buttons have a defined compact height (Guideline #357)', () => {
     // Guideline #357 (user directive #1532): WCAG 2.5.5 44px touch target requirement
-    // is explicitly waived for editor chrome. Toolbar controls target 28px (h-7).
-    // Pattern accepts: h-7/h-8 Tailwind classes OR a 24–29px height value declared in
-    // the shared Toolbar.module.css (post-Task #399 — height moved to CSS module).
+    // is explicitly waived for editor chrome. Toolbar controls target 28px.
+    // Pattern asserts a 24–29px height value declared in the shared Toolbar.module.css.
     // UndoRedoButtons lives in the canvas notch and uses the notch chrome
     // styling, not the toolbar shared CSS — covered by canvasNotch.test.ts.
     const files = [
@@ -609,8 +606,8 @@ describe('Toolbar — structural requirements', () => {
         'utf-8',
       )
       const src = tsx + '\n' + sharedCss
-      // Compact only — h-7/h-8 Tailwind utility OR 24–29px height in the CSS module.
-      const hasHeight = /h-7|h-8|height:\s*2[4-9]/.test(src)
+      // Compact only — 24–29px height declared in the shared Toolbar.module.css.
+      const hasHeight = /height:\s*2[4-9]/.test(src)
       expect(hasHeight).toBe(true)
     }
   })
