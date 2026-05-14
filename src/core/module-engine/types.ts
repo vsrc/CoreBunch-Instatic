@@ -1,94 +1,13 @@
 import type { ComponentType, ReactNode } from 'react'
 import type { IconComponent } from 'pixel-art-icons/types'
+import type { PropertySchema } from './propertySchema'
 
-// ---------------------------------------------------------------------------
-// Property Condition — declarative, JSON-serializable (no function callbacks)
-// Constraint #212: condition must NOT be a function — breaks serialization
-// ---------------------------------------------------------------------------
-
-export type PropertyCondition =
-  | { field: string; eq: unknown }
-  | { field: string; notEq: unknown }
-  | { field: string; in: unknown[] }
-  | { field: string; notIn: unknown[] }
-  | { and: PropertyCondition[] }
-  | { or: PropertyCondition[] }
-
-// ---------------------------------------------------------------------------
-// Property Controls — drive the Properties Panel UI
-// ---------------------------------------------------------------------------
-
-/**
- * Row layout for a single property control inside the Properties Panel.
- *
- *   `inline`  — default for compact controls. Label sits in a 100px column on
- *               the left, the value control fills the remaining width. Best
- *               for short numeric, select, color, toggle, and short-text fields.
- *
- *   `stacked` — label sits on its own line above a full-width value control.
- *               Best for controls that need horizontal room: media pickers,
- *               textareas, richtext, multi-step pickers with their own internal
- *               layout. Image / media / textarea / richtext default to this.
- *
- * The `layout` field on a control overrides the per-type default, so a module
- * author can opt any field in or out (e.g. an `alt text` field next to an
- * image picker often reads better stacked even though it's a `text` control).
- */
-export type PropertyControlLayout = 'inline' | 'stacked'
-
-type PropertyControlBase = {
-  label: string
-  description?: string
-  condition?: PropertyCondition
-  /**
-   * Optional row layout override. When omitted, the renderer uses a sensible
-   * default based on the control type: `image`, `media`, `textarea`, and
-   * `richtext` default to `stacked`; everything else defaults to `inline`.
-   */
-  layout?: PropertyControlLayout
-  /**
-   * Whether edits to this prop on a non-default breakpoint should be stored as
-   * a per-breakpoint override (`breakpointOverrides[bp][key]`) instead of the
-   * base value (`props[key]`).
-   *
-   * Default `false`: the prop is treated as **content** — there is exactly
-   * one value across all breakpoints, and the editor writes to base props
-   * regardless of which breakpoint frame the user is editing in. This is the
-   * right default for module props: the published page is a single HTML
-   * document, so text, tags, image src/alt, etc. cannot meaningfully differ
-   * per breakpoint.
-   *
-   * Set to `true` only when the prop is consumed by something that *can*
-   * legitimately read its value at runtime per viewport — e.g. a future JS
-   * runtime variable surface that swaps values via media query. Visual
-   * (CSS-shaped) variation already lives in class breakpoint styles, not in
-   * module props.
-   */
-  breakpointOverridable?: boolean
-}
-
-export type PropertyControl = PropertyControlBase &
-  (
-    | { type: 'text'; placeholder?: string }
-    | { type: 'textarea'; rows?: number; placeholder?: string }
-    | { type: 'number'; min?: number; max?: number; step?: number; unit?: string }
-    | { type: 'color'; format?: 'hex' | 'rgba' }
-    | { type: 'select'; options: Array<{ label: string; value: unknown }> }
-    | { type: 'toggle' }
-    | { type: 'image' }
-    | { type: 'media'; mediaKind: 'image' | 'video' }
-    | { type: 'url' }
-    | { type: 'richtext' }
-    | { type: 'spacing' }
-    | { type: 'group'; collapsed?: boolean; children: PropertySchema }
-  )
-
-/**
- * Maps each prop key to a PropertyControl descriptor.
- * Keys must be FLAT — no dot-paths.
- * Use `type: 'group'` for visual grouping only — it does NOT nest the data shape.
- */
-export type PropertySchema = Record<string, PropertyControl>
+export type {
+  PropertyCondition,
+  PropertyControl,
+  PropertyControlLayout,
+  PropertySchema,
+} from './propertySchema'
 
 // ---------------------------------------------------------------------------
 // Module package dependencies — dependency-backed editor runtimes

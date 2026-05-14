@@ -52,15 +52,15 @@ import {
 } from '../repositories/plugins'
 import { isCoreCapability, type CoreCapability } from '../auth/capabilities'
 import type {
-  ApiCall,
   LoadPluginResult,
   MainToWorkerMessage,
   SerializedRequest,
   SerializedResponse,
   SerializedUser,
+  ValidatedApiCall,
   WorkerToMainMessage,
 } from './workerProtocol'
-import { isAllowedApiTarget } from './workerProtocol'
+import { parseApiCall } from './workerProtocol'
 
 // ---------------------------------------------------------------------------
 // Per-plugin host-side bookkeeping
@@ -234,7 +234,7 @@ function ensureWorkerFor(pluginId: string): Worker {
   const w = new Worker(new URL('./pluginWorker.ts', import.meta.url).href)
   workers.set(pluginId, w)
   w.addEventListener('message', (event: MessageEvent) => {
-    handleWorkerMessage(pluginId, event.data as WorkerToMainMessage)
+    handleWorkerMessage(pluginId, event.data)
   })
   w.addEventListener('error', (event: ErrorEvent) => {
     console.error(`[plugin:${pluginId}] uncaught error in worker:`, event.message, event.error)
@@ -317,32 +317,69 @@ function requestFromWorker<TKind extends WorkerToMainMessage['kind']>(
   })
 }
 
-function handleWorkerMessage(workerPluginId: string, msg: WorkerToMainMessage): void {
-  switch (msg.kind) {
+function workerMessageKind(value: unknown): string | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const kind = (value as { kind?: unknown }).kind
+  return typeof kind === 'string' ? kind : null
+}
+
+function workerMessageCorrelationId(value: unknown): string | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const correlationId = (value as { correlationId?: unknown }).correlationId
+  return typeof correlationId === 'string' && correlationId ? correlationId : null
+}
+
+function workerLogArgs(value: unknown): unknown[] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return []
+  const args = (value as { args?: unknown }).args
+  return Array.isArray(args) ? args : []
+}
+
+function rejectInvalidApiCall(workerPluginId: string, msg: unknown, err: unknown): void {
+  const message = err instanceof Error ? err.message : String(err)
+  console.error(`[plugin:${workerPluginId}] invalid api-call:`, err)
+
+  const correlationId = workerMessageCorrelationId(msg)
+  if (!correlationId) return
+  replyApiError(workerPluginId, correlationId, message)
+}
+
+function handleWorkerMessage(workerPluginId: string, msg: unknown): void {
+  switch (workerMessageKind(msg)) {
     case 'log':
       // Defense-in-depth: a worker can't impersonate another plugin's id in
       // its log line. The log prefix is the worker's owning pluginId.
-      console.info(`[plugin:${workerPluginId}]`, ...msg.args)
+      console.info(`[plugin:${workerPluginId}]`, ...workerLogArgs(msg))
       return
-    case 'api-call':
+    case 'api-call': {
+      let apiCall: ValidatedApiCall
+      try {
+        apiCall = parseApiCall(msg)
+      } catch (err) {
+        rejectInvalidApiCall(workerPluginId, msg, err)
+        return
+      }
       // Defense-in-depth: an api-call must reference the worker's own
       // pluginId. Cross-plugin dispatch attempts get rejected before any
       // host-side side effect.
-      if (msg.pluginId !== workerPluginId) {
+      if (apiCall.pluginId !== workerPluginId) {
         replyApiError(
           workerPluginId,
-          msg.correlationId,
-          `api-call from worker "${workerPluginId}" references foreign pluginId "${msg.pluginId}"`,
+          apiCall.correlationId,
+          `api-call from worker "${workerPluginId}" references foreign pluginId "${apiCall.pluginId}"`,
         )
         return
       }
-      void dispatchApiCall(msg)
+      void dispatchApiCall(apiCall)
       return
+    }
     default: {
-      const pending = pendingRequests.get(msg.correlationId)
+      const correlationId = workerMessageCorrelationId(msg)
+      if (!correlationId) return
+      const pending = pendingRequests.get(correlationId)
       if (!pending) return
-      pendingRequests.delete(msg.correlationId)
-      pending.resolve(msg)
+      pendingRequests.delete(correlationId)
+      pending.resolve(msg as WorkerToMainMessage)
     }
   }
 }
@@ -572,11 +609,7 @@ export async function resetPluginWorker(): Promise<void> {
 // Inbound api-call dispatch
 // ---------------------------------------------------------------------------
 
-async function dispatchApiCall(msg: ApiCall): Promise<void> {
-  if (!isAllowedApiTarget(msg.target)) {
-    replyApiError(msg.pluginId, msg.correlationId, `Unknown api target "${msg.target}"`)
-    return
-  }
+async function dispatchApiCall(msg: ValidatedApiCall): Promise<void> {
   if (!dbForApi) {
     replyApiError(msg.pluginId, msg.correlationId, 'Plugin worker host has no DbClient configured')
     return
@@ -592,12 +625,7 @@ async function dispatchApiCall(msg: ApiCall): Promise<void> {
     switch (msg.target) {
       case 'cms.routes.register': {
         assertHostPluginPermission(entry, 'cms.routes')
-        const arg = msg.args[0] as {
-          method: string
-          path: string
-          capability: string | null
-          routeKey: string
-        }
+        const [arg] = msg.args
         if (arg.capability !== null && !isCoreCapability(arg.capability)) {
           throw new Error(`Unknown plugin route capability: ${arg.capability}`)
         }
@@ -605,7 +633,7 @@ async function dispatchApiCall(msg: ApiCall): Promise<void> {
           pluginId: msg.pluginId,
           method: arg.method,
           path: arg.path,
-          capability: arg.capability as CoreCapability | null,
+          capability: arg.capability,
           routeKey: arg.routeKey,
         })
         replyApiOk(msg.pluginId, msg.correlationId)
@@ -614,7 +642,7 @@ async function dispatchApiCall(msg: ApiCall): Promise<void> {
 
       case 'cms.hooks.on': {
         assertHostPluginPermission(entry, 'cms.hooks')
-        const { event, listenerId } = msg.args[0] as { event: string; listenerId: string }
+        const [{ event, listenerId }] = msg.args
         entry.hookListeners.push({ pluginId: msg.pluginId, listenerId })
         // The hookBus listener is a thin shim that round-trips back to the worker.
         hookBus.on(msg.pluginId, event, async (payload: unknown) => {
@@ -626,7 +654,7 @@ async function dispatchApiCall(msg: ApiCall): Promise<void> {
 
       case 'cms.hooks.filter': {
         assertHostPluginPermission(entry, 'cms.hooks')
-        const { name, filterId } = msg.args[0] as { name: string; filterId: string }
+        const [{ name, filterId }] = msg.args
         entry.hookFilters.push({ pluginId: msg.pluginId, filterId })
         hookBus.filter(msg.pluginId, name, async (value: unknown) => {
           return await runHookFilterInWorker(msg.pluginId, filterId, name, value)
@@ -637,7 +665,7 @@ async function dispatchApiCall(msg: ApiCall): Promise<void> {
 
       case 'cms.hooks.emit': {
         assertHostPluginPermission(entry, 'cms.hooks')
-        const { event, payload } = msg.args[0] as { event: string; payload: unknown }
+        const [{ event, payload }] = msg.args
         await hookBus.emit(event, payload)
         replyApiOk(msg.pluginId, msg.correlationId)
         return
@@ -645,7 +673,7 @@ async function dispatchApiCall(msg: ApiCall): Promise<void> {
 
       case 'cms.loops.registerSource': {
         assertHostPluginPermission(entry, 'loops.register')
-        const descriptor = msg.args[0] as Omit<LoopEntitySource, 'fetch' | 'preview'>
+        const [descriptor] = msg.args
         if (!descriptor.id?.startsWith(`${msg.pluginId}.`)) {
           throw new Error(
             `Loop source id "${descriptor.id}" must start with the plugin id "${msg.pluginId}.".`,
@@ -673,7 +701,7 @@ async function dispatchApiCall(msg: ApiCall): Promise<void> {
 
       case 'cms.storage.list': {
         assertHostPluginPermission(entry, 'cms.storage')
-        const [resourceId] = msg.args as [string]
+        const [resourceId] = msg.args
         const records = await listPluginRecords(db, msg.pluginId, resourceId)
         replyApiOk(msg.pluginId, msg.correlationId, records as unknown)
         return
@@ -681,7 +709,7 @@ async function dispatchApiCall(msg: ApiCall): Promise<void> {
 
       case 'cms.storage.create': {
         assertHostPluginPermission(entry, 'cms.storage')
-        const [resourceId, data] = msg.args as [string, Record<string, unknown>]
+        const [resourceId, data] = msg.args
         const resource = findPluginResource(entry.manifest, resourceId)
         const cleanedData = resource ? validatePluginRecordData(resource, data) : data
         const created: PluginRecord = await createPluginRecord(db, {
@@ -696,7 +724,7 @@ async function dispatchApiCall(msg: ApiCall): Promise<void> {
 
       case 'cms.storage.update': {
         assertHostPluginPermission(entry, 'cms.storage')
-        const [resourceId, recordId, data] = msg.args as [string, string, Record<string, unknown>]
+        const [resourceId, recordId, data] = msg.args
         const resource = findPluginResource(entry.manifest, resourceId)
         const cleanedData = resource ? validatePluginRecordData(resource, data) : data
         const updated = await updatePluginRecord(db, {
@@ -711,7 +739,7 @@ async function dispatchApiCall(msg: ApiCall): Promise<void> {
 
       case 'cms.storage.delete': {
         assertHostPluginPermission(entry, 'cms.storage')
-        const [resourceId, recordId] = msg.args as [string, string]
+        const [resourceId, recordId] = msg.args
         const ok = await deletePluginRecord(db, {
           id: recordId,
           pluginId: msg.pluginId,
@@ -722,7 +750,7 @@ async function dispatchApiCall(msg: ApiCall): Promise<void> {
       }
 
       case 'cms.settings.replace': {
-        const [next] = msg.args as [Record<string, unknown>]
+        const [next] = msg.args
         const declared = (entry.manifest.settings ?? []) as PluginSettingDefinition[]
         const cleaned = validatePluginSettingsRecord(declared, next)
         await setPluginSettings(db, msg.pluginId, cleaned)

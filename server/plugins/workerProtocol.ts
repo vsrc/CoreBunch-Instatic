@@ -29,6 +29,9 @@
  *    plugins log their own stacks, the host logs `[plugin:<id>]` prefix).
  */
 
+import { Type, type Static, type TSchema } from '@sinclair/typebox'
+import { Value } from '@sinclair/typebox/value'
+import { PropertySchemaSchema } from '@core/module-engine/propertySchema'
 import type { PluginManifest, PluginPermission } from '@core/plugin-sdk'
 
 // ---------------------------------------------------------------------------
@@ -297,6 +300,231 @@ export type AllowedApiTarget = typeof ALLOWED_API_TARGETS[number]
 
 export function isAllowedApiTarget(target: string): target is AllowedApiTarget {
   return (ALLOWED_API_TARGETS as readonly string[]).includes(target)
+}
+
+// ---------------------------------------------------------------------------
+// Runtime validation for worker-initiated api-calls
+// ---------------------------------------------------------------------------
+
+const RouteMethodSchema = Type.Union([
+  Type.Literal('GET'),
+  Type.Literal('POST'),
+  Type.Literal('PATCH'),
+  Type.Literal('DELETE'),
+])
+
+const RouteRegistrationArgSchema = Type.Object(
+  {
+    method: RouteMethodSchema,
+    path: Type.String({ minLength: 1 }),
+    capability: Type.Union([Type.String({ minLength: 1 }), Type.Null()]),
+    routeKey: Type.String({ minLength: 1 }),
+  },
+  { additionalProperties: false },
+)
+
+const HookListenerArgSchema = Type.Object(
+  {
+    event: Type.String({ minLength: 1 }),
+    listenerId: Type.String({ minLength: 1 }),
+  },
+  { additionalProperties: false },
+)
+
+const HookFilterArgSchema = Type.Object(
+  {
+    name: Type.String({ minLength: 1 }),
+    filterId: Type.String({ minLength: 1 }),
+  },
+  { additionalProperties: false },
+)
+
+const HookEmitArgSchema = Type.Object(
+  {
+    event: Type.String({ minLength: 1 }),
+    payload: Type.Unknown(),
+  },
+  { additionalProperties: false },
+)
+
+const LoopSourceFieldSchema = Type.Object(
+  {
+    id: Type.String({ minLength: 1 }),
+    label: Type.String({ minLength: 1 }),
+    description: Type.Optional(Type.String()),
+    format: Type.Optional(Type.Union([
+      Type.Literal('plain'),
+      Type.Literal('html'),
+      Type.Literal('url'),
+      Type.Literal('media'),
+    ])),
+  },
+  { additionalProperties: false },
+)
+
+const LoopSourceDescriptorSchema = Type.Object(
+  {
+    id: Type.String({ minLength: 1 }),
+    label: Type.String({ minLength: 1 }),
+    description: Type.Optional(Type.String()),
+    filterSchema: PropertySchemaSchema,
+    orderByOptions: Type.Array(Type.Object(
+      {
+        id: Type.String({ minLength: 1 }),
+        label: Type.String({ minLength: 1 }),
+      },
+      { additionalProperties: false },
+    )),
+    fields: Type.Array(LoopSourceFieldSchema),
+  },
+  { additionalProperties: false },
+)
+
+const JsonRecordSchema = Type.Record(Type.String(), Type.Unknown())
+
+function apiCallSchema<TTarget extends AllowedApiTarget, TArgs extends TSchema>(
+  target: TTarget,
+  args: TArgs,
+) {
+  return Type.Object(
+    {
+      kind: Type.Literal('api-call'),
+      correlationId: Type.String({ minLength: 1 }),
+      pluginId: Type.String({ minLength: 1 }),
+      target: Type.Literal(target),
+      args,
+    },
+    { additionalProperties: false },
+  )
+}
+
+const ApiCallSchemas = {
+  'cms.routes.register': apiCallSchema('cms.routes.register', Type.Tuple([RouteRegistrationArgSchema])),
+  'cms.hooks.on': apiCallSchema('cms.hooks.on', Type.Tuple([HookListenerArgSchema])),
+  'cms.hooks.filter': apiCallSchema('cms.hooks.filter', Type.Tuple([HookFilterArgSchema])),
+  'cms.hooks.emit': apiCallSchema('cms.hooks.emit', Type.Tuple([HookEmitArgSchema])),
+  'cms.loops.registerSource': apiCallSchema('cms.loops.registerSource', Type.Tuple([LoopSourceDescriptorSchema])),
+  'cms.storage.list': apiCallSchema('cms.storage.list', Type.Tuple([Type.String({ minLength: 1 })])),
+  'cms.storage.create': apiCallSchema('cms.storage.create', Type.Tuple([Type.String({ minLength: 1 }), JsonRecordSchema])),
+  'cms.storage.update': apiCallSchema('cms.storage.update', Type.Tuple([
+    Type.String({ minLength: 1 }),
+    Type.String({ minLength: 1 }),
+    JsonRecordSchema,
+  ])),
+  'cms.storage.delete': apiCallSchema('cms.storage.delete', Type.Tuple([
+    Type.String({ minLength: 1 }),
+    Type.String({ minLength: 1 }),
+  ])),
+  'cms.settings.replace': apiCallSchema('cms.settings.replace', Type.Tuple([JsonRecordSchema])),
+} satisfies Record<AllowedApiTarget, TSchema>
+
+export type RouteRegistrationApiCall = Static<typeof ApiCallSchemas['cms.routes.register']>
+export type HookOnApiCall = Static<typeof ApiCallSchemas['cms.hooks.on']>
+export type HookFilterApiCall = Static<typeof ApiCallSchemas['cms.hooks.filter']>
+export type HookEmitApiCall = Static<typeof ApiCallSchemas['cms.hooks.emit']>
+export type LoopSourceRegisterApiCall = Static<typeof ApiCallSchemas['cms.loops.registerSource']>
+export type StorageListApiCall = Static<typeof ApiCallSchemas['cms.storage.list']>
+export type StorageCreateApiCall = Static<typeof ApiCallSchemas['cms.storage.create']>
+export type StorageUpdateApiCall = Static<typeof ApiCallSchemas['cms.storage.update']>
+export type StorageDeleteApiCall = Static<typeof ApiCallSchemas['cms.storage.delete']>
+export type SettingsReplaceApiCall = Static<typeof ApiCallSchemas['cms.settings.replace']>
+
+export type ValidatedApiCall =
+  | RouteRegistrationApiCall
+  | HookOnApiCall
+  | HookFilterApiCall
+  | HookEmitApiCall
+  | LoopSourceRegisterApiCall
+  | StorageListApiCall
+  | StorageCreateApiCall
+  | StorageUpdateApiCall
+  | StorageDeleteApiCall
+  | SettingsReplaceApiCall
+
+export class ApiCallValidationError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'ApiCallValidationError'
+  }
+}
+
+function firstSchemaError(schema: TSchema, value: unknown): string {
+  const [error] = [...Value.Errors(schema, value)]
+  if (!error) return 'unknown validation error'
+  const path = error.path || '/'
+  return `${path}: ${error.message}`
+}
+
+function normalizeRoutePath(path: string): string {
+  const trimmed = path.trim()
+  if (!trimmed || trimmed === '/') return '/'
+  return `/${trimmed.replace(/^\/+|\/+$/g, '')}`
+}
+
+function validateApiCallSemantics(call: ValidatedApiCall): void {
+  if (call.target !== 'cms.routes.register') return
+
+  const [route] = call.args
+  const normalizedPath = normalizeRoutePath(route.path)
+  if (route.path !== normalizedPath) {
+    throw new ApiCallValidationError(
+      `Invalid api-call payload for cms.routes.register: path must be normalized as "${normalizedPath}"`,
+    )
+  }
+
+  const expectedRouteKey = `${route.method}:${normalizedPath}`
+  if (route.routeKey !== expectedRouteKey) {
+    throw new ApiCallValidationError(
+      `Invalid api-call payload for cms.routes.register: routeKey must be "${expectedRouteKey}"`,
+    )
+  }
+}
+
+function decodeApiCall(target: AllowedApiTarget, value: unknown): ValidatedApiCall {
+  switch (target) {
+    case 'cms.routes.register':
+      return Value.Decode(ApiCallSchemas['cms.routes.register'], value)
+    case 'cms.hooks.on':
+      return Value.Decode(ApiCallSchemas['cms.hooks.on'], value)
+    case 'cms.hooks.filter':
+      return Value.Decode(ApiCallSchemas['cms.hooks.filter'], value)
+    case 'cms.hooks.emit':
+      return Value.Decode(ApiCallSchemas['cms.hooks.emit'], value)
+    case 'cms.loops.registerSource':
+      return Value.Decode(ApiCallSchemas['cms.loops.registerSource'], value)
+    case 'cms.storage.list':
+      return Value.Decode(ApiCallSchemas['cms.storage.list'], value)
+    case 'cms.storage.create':
+      return Value.Decode(ApiCallSchemas['cms.storage.create'], value)
+    case 'cms.storage.update':
+      return Value.Decode(ApiCallSchemas['cms.storage.update'], value)
+    case 'cms.storage.delete':
+      return Value.Decode(ApiCallSchemas['cms.storage.delete'], value)
+    case 'cms.settings.replace':
+      return Value.Decode(ApiCallSchemas['cms.settings.replace'], value)
+  }
+}
+
+export function parseApiCall(value: unknown): ValidatedApiCall {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new ApiCallValidationError('Invalid api-call payload: expected object')
+  }
+
+  const target = (value as { target?: unknown }).target
+  if (typeof target !== 'string' || !isAllowedApiTarget(target)) {
+    throw new ApiCallValidationError('Invalid api-call payload: unknown target')
+  }
+
+  const schema = ApiCallSchemas[target]
+  if (!Value.Check(schema, value)) {
+    throw new ApiCallValidationError(
+      `Invalid api-call payload for ${target}: ${firstSchemaError(schema, value)}`,
+    )
+  }
+
+  const parsed = decodeApiCall(target, value)
+  validateApiCallSemantics(parsed)
+  return parsed
 }
 
 // ---------------------------------------------------------------------------
