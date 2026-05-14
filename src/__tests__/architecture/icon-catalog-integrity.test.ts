@@ -159,22 +159,22 @@ describe('Gate 2 — Catalog files export the expected PascalCase component name
   // public CMS repo. (Constraint #451 forbids `XIcon` as a close glyph, so
   // `x` is intentionally NOT in this list.)
   const SAMPLED_ICONS = [
-    'eye',
+    'eye-solid',
     'undo',
     'redo',
-    'file-text',
+    'file-text-solid',
     'command',
     'upload',
     'sliders-horizontal',
-    'smartphone',
-    'monitor',
-    'laptop',
-    'tablet',
+    'smartphone-solid',
+    'monitor-solid',
+    'laptop-solid',
+    'tablet-solid',
     'chevron-right',
     'chevron-left',
-    'folder',
-    'package',
-    'search',
+    'folder-glyph',
+    'package-solid',
+    'search-solid',
     'plus',
   ]
 

@@ -44,9 +44,9 @@ import { useEditorStore } from '@site/store/store'
 import { useShallow } from 'zustand/react/shallow'
 import { Button } from '@ui/components/Button'
 import { cn } from '@ui/cn'
-import { Copy2Icon } from 'pixel-art-icons/icons/copy-2'
-import { DeleteIcon } from 'pixel-art-icons/icons/delete'
-import { DragAndDropIcon } from 'pixel-art-icons/icons/drag-and-drop'
+import { CopyPlusSolidIcon } from 'pixel-art-icons/icons/copy-plus-solid'
+import { TrashSolidIcon } from 'pixel-art-icons/icons/trash-solid'
+import { HandGrabSolidIcon } from 'pixel-art-icons/icons/hand-grab-solid'
 import { CanvasViewportActionsContext } from './CanvasContexts'
 import { useCanvasReorderDrag } from './useCanvasReorderDrag'
 import { measureCanvasNodeClientUnionRect } from './canvasDomGeometry'
@@ -179,7 +179,7 @@ export function BreakpointSelectionOverlay({
         className={cn(styles.selectionToolbarButton, styles.dragToolbarButton)}
         onPointerDown={reorderDrag.handlePointerDown}
       >
-        <DragAndDropIcon size={13} color="var(--editor-text)" />
+        <HandGrabSolidIcon size={13} color="var(--editor-text)" />
       </Button>
       <Button
         variant="secondary"
@@ -190,7 +190,7 @@ export function BreakpointSelectionOverlay({
         className={styles.selectionToolbarButton}
         onClick={duplicateSelectedLayers}
       >
-        <Copy2Icon size={13} color="var(--editor-text)" />
+        <CopyPlusSolidIcon size={13} color="var(--editor-text)" />
       </Button>
       <Button
         variant="secondary"
@@ -202,7 +202,7 @@ export function BreakpointSelectionOverlay({
         className={styles.selectionToolbarButton}
         onClick={deleteSelectedLayers}
       >
-        <DeleteIcon size={13} color="var(--editor-danger-light)" />
+        <TrashSolidIcon size={13} color="var(--editor-danger-light)" />
       </Button>
     </div>
   ) : null

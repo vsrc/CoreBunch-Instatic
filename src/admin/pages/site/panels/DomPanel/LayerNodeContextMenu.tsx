@@ -47,15 +47,16 @@ import { resolveInsertLocation } from '@site/store/insertLocation'
 import { ModulePicker } from '@site/module-picker'
 import { useConfirmDelete } from '@admin/shared/dialogs/ConfirmDeleteDialog'
 import type { AnyModuleDefinition } from '@core/module-engine/types'
-import { EditIcon } from 'pixel-art-icons/icons/edit'
-import { CopyIcon } from 'pixel-art-icons/icons/copy'
-import { Copy2Icon } from 'pixel-art-icons/icons/copy-2'
-import { EraserIcon } from 'pixel-art-icons/icons/eraser'
-import { FilesStack2Icon } from 'pixel-art-icons/icons/files-stack-2'
-import { CheckboxIcon } from 'pixel-art-icons/icons/checkbox'
-import { DeleteIcon } from 'pixel-art-icons/icons/delete'
-import { PlusIcon } from 'pixel-art-icons/icons/plus'
-import { BoxStackIcon } from 'pixel-art-icons/icons/box-stack'
+import { PenSquareSolidIcon } from 'pixel-art-icons/icons/pen-square-solid'
+import { CopyPlusSolidIcon } from 'pixel-art-icons/icons/copy-plus-solid'
+import { CopySolidIcon } from 'pixel-art-icons/icons/copy-solid'
+import { CopyXSolidIcon } from 'pixel-art-icons/icons/copy-x-solid'
+import { FilesStack2SolidIcon } from 'pixel-art-icons/icons/files-stack-2-solid'
+import { CheckboxSolidIcon } from 'pixel-art-icons/icons/checkbox-solid'
+import { ContainerSolidIcon } from 'pixel-art-icons/icons/container-solid'
+import { TrashSolidIcon } from 'pixel-art-icons/icons/trash-solid'
+import { AppGridPlusGlyphIcon } from 'pixel-art-icons/icons/app-grid-plus-glyph'
+import { BoxStackSolidIcon } from 'pixel-art-icons/icons/box-stack-solid'
 import styles from './LayerNodeContextMenu.module.css'
 
 interface LayerNodeContextMenuProps {
@@ -280,7 +281,7 @@ export function LayerNodeContextMenu({
       {!lockedSlotInstance && !isMulti && (
         <>
           <ContextMenuItem ref={firstItemRef} onClick={onRename}>
-            <span aria-hidden="true"><EditIcon size={13} /></span>
+            <span aria-hidden="true"><PenSquareSolidIcon size={13} /></span>
             Rename
           </ContextMenuItem>
         </>
@@ -292,25 +293,25 @@ export function LayerNodeContextMenu({
             ref={isMulti ? firstItemRef : undefined}
             onClick={dispatchDuplicate}
           >
-            <span aria-hidden="true"><CopyIcon size={13} /></span>
+            <span aria-hidden="true"><CopyPlusSolidIcon size={13} /></span>
             Duplicate
           </ContextMenuItem>
 
           <ContextMenuSeparator />
 
           <ContextMenuItem onClick={dispatchCopy}>
-            <span aria-hidden="true"><Copy2Icon size={13} /></span>
+            <span aria-hidden="true"><CopySolidIcon size={13} /></span>
             Copy
           </ContextMenuItem>
 
           <ContextMenuItem onClick={dispatchCut}>
-            <span aria-hidden="true"><EraserIcon size={13} /></span>
+            <span aria-hidden="true"><CopyXSolidIcon size={13} /></span>
             Cut
           </ContextMenuItem>
 
           {canPaste && (
             <ContextMenuItem onClick={onPaste}>
-              <span aria-hidden="true"><FilesStack2Icon size={13} /></span>
+              <span aria-hidden="true"><FilesStack2SolidIcon size={13} /></span>
               Paste
             </ContextMenuItem>
           )}
@@ -323,16 +324,16 @@ export function LayerNodeContextMenu({
               single wrapper at the right tree level. */}
           <ContextMenuSubmenu
             label="Wrap in"
-            icon={<CheckboxIcon size={13} />}
+            icon={<ContainerSolidIcon size={13} />}
             onClose={onClose}
             width={200}
           >
             <ContextMenuItem onClick={dispatchWrapInContainer}>
-              <span aria-hidden="true"><CheckboxIcon size={13} /></span>
+              <span aria-hidden="true"><CheckboxSolidIcon size={13} /></span>
               Container
             </ContextMenuItem>
             <ContextMenuItem onClick={dispatchWrapInLoop}>
-              <span aria-hidden="true"><BoxStackIcon size={13} /></span>
+              <span aria-hidden="true"><BoxStackSolidIcon size={13} /></span>
               Loop
             </ContextMenuItem>
           </ContextMenuSubmenu>
@@ -349,7 +350,7 @@ export function LayerNodeContextMenu({
       {showInsertHere && (
         <ContextMenuSubmenu
           label="Insert module here"
-          icon={<PlusIcon size={13} />}
+          icon={<AppGridPlusGlyphIcon size={13} />}
           onClose={onClose}
           width={280}
           maxHeight={420}
@@ -370,7 +371,7 @@ export function LayerNodeContextMenu({
           <ContextMenuSeparator />
 
           <ContextMenuItem danger onClick={dispatchDelete}>
-            <span aria-hidden="true"><DeleteIcon size={13} /></span>
+            <span aria-hidden="true"><TrashSolidIcon size={13} /></span>
             Delete
           </ContextMenuItem>
         </>
