@@ -1,22 +1,26 @@
 export { cmsAdapter } from './cms'
 export { getCmsPublishStatus, publishCmsDraft } from './cmsPublish'
-export { listCmsMediaAssets } from './cmsMedia'
+export { getCmsMediaAssetsByIds, listCmsMediaAssets } from './cmsMedia'
 export type { CmsMediaAsset } from './cmsMedia'
 export {
-  createCmsContentCollection,
-  createCmsContentEntry,
-  deleteCmsContentCollection,
-  deleteCmsContentEntry,
-  listCmsContentAuthors,
-  listCmsContentCollections,
-  listCmsContentEntries,
-  publishCmsContentEntry,
-  saveCmsContentEntryDraft,
-  updateCmsContentEntryAuthor,
-  updateCmsContentCollection,
-  updateCmsContentEntryCollection,
-  updateCmsContentEntryStatus,
-} from './cmsContent'
+  createCmsDataRow,
+  createCmsDataTable,
+  deleteCmsDataRow,
+  deleteCmsDataTable,
+  getCmsDataRow,
+  getCmsDataTable,
+  getCmsDataTableBySlug,
+  listCmsDataAuthors,
+  listCmsDataRows,
+  listCmsDataTables,
+  previewCmsDataLoopItems,
+  publishCmsDataRow,
+  saveCmsDataRowDraft,
+  updateCmsDataRowAuthor,
+  updateCmsDataRowStatus,
+  updateCmsDataRowTable,
+  updateCmsDataTable,
+} from './cmsData'
 export {
   inspectCmsPluginPackage,
   installCmsPluginPackage,
@@ -50,6 +54,7 @@ export {
   deleteCurrentUserAvatar,
   disableCurrentUserTotp,
   enableCurrentUserTotp,
+  getCmsPublicSite,
   getCmsSetupStatus,
   getCurrentCmsUser,
   isStepUpRequiredError,
@@ -72,4 +77,5 @@ export type {
   CmsLoginActivityResult,
   CmsSession,
 } from './cmsAuth'
+export type { CmsPublicSite } from './responseSchemas'
 // usePersistence moved to src/editor/hooks/usePersistence.ts (Constraint #179 — no React in core)

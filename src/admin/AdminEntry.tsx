@@ -1,15 +1,18 @@
 import { lazy, Suspense, useEffect, useId, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Button } from '@ui/components/Button'
+import { Input } from '@ui/components/Input'
 import { DatabaseSolidIcon } from 'pixel-art-icons/icons/database-solid'
 import { LoaderIcon } from 'pixel-art-icons/icons/loader'
 import {
+  getCmsPublicSite,
   getCmsSetupStatus,
   getCurrentCmsUser,
   loginCms,
   setupCms,
   verifyCmsMfa,
   type CmsCurrentUser,
+  type CmsPublicSite,
 } from '@core/persistence'
 import { AppLoadingScreen } from './AppLoadingScreen'
 import type { AdminWorkspace } from './workspace'
@@ -50,6 +53,9 @@ const UsersPage = lazy(() =>
 const AccountPage = lazy(() =>
   import('./pages/account/AccountPage').then((m) => ({ default: m.AccountPage })),
 )
+const DataPage = lazy(() =>
+  import('./pages/data/DataPage').then((m) => ({ default: m.DataPage })),
+)
 
 type AdminPhase = 'loading' | 'setup' | 'login' | 'mfa' | 'editor'
 type AdminSection = AdminWorkspace
@@ -67,6 +73,11 @@ export default function AdminEntry({ section = 'site' }: AdminEntryProps) {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [currentUser, setCurrentUser] = useState<CmsCurrentUser | null>(null)
+  // Operator-provided site identity (logo + name) shown on the unauthenticated
+  // login / setup / MFA screens. Falls back to `{ null, null }` when the
+  // install hasn't picked a favicon — the brand row then renders the default
+  // DatabaseSolidIcon + "Page Builder CMS" text.
+  const [publicSite, setPublicSite] = useState<CmsPublicSite>({ name: null, faviconUrl: null })
   const siteNameId = useId()
   const emailId = useId()
   const passwordId = useId()
@@ -76,6 +87,17 @@ export default function AdminEntry({ section = 'site' }: AdminEntryProps) {
     let cancelled = false
 
     async function loadAdminState() {
+      // Site identity (logo + name) is rendered on every pre-auth phase.
+      // Fetched in parallel with setup status / current-user so the brand
+      // row hydrates as soon as the network resolves — never blocks login.
+      void getCmsPublicSite()
+        .then((next) => {
+          if (!cancelled) setPublicSite(next)
+        })
+        .catch(() => {
+          // Brand row falls back to the default mark on failure.
+        })
+
       try {
         const status = await getCmsSetupStatus()
         if (cancelled) return
@@ -183,14 +205,30 @@ export default function AdminEntry({ section = 'site' }: AdminEntryProps) {
     isMfa ? 'Verify' :
     'Sign In'
 
+  // Pre-auth brand row: when the install has picked a favicon, render it
+  // in place of the default icon AND swap the "Page Builder CMS" label for
+  // the operator-configured site name. When neither is set, keep the
+  // default mark + product name so a fresh clone still looks like itself.
+  const brandLabel = publicSite.name ?? 'Page Builder CMS'
+
   return (
     <main className={styles.page}>
       <section className={styles.panel} aria-labelledby="admin-entry-title">
         <div className={styles.brandRow}>
-          <div className={styles.brandIcon} aria-hidden="true">
-            <DatabaseSolidIcon size={16} />
-          </div>
-          <span>Page Builder CMS</span>
+          {publicSite.faviconUrl ? (
+            <img
+              className={styles.brandFavicon}
+              src={publicSite.faviconUrl}
+              alt=""
+              aria-hidden="true"
+              draggable={false}
+            />
+          ) : (
+            <div className={styles.brandIcon} aria-hidden="true">
+              <DatabaseSolidIcon size={16} />
+            </div>
+          )}
+          <span>{brandLabel}</span>
         </div>
 
         <h1 id="admin-entry-title" className={styles.title}>{title}</h1>
@@ -202,7 +240,7 @@ export default function AdminEntry({ section = 'site' }: AdminEntryProps) {
           {isMfa ? (
             <label className={styles.field} htmlFor={mfaCodeId}>
               <span>Authentication code</span>
-              <input
+              <Input
                 id={mfaCodeId}
                 value={mfaCode}
                 onChange={(event) => setMfaCode(event.target.value)}
@@ -215,7 +253,7 @@ export default function AdminEntry({ section = 'site' }: AdminEntryProps) {
           ) : isSetup && (
             <label className={styles.field} htmlFor={siteNameId}>
               <span>Site name</span>
-              <input
+              <Input
                 id={siteNameId}
                 value={siteName}
                 onChange={(event) => setSiteName(event.target.value)}
@@ -229,7 +267,7 @@ export default function AdminEntry({ section = 'site' }: AdminEntryProps) {
             <>
               <label className={styles.field} htmlFor={emailId}>
                 <span>Email</span>
-                <input
+                <Input
                   id={emailId}
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
@@ -241,7 +279,7 @@ export default function AdminEntry({ section = 'site' }: AdminEntryProps) {
 
               <label className={styles.field} htmlFor={passwordId}>
                 <span>Password</span>
-                <input
+                <Input
                   id={passwordId}
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
@@ -262,7 +300,7 @@ export default function AdminEntry({ section = 'site' }: AdminEntryProps) {
 
           <Button
             variant="primary"
-            size="lg"
+            size="md"
             type="submit"
             fullWidth
             disabled={submitting}
@@ -308,6 +346,7 @@ function AuthenticatedAdmin({
       <StepUpProvider>
         <Suspense fallback={<AppLoadingScreen />}>
           {section === 'content' ? <ContentPage /> :
+            section === 'data' ? <DataPage /> :
             section === 'media' ? <MediaPage /> :
             section === 'plugins' ? <PluginsPage /> :
             section === 'users' ? <UsersPage /> :

@@ -54,6 +54,7 @@ export function Toolbar({
   rightSlot,
 }: ToolbarProps) {
   const siteName = useEditorStore((s) => s.site?.name ?? 'Untitled Site')
+  const faviconUrl = useEditorStore((s) => s.site?.settings.faviconUrl ?? null)
   const [pluginButtons, setPluginButtons] = useState<RegisteredPluginToolbarButton[]>(() =>
     pluginRuntime.getToolbarButtons(),
   )
@@ -136,14 +137,29 @@ export function Toolbar({
       >
         {/* ── Left section ────────────────────────────────────────────────── */}
 
-        {/* Site name */}
-        <span
-          className={styles.siteName}
-          title={siteName}
-          aria-label={`Site: ${siteName}`}
-        >
-          {siteName}
-        </span>
+        {/* Site brand — favicon when configured (icon replaces text per
+            operator preference); falls back to the site name text for fresh
+            installs that haven't picked a logo yet. The image is rendered
+            here purely as a visual brand mark: SafeURL'd assets land at
+            `/uploads/...` from the picker, so we don't need extra escaping. */}
+        {faviconUrl ? (
+          <img
+            className={styles.siteFavicon}
+            src={faviconUrl}
+            alt=""
+            title={siteName}
+            aria-label={`Site: ${siteName}`}
+            draggable={false}
+          />
+        ) : (
+          <span
+            className={styles.siteName}
+            title={siteName}
+            aria-label={`Site: ${siteName}`}
+          >
+            {siteName}
+          </span>
+        )}
         {adminNavigationSlot ?? <DefaultAdminNavigation section={section} />}
 
         {/* ── VC breadcrumb — visible only in Visual Component edit mode ── */}
@@ -222,6 +238,11 @@ function DefaultAdminNavigation({ section }: { section: AdminWorkspace }) {
         <span className={styles.activeSection}>Content</span>
       ) : (
         <a className={styles.adminLink} href="/admin/content">Content</a>
+      )}
+      {section === 'data' ? (
+        <span className={styles.activeSection}>Data</span>
+      ) : (
+        <a className={styles.adminLink} href="/admin/data">Data</a>
       )}
       {section === 'media' ? (
         <span className={styles.activeSection}>Media</span>

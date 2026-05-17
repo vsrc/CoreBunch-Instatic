@@ -1,7 +1,9 @@
 import { parseJsonResponse } from '@core/utils/jsonValidate'
 import {
+  CmsPublicSiteSchema,
   CmsSetupStatusSchema,
   ErrorEnvelopeSchema,
+  type CmsPublicSite,
   type CmsSetupStatus,
 } from './responseSchemas'
 import { Type, type Static } from '@sinclair/typebox'
@@ -106,6 +108,24 @@ export async function getCmsSetupStatus(
   })
   await assertOk(res, `CMS setup status failed with ${res.status}`)
   return await parseJsonResponse(res, CmsSetupStatusSchema)
+}
+
+/**
+ * Read the unauthenticated site-identity (name + favicon URL) the login /
+ * setup screen renders as its brand row. Safe to call before login; never
+ * exposes a page tree or user data. Resolves to `{ name: null, faviconUrl:
+ * null }` for a freshly-cloned install where no site has been created yet.
+ */
+export async function getCmsPublicSite(
+  fetchImpl: FetchLike = globalThis.fetch.bind(globalThis),
+  basePath = '/admin/api/cms',
+): Promise<CmsPublicSite> {
+  const res = await fetchImpl(`${basePath}/public-site`, {
+    method: 'GET',
+    credentials: 'include',
+  })
+  await assertOk(res, `CMS public site identity failed with ${res.status}`)
+  return await parseJsonResponse(res, CmsPublicSiteSchema)
 }
 
 export async function setupCms(

@@ -26,6 +26,19 @@
     color: var(--editor-text);
 }
 
+/* Site brand favicon — sized to match the 28px nav-item track so it sits
+   visually balanced next to the link buttons. Object-fit cover crops to a
+   neat square preview regardless of the asset's aspect ratio. */
+.siteFavicon {
+    width: 20px;
+    height: 20px;
+    margin: 0 6px 0 4px;
+    object-fit: cover;
+    border-radius: var(--editor-radius-sm);
+    flex-shrink: 0;
+    user-select: none;
+}
+
 .adminLink {
     display: inline-flex;
     align-items: center;

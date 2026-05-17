@@ -1,13 +1,19 @@
 /**
- * First-run setup endpoints.
+ * First-run setup endpoints + public site identity.
  *
  *   GET  /admin/api/cms/setup/status — does the install need setup?
  *   POST /admin/api/cms/setup        — create site + first owner + a
  *                                       starter homepage in one transaction.
+ *   GET  /admin/api/cms/public-site  — site name + favicon URL exposed
+ *                                       without auth so the login / setup
+ *                                       screen can render the configured
+ *                                       brand instead of the default mark.
  *
  * The setup POST is a one-shot bootstrap: it 409s if anyone has already
  * run setup, so the endpoint can stay public without becoming an account
- * creation backdoor.
+ * creation backdoor. The `public-site` GET only exposes the two fields
+ * that are already rendered on every published page (site name, favicon),
+ * so it adds no new information leak.
  */
 import { nanoid } from 'nanoid'
 import type { DbClient } from '../../db/client'
@@ -18,6 +24,7 @@ import { createAuditEvent } from '../../repositories/audit'
 import { createNode } from '@core/page-tree/mutations'
 import type { Page } from '@core/page-tree/schemas'
 import { badRequest, jsonResponse, methodNotAllowed, readJsonObject } from '../../http'
+import type { SiteRow } from '../../types'
 import { CMS_API_PREFIX, readString, requestAuditContext } from './shared'
 
 export async function handleSetupRoutes(req: Request, db: DbClient): Promise<Response | null> {
@@ -26,6 +33,11 @@ export async function handleSetupRoutes(req: Request, db: DbClient): Promise<Res
   if (url.pathname === `${CMS_API_PREFIX}/setup/status`) {
     if (req.method !== 'GET') return methodNotAllowed()
     return jsonResponse(await getSetupStatus(db))
+  }
+
+  if (url.pathname === `${CMS_API_PREFIX}/public-site`) {
+    if (req.method !== 'GET') return methodNotAllowed()
+    return jsonResponse(await loadPublicSiteIdentity(db))
   }
 
   if (url.pathname === `${CMS_API_PREFIX}/setup`) {
@@ -100,4 +112,49 @@ export async function handleSetupRoutes(req: Request, db: DbClient): Promise<Res
   }
 
   return null
+}
+
+interface PublicSiteIdentity {
+  name: string | null
+  faviconUrl: string | null
+}
+
+/**
+ * Read the site identity (name + favicon URL) the unauthenticated login /
+ * setup screen renders as its brand. Never throws: a missing site row or
+ * malformed settings JSON resolves to `{ name: null, faviconUrl: null }`,
+ * which the client falls back to the default mark.
+ *
+ * Only the two fields published pages already expose are returned — no
+ * page tree, no plugin list, no user info — so this stays safe to serve
+ * without auth.
+ */
+async function loadPublicSiteIdentity(db: DbClient): Promise<PublicSiteIdentity> {
+  const { rows } = await db<SiteRow>`
+    select id, name, settings_json, created_at, updated_at
+    from site
+    where id = 'default'
+    limit 1
+  `
+  const row = rows[0]
+  if (!row) return { name: null, faviconUrl: null }
+
+  const stored = row.settings_json
+  const innerSite = stored && typeof stored === 'object' && !Array.isArray(stored)
+    ? (stored as Record<string, unknown>).site
+    : undefined
+  const settings = innerSite && typeof innerSite === 'object' && !Array.isArray(innerSite)
+    ? (innerSite as Record<string, unknown>).settings
+    : undefined
+  const faviconUrl = settings
+    && typeof settings === 'object'
+    && !Array.isArray(settings)
+    && typeof (settings as Record<string, unknown>).faviconUrl === 'string'
+    ? (settings as Record<string, unknown>).faviconUrl as string
+    : null
+
+  return {
+    name: typeof row.name === 'string' && row.name.length > 0 ? row.name : null,
+    faviconUrl,
+  }
 }
