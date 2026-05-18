@@ -90,7 +90,7 @@ describe('Constraint #283 — @anthropic-ai/sdk must not be imported in producti
       throw new Error(
         `[Constraint #283] ${FORBIDDEN_PKG} found in production source. ` +
         `Use the Claude Agent SDK instead (directive #1103).\n` +
-        `AI integration must be server-side only (fetch to /api/agent endpoint).\n` +
+        `AI integration must be server-side only (fetch to /admin/api/agent endpoint).\n` +
         `Violating files:\n` +
         rel.map((f) => `  ${f}`).join('\n')
       )
@@ -120,7 +120,7 @@ describe('Constraint #283 — @anthropic-ai/sdk must not be imported in producti
 // ---------------------------------------------------------------------------
 // Constraint #286 — Agent Panel must not import any AI SDK client library
 //
-// The AgentPanel communicates via fetch('/api/agent', ...) only.
+// The AgentPanel communicates via fetch('/admin/api/agent', ...) only.
 // The server-side agent endpoint uses the Claude Agent SDK — browser code never does.
 // ---------------------------------------------------------------------------
 
@@ -151,7 +151,7 @@ describe('Constraint #286 — AgentPanel uses fetch, not AI SDK clients', () => 
     if (violations.length > 0) {
       throw new Error(
         `[Constraint #286] AI SDK client found in src/admin/pages/site/. ` +
-        `The AgentPanel must communicate via fetch('/api/agent'), not directly import AI SDK.\n` +
+        `The AgentPanel must communicate via fetch('/admin/api/agent'), not directly import AI SDK.\n` +
         violations.map((f) => `  ${f}`).join('\n')
       )
     }
