@@ -57,23 +57,3 @@ export function evaluateDependencyLockStatus(
   return { kind: 'stale', missing, mismatched, orphan }
 }
 
-export function describeLockStatus(status: DependencyLockStatus): string {
-  if (status.kind === 'in-sync') return ''
-  if (status.kind === 'unresolved') {
-    return status.missing.length === 1
-      ? `1 package needs to be resolved before it will run.`
-      : `${status.missing.length} packages need to be resolved before they will run.`
-  }
-
-  const parts: string[] = []
-  if (status.missing.length > 0) {
-    parts.push(`${status.missing.length} new`)
-  }
-  if (status.mismatched.length > 0) {
-    parts.push(`${status.mismatched.length} changed`)
-  }
-  if (status.orphan.length > 0) {
-    parts.push(`${status.orphan.length} removed`)
-  }
-  return `Lock is out of sync (${parts.join(', ')}). Re-resolve to update.`
-}

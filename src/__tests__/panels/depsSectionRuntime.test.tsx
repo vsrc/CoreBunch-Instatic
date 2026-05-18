@@ -40,6 +40,12 @@ function resetStore() {
     canUndo: false,
     canRedo: false,
     hasUnsavedChanges: false,
+    // Reset auto-resolve transient state so prior tests in the same suite
+    // (or in `useAutoResolveDependencies.test.tsx`) don't leak a "resolved"
+    // banner / counter into the DepsSection render under test.
+    dependencyResolveStatus: 'idle',
+    dependencyResolveLockedCount: 0,
+    dependencyResolveError: null,
   } as Parameters<typeof useEditorStore.setState>[0])
 }
 
@@ -91,11 +97,13 @@ describe('DepsSection runtime script dependency usage', () => {
 
     const row = screen.getByTestId('dep-row-canvas-confetti')
     expect(within(row).getByTitle('Locked at 1.9.4')).toBeDefined()
-    // The lock matches the requested range — banner should not appear.
-    expect(screen.queryByTestId('deps-lock-stale')).toBeNull()
+    // The lock matches the requested range — no manual re-resolve UI should
+    // appear (auto-resolve has nothing to do, and the panel stays tidy).
+    expect(screen.queryByRole('button', { name: 'Re-resolve' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Retry resolve' })).toBeNull()
   })
 
-  it('shows a stale-lock banner when packageJson has un-resolved or changed packages', () => {
+  it('exposes a manual Re-resolve button when packageJson has un-resolved or changed packages', () => {
     const lockedRuntime = normalizeSiteRuntimeConfig({
       dependencyLock: {
         version: 1,
@@ -126,12 +134,13 @@ describe('DepsSection runtime script dependency usage', () => {
 
     render(<DepsSection />)
 
-    const banner = screen.getByTestId('deps-lock-stale')
-    expect(banner.textContent).toContain('1 new')
+    // The auto-resolve hook handles the common case in the editor shell;
+    // the panel still surfaces a manual escape hatch when the lock is out
+    // of sync.
     expect(screen.getByRole('button', { name: 'Re-resolve' })).toBeDefined()
   })
 
-  it('resolves runtime dependencies into the site dependency lock', async () => {
+  it('resolves runtime dependencies into the site dependency lock via the manual button', async () => {
     globalThis.fetch = (async () =>
       new Response(JSON.stringify({
         dependencyLock: {
@@ -150,7 +159,7 @@ describe('DepsSection runtime script dependency usage', () => {
 
     render(<DepsSection />)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Resolve runtime' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Re-resolve' }))
     expect(await screen.findByText('1 locked')).toBeDefined()
     expect(useEditorStore.getState().siteRuntime.dependencyLock.packages['canvas-confetti']?.version).toBe('1.9.3')
     expect(useEditorStore.getState().site?.runtime?.dependencyLock.packages['canvas-confetti']?.version).toBe('1.9.3')

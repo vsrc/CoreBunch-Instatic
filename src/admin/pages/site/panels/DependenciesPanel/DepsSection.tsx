@@ -34,9 +34,8 @@ import {
   type RuntimePackageDependencyUsage,
   type SiteRuntimeDiagnostic,
 } from '@core/site-runtime'
-import { resolveCmsRuntimeDependencies } from '@core/persistence/cmsRuntime'
 import { registry } from '@core/module-engine/registry'
-import { describeLockStatus, evaluateDependencyLockStatus } from './lockStatus'
+import { evaluateDependencyLockStatus } from './lockStatus'
 import styles from './DepsSection.module.css'
 
 // ---------------------------------------------------------------------------
@@ -71,15 +70,16 @@ export function DepsSection() {
   const siteRuntime = useEditorStore((s) => s.siteRuntime)
   const setDependency = useEditorStore((s) => s.setDependency)
   const removeDependency = useEditorStore((s) => s.removeDependency)
-  const setSiteDependencyLock = useEditorStore((s) => s.setSiteDependencyLock)
+  const resolveDependencyLock = useEditorStore((s) => s.resolveDependencyLock)
+  const resolveStatus = useEditorStore((s) => s.dependencyResolveStatus)
+  const resolveLockedCount = useEditorStore((s) => s.dependencyResolveLockedCount)
+  const resolveError = useEditorStore((s) => s.dependencyResolveError)
 
   // ── Local state ─────────────────────────────────────────────────────────
   const [searchQuery, setSearchQuery] = useState('')
   const [addName, setAddName] = useState('')
   const [addDev, setAddDev] = useState(false)
   const [addError, setAddError] = useState<string | null>(null)
-  const [resolveStatus, setResolveStatus] = useState<'idle' | 'resolving' | 'resolved' | 'error'>('idle')
-  const [resolveMessage, setResolveMessage] = useState<string | null>(null)
   const [removeConfirm, setRemoveConfirm] = useState<RemoveConfirmState | null>(null)
 
   const cancelRef = useRef<HTMLButtonElement>(null)
@@ -127,15 +127,21 @@ export function DepsSection() {
     [packageJson, lockedPackages],
   )
 
-  // Suppress the manual resolve toast whenever the lock status falls out of
-  // sync (e.g. user added another package after a successful resolve).
-  // Derived during render so we don't need a useEffect to mutate state in
-  // response to a prop change. The underlying state is left alone — only the
-  // surfaced view is hidden.
+  // The slice's `resolved` status hangs around until the next attempt — when
+  // the lock has fallen out of sync since (user added another package after
+  // a successful resolve), the "N locked" toast would be misleading. Hide
+  // the toast in that window; the auto-resolve hook will re-fire and the
+  // toast re-appears once the new lock lands.
   const isResolveToastStale =
     lockStatus.kind !== 'in-sync' && resolveStatus === 'resolved'
   const displayedResolveStatus = isResolveToastStale ? 'idle' : resolveStatus
-  const displayedResolveMessage = isResolveToastStale ? null : resolveMessage
+  const displayedResolveMessage = (() => {
+    if (isResolveToastStale) return null
+    if (resolveStatus === 'resolving') return 'Resolving…'
+    if (resolveStatus === 'resolved') return `${resolveLockedCount} locked`
+    if (resolveStatus === 'error') return resolveError ?? 'Dependency resolution failed'
+    return null
+  })()
 
   // ── Add package handler ──────────────────────────────────────────────────
   const handleAddPackage = useCallback(() => {
@@ -219,19 +225,11 @@ export function DepsSection() {
   const runtimeDependencyCount = Object.keys(packageJson.dependencies).length
 
   const handleResolveDependencies = useCallback(() => {
-    setResolveStatus('resolving')
-    setResolveMessage(null)
-    resolveCmsRuntimeDependencies(packageJson)
-      .then((dependencyLock) => {
-        setSiteDependencyLock(dependencyLock)
-        setResolveStatus('resolved')
-        setResolveMessage(`${Object.keys(dependencyLock.packages).length} locked`)
-      })
-      .catch((error) => {
-        setResolveStatus('error')
-        setResolveMessage(error instanceof Error ? error.message : 'Dependency resolution failed')
-      })
-  }, [packageJson, setSiteDependencyLock])
+    // The auto-resolve hook handles the common case (dep added/removed →
+    // background resolve). This button is the manual escape hatch: surface
+    // when an auto-resolve errored, or let the user re-run on demand.
+    resolveDependencyLock().catch(() => {/* slice stores the error */})
+  }, [resolveDependencyLock])
 
   return (
     <div
@@ -341,31 +339,25 @@ export function DepsSection() {
 
       {/* ─── Add package form ──────────────────────────────────────── */}
       <div className={styles.addForm}>
-        {runtimeDependencyCount > 0 && lockStatus.kind !== 'in-sync' && (
-          <div
-            className={styles.lockStaleBanner}
-            data-testid="deps-lock-stale"
-            role="status"
-          >
-            {describeLockStatus(lockStatus)}
-          </div>
-        )}
         {runtimeDependencyCount > 0 && (
           <div className={styles.resolveRow}>
-            <Button
-              variant={lockStatus.kind === 'in-sync' ? 'secondary' : 'primary'}
-              size="xs"
-              onClick={handleResolveDependencies}
-              disabled={displayedResolveStatus === 'resolving'}
-            >
-              {displayedResolveStatus === 'resolving'
-                ? 'Resolving'
-                : lockStatus.kind === 'unresolved'
-                  ? 'Resolve runtime'
-                  : lockStatus.kind === 'stale'
-                    ? 'Re-resolve'
-                    : 'Resolve runtime'}
-            </Button>
+            {/* Manual re-resolve — auto-resolve covers the happy path; this
+                button is here for "the network blipped, retry" and explicit
+                refreshes. Hidden until something is worth surfacing. */}
+            {(displayedResolveStatus === 'error' || lockStatus.kind !== 'in-sync') && (
+              <Button
+                variant={displayedResolveStatus === 'error' ? 'primary' : 'secondary'}
+                size="xs"
+                onClick={handleResolveDependencies}
+                disabled={displayedResolveStatus === 'resolving'}
+              >
+                {displayedResolveStatus === 'resolving'
+                  ? 'Resolving'
+                  : displayedResolveStatus === 'error'
+                    ? 'Retry resolve'
+                    : 'Re-resolve'}
+              </Button>
+            )}
             {displayedResolveMessage && (
               <span
                 className={styles.resolveStatus}

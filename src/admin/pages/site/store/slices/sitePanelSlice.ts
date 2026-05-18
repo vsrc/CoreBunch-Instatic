@@ -21,6 +21,7 @@
 
 import type { EditorStoreSliceCreator } from '@site/store/types'
 import type {
+  RuntimePackageImportmap,
   SiteDependencyLock,
   SiteRuntimeConfig,
   SiteScriptRuntimeConfig,
@@ -37,6 +38,7 @@ import {
   normalizeScriptRuntimeConfig,
   normalizeSiteRuntimeConfig,
 } from '@core/site-runtime'
+import { resolveCmsRuntimeDependencies } from '@core/persistence/cmsRuntime'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -47,6 +49,14 @@ import {
  * Stores only the dependency maps relevant to DependenciesPanel.
  */
 type PackageJson = SitePackageJson
+
+/**
+ * Lifecycle of the background dependency-lock resolution. Driven by the
+ * auto-resolve hook (and the manual `resolveDependencyLock()` action),
+ * surfaced by DepsSection so the user can see what's happening even when
+ * the work was triggered without a click.
+ */
+export type DependencyResolveStatus = 'idle' | 'resolving' | 'resolved' | 'error'
 
 export interface SitePanelSlice {
   /**
@@ -60,6 +70,24 @@ export interface SitePanelSlice {
    * dependency panels. The persisted source of truth remains SiteDocument.
    */
   siteRuntime: SiteRuntimeConfig
+
+  /**
+   * Transient status for the dependency-lock resolution. Not persisted —
+   * lives only as long as the editor session.
+   */
+  dependencyResolveStatus: DependencyResolveStatus
+
+  /**
+   * Number of packages locked at the end of the last successful resolution.
+   * Used by DepsSection to render `"N locked"` after a background resolve.
+   */
+  dependencyResolveLockedCount: number
+
+  /**
+   * Error message from the most recent failed resolution. Cleared at the
+   * start of every new attempt.
+   */
+  dependencyResolveError: string | null
 
   // ── Actions ──────────────────────────────────────────────────────────────
 
@@ -92,9 +120,23 @@ export interface SitePanelSlice {
   removeScriptRuntimeConfig: (fileId: string) => void
 
   /**
-   * Replace the self-hosted dependency lock after packages are resolved.
+   * Replace the self-hosted dependency lock + (optionally) the prebuilt
+   * importmap returned alongside it. The server emits both from one call
+   * to `/runtime/dependencies/resolve` so they reflect the same install.
    */
-  setSiteDependencyLock: (lock: SiteDependencyLock) => void
+  setSiteDependencyLock: (
+    lock: SiteDependencyLock,
+    packageImportmap?: RuntimePackageImportmap | null,
+  ) => void
+
+  /**
+   * Resolve the current `packageJson.dependencies` into a new lock, persist
+   * it through `setSiteDependencyLock`, and surface the result through the
+   * `dependencyResolve*` fields. Safe to call from a debounced effect — a
+   * second call while one is in flight short-circuits to a no-op so we
+   * don't pile up concurrent npm fetches against esm.sh.
+   */
+  resolveDependencyLock: () => Promise<void>
 
 }
 
@@ -111,6 +153,9 @@ declare module '@site/store/types' {
 export const createSitePanelSlice: EditorStoreSliceCreator<SitePanelSlice> = (set, get) => ({
   packageJson: clonePackageJson(DEFAULT_SITE_PACKAGE_JSON),
   siteRuntime: cloneSiteRuntimeConfig(DEFAULT_SITE_RUNTIME),
+  dependencyResolveStatus: 'idle',
+  dependencyResolveLockedCount: 0,
+  dependencyResolveError: null,
 
   setDependency: (name, version, dev = false) => {
     if (!isSafePackageName(name)) return
@@ -216,17 +261,35 @@ export const createSitePanelSlice: EditorStoreSliceCreator<SitePanelSlice> = (se
     })
   },
 
-  setSiteDependencyLock: (lock) => {
-    const nextLock = normalizeSiteRuntimeConfig({ dependencyLock: lock }).dependencyLock
-    const currentLock = get().siteRuntime.dependencyLock
-    if (JSON.stringify(currentLock) === JSON.stringify(nextLock)) return
+  setSiteDependencyLock: (lock, packageImportmap) => {
+    const normalized = normalizeSiteRuntimeConfig({
+      dependencyLock: lock,
+      ...(packageImportmap !== undefined ? { packageImportmap } : {}),
+    })
+    const nextLock = normalized.dependencyLock
+    const nextImportmap = normalized.packageImportmap
+    const currentRuntime = get().siteRuntime
+    const lockUnchanged = JSON.stringify(currentRuntime.dependencyLock) === JSON.stringify(nextLock)
+    // When the caller omits the importmap (legacy single-arg call), keep
+    // the existing one. When they pass `null`, treat that as "clear" —
+    // useful for tests + future call sites that want to drop a stale map.
+    const importmapUnchanged = packageImportmap === undefined
+      ? true
+      : JSON.stringify(currentRuntime.packageImportmap ?? null) === JSON.stringify(nextImportmap ?? null)
+    if (lockUnchanged && importmapUnchanged) return
 
     if (get().site) get().pushHistory()
     set((s) => {
-      const nextRuntime = {
-        ...s.siteRuntime,
-        dependencyLock: nextLock,
-      }
+      const baseRuntime = { ...s.siteRuntime, dependencyLock: nextLock }
+      const nextRuntime: SiteRuntimeConfig = packageImportmap === undefined
+        ? baseRuntime
+        : nextImportmap
+          ? { ...baseRuntime, packageImportmap: nextImportmap }
+          : (() => {
+            const stripped = { ...baseRuntime }
+            delete stripped.packageImportmap
+            return stripped
+          })()
       return {
         siteRuntime: nextRuntime,
         site: s.site
@@ -235,6 +298,29 @@ export const createSitePanelSlice: EditorStoreSliceCreator<SitePanelSlice> = (se
         hasUnsavedChanges: Boolean(s.site) || s.hasUnsavedChanges,
       }
     })
+  },
+
+  resolveDependencyLock: async () => {
+    // Concurrency guard — a second auto-resolve fired by a fresh edit
+    // mid-resolution would race the network call and the `setSiteDependencyLock`
+    // write. The trailing edit will re-trigger the auto-resolve hook
+    // (lockStatus stays out-of-sync) and we'll pick it up then.
+    if (get().dependencyResolveStatus === 'resolving') return
+
+    set({ dependencyResolveStatus: 'resolving', dependencyResolveError: null })
+
+    try {
+      const result = await resolveCmsRuntimeDependencies(get().packageJson)
+      get().setSiteDependencyLock(result.dependencyLock, result.packageImportmap ?? null)
+      set({
+        dependencyResolveStatus: 'resolved',
+        dependencyResolveLockedCount: Object.keys(result.dependencyLock.packages).length,
+        dependencyResolveError: null,
+      })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Dependency resolution failed'
+      set({ dependencyResolveStatus: 'error', dependencyResolveError: message })
+    }
   },
 
 })

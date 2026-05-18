@@ -1,0 +1,150 @@
+/**
+ * Tests for the auto-resolve hook that keeps `siteRuntime.dependencyLock`
+ * in lockstep with `packageJson.dependencies`.
+ */
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
+import { useAutoResolveDependencies } from '@site/hooks/useAutoResolveDependencies'
+import { useEditorStore } from '@site/store/store'
+import { normalizeSiteRuntimeConfig } from '@core/site-runtime'
+import { makeSite } from '../fixtures'
+
+const originalFetch = globalThis.fetch
+
+afterEach(() => {
+  globalThis.fetch = originalFetch
+  cleanup()
+})
+
+function seedStore(packageDeps: Record<string, string>) {
+  const packageJson = { dependencies: packageDeps, devDependencies: {} }
+  const runtime = normalizeSiteRuntimeConfig(undefined)
+  useEditorStore.setState({
+    site: makeSite({ packageJson, runtime }),
+    packageJson,
+    siteRuntime: runtime,
+    dependencyResolveStatus: 'idle',
+    dependencyResolveLockedCount: 0,
+    dependencyResolveError: null,
+  } as Parameters<typeof useEditorStore.setState>[0])
+}
+
+describe('useAutoResolveDependencies', () => {
+  beforeEach(() => seedStore({ 'canvas-confetti': '^1.9.3' }))
+
+  it('kicks off a background resolve when the lock is out of sync', async () => {
+    let calls = 0
+    globalThis.fetch = (async () => {
+      calls += 1
+      return new Response(JSON.stringify({
+        dependencyLock: {
+          version: 1,
+          packages: {
+            'canvas-confetti': {
+              name: 'canvas-confetti',
+              requested: '^1.9.3',
+              version: '1.9.3',
+              resolvedAt: 1,
+            },
+          },
+          updatedAt: 1,
+        },
+      }), { status: 200 })
+    }) as typeof fetch
+
+    renderHook(() => useAutoResolveDependencies())
+
+    await waitFor(() => {
+      expect(useEditorStore.getState().siteRuntime.dependencyLock.packages['canvas-confetti']?.version).toBe('1.9.3')
+    }, { timeout: 2000 })
+    expect(calls).toBe(1)
+    expect(useEditorStore.getState().dependencyResolveStatus).toBe('resolved')
+  })
+
+  it('is a no-op when the lock is already in-sync', async () => {
+    let calls = 0
+    globalThis.fetch = (async () => {
+      calls += 1
+      return new Response(JSON.stringify({ dependencyLock: { version: 1, packages: {}, updatedAt: 0 } }), { status: 200 })
+    }) as typeof fetch
+
+    const runtime = normalizeSiteRuntimeConfig({
+      dependencyLock: {
+        version: 1,
+        packages: {
+          'canvas-confetti': {
+            name: 'canvas-confetti',
+            requested: '^1.9.3',
+            version: '1.9.4',
+            resolvedAt: 1,
+          },
+        },
+        updatedAt: 1,
+      },
+    })
+    useEditorStore.setState({
+      siteRuntime: runtime,
+      site: { ...useEditorStore.getState().site!, runtime },
+    } as Parameters<typeof useEditorStore.setState>[0])
+
+    renderHook(() => useAutoResolveDependencies())
+
+    // Wait past the debounce window to confirm nothing fires.
+    await new Promise((resolve) => setTimeout(resolve, 800))
+    expect(calls).toBe(0)
+  })
+
+  it('debounces a burst of dependency changes into one resolve', async () => {
+    let calls = 0
+    globalThis.fetch = (async () => {
+      calls += 1
+      return new Response(JSON.stringify({
+        dependencyLock: {
+          version: 1,
+          packages: {
+            'canvas-confetti': {
+              name: 'canvas-confetti',
+              requested: '^1.9.3',
+              version: '1.9.3',
+              resolvedAt: 1,
+            },
+            three: {
+              name: 'three',
+              requested: '^0.169.0',
+              version: '0.169.0',
+              resolvedAt: 1,
+            },
+          },
+          updatedAt: 1,
+        },
+      }), { status: 200 })
+    }) as typeof fetch
+
+    renderHook(() => useAutoResolveDependencies())
+
+    // Two rapid edits — should debounce to one fetch.
+    act(() => {
+      useEditorStore.getState().setDependency('three', '^0.169.0', false)
+    })
+    act(() => {
+      useEditorStore.getState().setDependency('motion', '*', false)
+    })
+
+    await waitFor(() => {
+      expect(useEditorStore.getState().dependencyResolveStatus).toBe('resolved')
+    }, { timeout: 2000 })
+    expect(calls).toBe(1)
+  })
+
+  it('surfaces resolution errors on the slice without throwing', async () => {
+    globalThis.fetch = (async () =>
+      new Response('upstream blew up', { status: 502 })) as typeof fetch
+
+    renderHook(() => useAutoResolveDependencies())
+
+    await waitFor(() => {
+      expect(useEditorStore.getState().dependencyResolveStatus).toBe('error')
+    }, { timeout: 2000 })
+    expect(useEditorStore.getState().dependencyResolveError).toBeTruthy()
+  })
+})

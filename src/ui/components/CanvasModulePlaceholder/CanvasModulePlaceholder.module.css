@@ -84,6 +84,14 @@
  * marked `data-canvas-interactive="true"` on the React side so clicks reach
  * the embedded controls instead of being swallowed by the canvas selection
  * capture in `NodeWrapper`.
+ *
+ * Buttons inside `.actions` are restyled to read well on the light canvas
+ * placeholder surface. The shared `Button` primitive's `variant-primary`
+ * uses chrome-dark surface tokens that were tuned for the editor sidebar,
+ * not for a light page background — without these overrides the button
+ * disappears into the placeholder pattern. We override here (not on the
+ * primitive) so the Button stays generic and the canvas-specific look is
+ * owned by the canvas-specific component.
  */
 .actions {
     display: inline-flex;
@@ -91,4 +99,34 @@
     justify-content: center;
     gap: 6px;
     margin-top: 4px;
+}
+
+/* Descendant selector gives us specificity over `.variant-primary` /
+ * `.size-xs` from `Button.module.css` (both 0,1,0). The button still gets
+ * the Button primitive's reset (display, font, border-radius), focus
+ * ring, and disabled treatment — we only retune the colour, size and
+ * padding so the affordance reads on the light placeholder. */
+.actions button {
+    height: 28px;
+    padding: 0 14px;
+    border: 1px solid color-mix(in srgb, var(--editor-text) 14%, transparent);
+    border-radius: 999px;
+    background: var(--editor-surface);
+    color: var(--editor-text-bright);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    transition:
+        background-color 150ms ease,
+        border-color 150ms ease,
+        color 150ms ease;
+}
+
+.actions button:hover {
+    background: var(--editor-surface-2);
+    border-color: color-mix(in srgb, var(--editor-text) 22%, transparent);
+}
+
+.actions button:active {
+    background: var(--editor-surface-3);
 }

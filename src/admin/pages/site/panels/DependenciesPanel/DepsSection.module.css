@@ -96,17 +96,6 @@
     flex-shrink: 0;
 }
 
-.lockStaleBanner {
-    margin: 0 0 6px;
-    padding: 6px 8px;
-    border: 1px solid rgba(245, 158, 11, 0.28);
-    border-radius: 6px;
-    background: rgba(245, 158, 11, 0.1);
-    color: var(--editor-warning-text);
-    font-size: 10px;
-    line-height: 1.35;
-}
-
 .resolveRow {
     display: flex;
     align-items: center;

@@ -48,6 +48,12 @@ export interface ModulePackRenderOutput {
  * Module metadata as it exits the VM. Mirrors `PluginModuleDefinition` minus
  * the function fields (`render`, `preview`) — those live inside the VM and
  * are invoked through `vm.render(...)` / `vm.preview(...)`.
+ *
+ * `dependencies` and `editorRuntime` are both JSON-serializable shapes
+ * declared by plugin modules (see `PluginModuleDependencies` /
+ * `PluginEditorRuntime` in the SDK). They cross the VM boundary so the host
+ * can write deps into the site's package.json and wire up the editor
+ * iframe preview's import map.
  */
 export interface SerializedModuleDefinition {
   id: string
@@ -60,6 +66,8 @@ export interface SerializedModuleDefinition {
   canHaveChildren?: boolean
   htmlTag?: string
   hasPreview: boolean
+  dependencies?: Record<string, string | { version: string; dev?: boolean }>
+  editorRuntime?: { sandbox?: { source: string; minHeight?: number } }
 }
 
 export interface ModulePackVm {
@@ -84,17 +92,30 @@ function getWasmModule(): Promise<QuickJSWASMModule> {
 }
 
 // ---------------------------------------------------------------------------
-// Source shim — convert raw ESM `export default [...]` (used by the SDK
-// build pipeline) into a `globalThis.__module_pack = ...` assignment that
-// the bootstrap can read. Matches the shim in `pluginWorker.ts`.
+// Source shim — convert raw ESM exports (any of the forms Bun's bundler
+// emits) into a `globalThis.__module_pack = ...` assignment that the
+// bootstrap can read. Matches the shim in `pluginWorker.ts`.
+//
+// Two forms cover everything the SDK build pipeline produces today:
+//
+//   1. `export default <expr>`              — direct default export
+//   2. `export { <ident> as default[, …] }` — Bun bundles default RE-exports
+//      this way when the facade does `import __default from …; export
+//      default __default`. The named-export block is dropped wholesale —
+//      QuickJS has no module loader, so no one imports those names.
 // ---------------------------------------------------------------------------
 
 function ensureModulePackIifeForm(source: string): string {
   if (source.includes('__module_pack')) return source
 
-  const transformed = source.replace(
+  let transformed = source.replace(
     /^([ \t]*)export\s+default\s+/gm,
     '$1globalThis.__module_pack = ',
+  )
+
+  transformed = transformed.replace(
+    /^([ \t]*)export\s*\{[^}]*?([A-Za-z_$][\w$]*)\s+as\s+default[^}]*\}\s*;?/gm,
+    '$1globalThis.__module_pack = $2;',
   )
 
   return `;(function () {\n${transformed}\n})();\n`
@@ -137,6 +158,15 @@ globalThis.__initPack = function initPack(pluginId) {
   globalThis.__modules = byId;
   // Return a SERIALIZED snapshot — metadata only, no functions.
   return value.map(function (def) {
+    // dependencies and editorRuntime are JSON-serializable shapes — copy
+    // them through so the host can wire deps into the site package.json
+    // and build the iframe sandbox's import map.
+    var deps = def.dependencies && typeof def.dependencies === 'object'
+      ? def.dependencies
+      : undefined;
+    var editorRuntime = def.editorRuntime && typeof def.editorRuntime === 'object'
+      ? def.editorRuntime
+      : undefined;
     return {
       id: def.id,
       name: def.name,
@@ -148,6 +178,8 @@ globalThis.__initPack = function initPack(pluginId) {
       canHaveChildren: !!def.canHaveChildren,
       htmlTag: typeof def.htmlTag === 'string' ? def.htmlTag : undefined,
       hasPreview: typeof def.preview === 'function',
+      dependencies: deps,
+      editorRuntime: editorRuntime,
     };
   });
 };

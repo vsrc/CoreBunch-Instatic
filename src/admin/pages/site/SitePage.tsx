@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { AdminCanvasLayout } from '@admin/layouts'
 import { useEditorStore } from '@site/store/store'
 import { consumePendingAction } from '@admin/spotlight/pendingAction'
+import { useAutoResolveDependencies } from '@site/hooks/useAutoResolveDependencies'
 
 // Register base modules with the global registry. Kept here (not in
 // AdminEntry / main.tsx) so the publisher / page-tree / sanitize stack only
@@ -34,6 +35,13 @@ import '@core/loops/sources'
  *   - ui/            — editor-shared building blocks (Tree, ModuleIcon)
  */
 export function SitePage() {
+  // Keep `siteRuntime.dependencyLock` in lockstep with `packageJson` while
+  // the editor is open — so dropping a module that auto-declares a dep
+  // doesn't strand the user with a "stale lock" banner waiting on a manual
+  // click. See `useAutoResolveDependencies` for the debounce / failure
+  // handling.
+  useAutoResolveDependencies()
+
   // Consume cross-workspace pending actions queued by the spotlight. Each
   // action waits for the editor store to hydrate (site !== null) — we
   // subscribe once and tear down as soon as the action has fired so the

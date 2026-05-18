@@ -41,6 +41,7 @@ import type {
   RunLoopPreviewRequest,
   RunMigrateRequest,
   RunRouteRequest,
+  RunScheduleRequest,
   SerializedResponse,
   UnloadPluginRequest,
   WorkerToMainMessage,
@@ -68,7 +69,7 @@ function ensureIifeForm(source: string): string {
   // Strip line/block comments only when computing the rewrite — we keep the
   // original characters for error messages. The rewriter uses anchored
   // regexes that match `export` at the start of a (possibly indented) line.
-  const transformed = source
+  let transformed = source
     .replace(
       /^([ \t]*)export\s+(async\s+)?function\s+([A-Za-z_$][\w$]*)/gm,
       '$1__plugin_exports.$3 = $2function $3',
@@ -85,6 +86,33 @@ function ensureIifeForm(source: string): string {
       /^([ \t]*)export\s+default\s+/gm,
       '$1__plugin_exports.default = ',
     )
+
+  // Bun's bundler emits `export { foo as default[, bar, …] }` for any
+  // re-export and for mixed default+named export blocks. Rewrite the whole
+  // block into one `__plugin_exports.default = <ident>` assignment plus
+  // one `__plugin_exports.<name> = <name>` line per sibling named export.
+  // Anything we can't parse falls through to the next pass — the QuickJS
+  // eval will then surface a clear SyntaxError to the caller.
+  transformed = transformed.replace(
+    /^([ \t]*)export\s*\{([^}]*)\}\s*;?/gm,
+    (_match, indent: string, body: string) => {
+      const assigns: string[] = []
+      for (const rawEntry of body.split(',')) {
+        const entry = rawEntry.trim()
+        if (!entry) continue
+        const asMatch = entry.match(/^([A-Za-z_$][\w$]*)\s+as\s+([A-Za-z_$][\w$]*)$/)
+        if (asMatch) {
+          assigns.push(`${indent}__plugin_exports.${asMatch[2]} = ${asMatch[1]};`)
+          continue
+        }
+        const bareMatch = entry.match(/^([A-Za-z_$][\w$]*)$/)
+        if (bareMatch) {
+          assigns.push(`${indent}__plugin_exports.${bareMatch[1]} = ${bareMatch[1]};`)
+        }
+      }
+      return assigns.join('\n')
+    },
+  )
 
   return `;(function () {\n  const __plugin_exports = (globalThis.__plugin_exports = {});\n${transformed}\n})();\n`
 }
@@ -154,6 +182,10 @@ async function handleLoadPlugin(msg: LoadPluginRequest): Promise<void> {
         pluginId: msg.pluginId,
         manifestVersion: msg.manifest.version,
         grantedPermissions: msg.manifest.grantedPermissions ?? [],
+        // Default to a sensible derived path when the manifest hasn't yet been
+        // written through `writePluginPackageFiles` (e.g. test fixtures that
+        // assemble manifests by hand). The real install flow sets this.
+        assetBasePath: msg.manifest.assetBasePath ?? `/uploads/plugins/${msg.pluginId}/${msg.manifest.version}`,
         settings: { ...msg.settings },
         hostCall: (target, args) =>
           callHostApi(msg.pluginId, target as ApiCall['target'], args),
@@ -386,6 +418,49 @@ async function handleRunLoopPreview(msg: RunLoopPreviewRequest): Promise<void> {
   }
 }
 
+async function handleRunSchedule(msg: RunScheduleRequest): Promise<void> {
+  const vm = vmsByPluginId.get(msg.pluginId)
+  if (!vm) {
+    send({
+      kind: 'schedule-result',
+      correlationId: msg.correlationId,
+      ok: false,
+      status: 'error',
+      error: `Plugin "${msg.pluginId}" not loaded in worker`,
+      durationMs: 0,
+    })
+    return
+  }
+  const startedAt = Date.now()
+  try {
+    await vm.runSchedule(msg.scheduleId, msg.maxDurationMs)
+    send({
+      kind: 'schedule-result',
+      correlationId: msg.correlationId,
+      ok: true,
+      status: 'ok',
+      durationMs: Date.now() - startedAt,
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    // The QuickJS interrupt handler raises `InternalError: interrupted`
+    // when the per-eval deadline kicks in (see withDeadline in
+    // quickjsHost.ts). Surface this as a distinct status so the admin UI
+    // and consecutive-failures logic can treat timeouts separately from
+    // logical errors.
+    const status: 'timeout' | 'error' =
+      message.toLowerCase().includes('interrupted') ? 'timeout' : 'error'
+    send({
+      kind: 'schedule-result',
+      correlationId: msg.correlationId,
+      ok: false,
+      status,
+      error: message,
+      durationMs: Date.now() - startedAt,
+    })
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Settings sync — `settings.changed` lands here from the host and updates
 // the VM's local mirror so subsequent `api.cms.settings.get(...)` calls
@@ -433,6 +508,9 @@ async function maybeApplySettingsChange(reply: ApiReply): Promise<void> {
       return
     case 'run-loop-preview':
       void handleRunLoopPreview(msg)
+      return
+    case 'run-schedule':
+      void handleRunSchedule(msg)
       return
     case 'api-reply':
       void maybeApplySettingsChange(msg)

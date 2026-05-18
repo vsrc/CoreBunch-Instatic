@@ -1,8 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, type CSSProperties } from 'react'
 import type { AnyModuleDefinition } from '@core/module-engine/types'
 import { createModuleImportMap } from '@core/module-engine/runtimeResolver'
+import {
+  getMissingModuleDependencies,
+  normalizeModuleDependencies,
+} from '@core/module-engine/dependencies'
 import type { SiteDocument } from '@core/page-tree/schemas'
 import { useEditorStore } from '@site/store/store'
+import { Button } from '@ui/components/Button'
+import { CanvasModulePlaceholder } from '@ui/components/CanvasModulePlaceholder'
+import { PackageSolidIcon } from 'pixel-art-icons/icons/package-solid'
 import { cn } from '@ui/cn'
 import { generateClassCSS } from '@core/publisher/classCss'
 import {
@@ -55,17 +62,53 @@ export function ModuleSandboxFrame({
   const packageJson = useEditorStore((s) => s.packageJson)
   const selectNode = useEditorStore((s) => s.selectNode)
   const setFocusedPanel = useEditorStore((s) => s.setFocusedPanel)
+  const setDependency = useEditorStore((s) => s.setDependency)
+  const setDependenciesPanelOpen = useEditorStore((s) => s.setDependenciesPanelOpen)
   const runtime = moduleDefinition.editorRuntime?.sandbox
+
+  // Dependencies the module declares but the site hasn't installed yet.
+  // The iframe's import map is built with `strictSiteManifest: true` —
+  // missing deps would surface as a raw `TypeError: Failed to resolve
+  // module specifier` inside the iframe. Show a friendlier empty state
+  // (with a one-click "add" affordance) before mounting the iframe at all.
+  const missingDependencies = useMemo(
+    () => getMissingModuleDependencies(moduleDefinition, packageJson),
+    [moduleDefinition, packageJson],
+  )
 
   const classCSS = useMemo(
     () => getNodeClassCSS(site, classIds),
     [site, classIds],
   )
 
+  // The iframe's import map is filtered from the site's precomputed
+  // `runtime.packageImportmap` — the server built it from the actual
+  // `bun install` cache when the user resolved their deps, so the URLs
+  // point at the host's own `/_pb/runtime/cache/...` route. Plugin code
+  // never names a CDN: `import * as THREE from 'three'` resolves to the
+  // same on-disk file the published page uses.
+  const siteImportmap = useEditorStore((s) => s.siteRuntime.packageImportmap)
+  const dependencyResolveStatus = useEditorStore((s) => s.dependencyResolveStatus)
   const importMap = useMemo(
-    () => createModuleImportMap(moduleDefinition, { packageJson, strictSiteManifest: true }),
-    [moduleDefinition, packageJson],
+    () => createModuleImportMap(moduleDefinition, {
+      packageJson,
+      strictSiteManifest: true,
+      siteImportmap,
+    }),
+    [moduleDefinition, packageJson, siteImportmap],
   )
+  // Importmap is incomplete if any runtime dep declared by this module is
+  // missing from `importMap.imports`. That's the case after opening a site
+  // whose persisted state predates the importmap field, or while the
+  // background auto-resolve is still installing. We refuse to mount the
+  // iframe in that state so the user sees a clear "resolving" message
+  // instead of a "Failed to resolve module specifier" runtime error.
+  const importmapIncomplete = useMemo(() => {
+    const runtimeDeps = normalizeModuleDependencies(moduleDefinition.dependencies)
+      .filter((dep) => !dep.dev)
+    if (runtimeDeps.length === 0) return false
+    return runtimeDeps.some((dep) => !importMap.imports[dep.name])
+  }, [moduleDefinition.dependencies, importMap])
 
   const sandboxContext = useMemo<SandboxContext>(
     () => ({
@@ -159,6 +202,64 @@ export function ModuleSandboxFrame({
       <div className={styles.fallback}>
         Missing sandbox runtime for {moduleDefinition.name}
       </div>
+    )
+  }
+
+  // Importmap not yet populated for this module's runtime deps —
+  // `useAutoResolveDependencies` triggers a fresh resolve in the
+  // background; mount nothing until the URLs land.
+  if (importmapIncomplete && missingDependencies.length === 0) {
+    const status = dependencyResolveStatus === 'error'
+      ? 'Dependency resolve failed — open the Dependencies panel to retry.'
+      : 'Resolving runtime packages…'
+    return (
+      <CanvasModulePlaceholder
+        className={mcClassName}
+        icon={<PackageSolidIcon size={16} color="currentColor" />}
+        label={`${moduleDefinition.name} is preparing`}
+        description={status}
+      />
+    )
+  }
+
+  if (missingDependencies.length > 0) {
+    const packagesLabel = missingDependencies
+      .map((dep) => `${dep.name}@${dep.version}`)
+      .join(', ')
+    const buttonLabel = missingDependencies.length === 1
+      ? `Add ${missingDependencies[0]!.name}`
+      : `Add ${missingDependencies.length} packages`
+    // Collapse to the placeholder's natural height — the iframe's
+    // `minHeight` was sized for the live preview (320–360 px), which leaves
+    // an empty white band below a short placeholder. Letting the empty
+    // state size itself reads cleanly and matches the rest of the canvas
+    // placeholder modules (container, image, loop).
+    return (
+      <CanvasModulePlaceholder
+        className={mcClassName}
+        icon={<PackageSolidIcon size={16} color="currentColor" />}
+        label={
+          missingDependencies.length === 1
+            ? `${moduleDefinition.name} needs 1 package`
+            : `${moduleDefinition.name} needs ${missingDependencies.length} packages`
+        }
+        description={packagesLabel}
+        actions={
+          <Button
+            variant="primary"
+            size="xs"
+            data-testid="module-sandbox-missing-deps-add"
+            onClick={() => {
+              for (const dep of missingDependencies) {
+                setDependency(dep.name, dep.version, dep.dev)
+              }
+              setDependenciesPanelOpen(true)
+            }}
+          >
+            {buttonLabel}
+          </Button>
+        }
+      />
     )
   }
 
