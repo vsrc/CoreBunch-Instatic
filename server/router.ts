@@ -27,6 +27,65 @@ interface ServerRuntime {
   uploadsDir?: string
 }
 
+/**
+ * A route handler returns a `Response` if it owns the request, or `null` if
+ * the URL/method doesn't match — the dispatcher walks the `routes` table and
+ * returns the first non-null response. Prefix-namespaced handlers (e.g.
+ * `/_pb/css/`, `/_pb/runtime/cache/`) absorb their entire namespace and emit
+ * a 404 themselves rather than falling through, so unknown paths under a
+ * known prefix can't accidentally match a later route.
+ */
+type RouteHandler = (
+  req: Request,
+  runtime: ServerRuntime,
+  url: URL,
+  pathname: string,
+) => Promise<Response | null> | Response | null
+
+// ---------------------------------------------------------------------------
+// Dispatcher
+// ---------------------------------------------------------------------------
+
+/**
+ * The ordered routing table. Routes are tried top-to-bottom; the first match
+ * wins. Adding a new endpoint is a one-line edit here plus a focused
+ * `tryServeX` function below — no per-call type juggling and no editing the
+ * dispatcher loop.
+ */
+const routes: readonly RouteHandler[] = [
+  tryServeHealth,
+  tryServeAgent,
+  tryServeAgentToolResult,
+  tryServeCmsApi,
+  tryServeLoopRuntimeAsset,
+  tryServeLoop,
+  tryServePublicTracker,
+  tryServeRuntimeAsset,
+  tryServeRuntimePackageNamespace,
+  tryServeSiteCssNamespace,
+  tryServeStaticAsset,
+  tryServeUpload,
+  tryServeAdminApp,
+  tryServePublishedPage,
+  tryServeContentRoute,
+  trySetupRedirect,
+]
+
+export async function handleServerRequest(
+  req: Request,
+  runtime: ServerRuntime,
+): Promise<Response> {
+  const url = new URL(req.url)
+  const { pathname } = url
+
+  for (const route of routes) {
+    const response = await route(req, runtime, url, pathname)
+    if (response) return response
+  }
+
+  return jsonResponse({ error: 'Not found' }, { status: 404 })
+}
+
 // ---------------------------------------------------------------------------
 // Path helpers
 // ---------------------------------------------------------------------------
@@ -46,16 +105,74 @@ function contentRouteFromPath(pathname: string): { tableRouteBase: string; rowSl
 }
 
 // ---------------------------------------------------------------------------
-// Per-route resolvers
+// Route handlers
 //
-// Each `tryServeXxx` returns a `Response` if it owns the request, or `null`
-// if the path/method doesn't match — the dispatcher chains them together
-// without per-call type juggling.
+// Each function checks its own method/path and returns `Response | null`.
+// Order matters — see `routes` above.
 // ---------------------------------------------------------------------------
 
-async function tryServeRuntimeAsset(req: Request, db: DbClient, pathname: string): Promise<Response | null> {
+function tryServeHealth(_req: Request, _runtime: ServerRuntime, _url: URL, pathname: string): Response | null {
+  if (pathname !== '/health') return null
+  return jsonResponse({ status: 'ok', ts: Date.now() })
+}
+
+/**
+ * Agent endpoints live under `/admin/api/agent[/...]` (not their own
+ * `/api/agent` prefix) so the admin session cookie — scoped to
+ * `Path=/admin` to keep it off the public site — is actually carried to
+ * them. Without that, the capability gate inside the handlers would 401
+ * every request. Matched before the broader `/admin/api/cms/` route
+ * because the agent paths don't include `cms` and must not be swallowed
+ * by the CMS dispatcher.
+ *
+ * The F-0008 architecture gate (`agent-endpoint-auth.test.ts`) scans this
+ * file for the literal calls `handleAgentRequest(req, runtime.db)` and
+ * `handleAgentToolResult(req, runtime.db)` to ensure the `DbClient` flows
+ * into the handlers' auth checks. Keep those literals here.
+ */
+function tryServeAgent(req: Request, runtime: ServerRuntime, _url: URL, pathname: string): Promise<Response> | null {
+  if (pathname !== '/admin/api/agent') return null
+  return handleAgentRequest(req, runtime.db)
+}
+
+function tryServeAgentToolResult(req: Request, runtime: ServerRuntime, _url: URL, pathname: string): Promise<Response> | null {
+  if (pathname !== '/admin/api/agent/tool-result') return null
+  return handleAgentToolResult(req, runtime.db)
+}
+
+function tryServeCmsApi(req: Request, runtime: ServerRuntime, _url: URL, pathname: string): Promise<Response> | null {
+  if (!pathname.startsWith('/admin/api/cms/')) return null
+  return handleCmsRequest(req, runtime.db, { uploadsDir: runtime.uploadsDir })
+}
+
+/**
+ * The loop runtime is a fixed CMS asset, served before the per-site
+ * runtime asset lookup so the request never falls through.
+ */
+function tryServeLoopRuntimeAsset(req: Request, _runtime: ServerRuntime, _url: URL, pathname: string): Response | null {
+  if (req.method !== 'GET' || !isLoopRuntimeAssetPath(pathname)) return null
+  return serveLoopRuntimeAsset()
+}
+
+function tryServeLoop(req: Request, runtime: ServerRuntime, url: URL, pathname: string): Promise<Response> | null {
+  if (!pathname.startsWith('/_pb/loop/')) return null
+  return handleLoopRequest(req, url, { db: runtime.db })
+}
+
+/**
+ * Frontend tracker — the runtime injected into published pages POSTs
+ * structured events here. No admin auth: the endpoint is public by design,
+ * events are scoped per plugin grant, and abuse mitigation belongs at the
+ * edge (rate limit / CSRF) for the host operator to configure.
+ */
+function tryServePublicTracker(req: Request, runtime: ServerRuntime, _url: URL, pathname: string): Promise<Response> | null {
+  if (!isPublicTrackerPath(pathname)) return null
+  return handlePublicTrackerRequest(req, runtime.db)
+}
+
+async function tryServeRuntimeAsset(req: Request, runtime: ServerRuntime, _url: URL, pathname: string): Promise<Response | null> {
   if (req.method !== 'GET' || !pathname.startsWith('/_pb/assets/')) return null
-  const runtimeAsset = await getPublishedRuntimeAsset(db, pathname)
+  const runtimeAsset = await getPublishedRuntimeAsset(runtime.db, pathname)
   if (!runtimeAsset) return null
   const body = new ArrayBuffer(runtimeAsset.bytes.byteLength)
   new Uint8Array(body).set(runtimeAsset.bytes)
@@ -67,18 +184,53 @@ async function tryServeRuntimeAsset(req: Request, db: DbClient, pathname: string
   })
 }
 
+/**
+ * Per-site runtime dependency cache — served from the hashed
+ * `bun install` workspace under `/_pb/runtime/cache/<hash>/<...path>`.
+ * The publisher emits a `<script type="importmap">` mapping bare
+ * specifiers like `three` to URLs in this namespace, so plugin module
+ * scripts and frontend bundles share a single locally-installed copy
+ * of every site dependency.
+ *
+ * The /_pb/runtime/cache/ namespace is exclusive: unknown paths under it
+ * 404 here rather than falling through to a later matcher.
+ */
+async function tryServeRuntimePackageNamespace(req: Request, _runtime: ServerRuntime, _url: URL, pathname: string): Promise<Response | null> {
+  if (!isRuntimePackagePath(pathname)) return null
+  return (await tryServeRuntimePackage(req, pathname)) ?? new Response('not found', { status: 404 })
+}
+
+/**
+ * Per-site CSS bundle — `reset-<hash>.css`, `framework-<hash>.css`,
+ * `style-<hash>.css`. Filenames embed a content hash, so responses can
+ * use `Cache-Control: immutable` for a year. Stale-hash requests 404 so
+ * the browser falls back to refetching the HTML (which carries the new
+ * hash).
+ *
+ * The /_pb/css/ namespace is exclusive: any unknown path under it is a
+ * 404, never falls through to the public-slug handler. That prevents an
+ * unrelated path like `/_pb/css/anything.css` from accidentally
+ * rendering the homepage.
+ */
+async function tryServeSiteCssNamespace(req: Request, runtime: ServerRuntime, _url: URL, pathname: string): Promise<Response | null> {
+  if (req.method !== 'GET' || !pathname.startsWith('/_pb/css/')) return null
+  return (await serveSiteCss(runtime.db, pathname)) ?? new Response('Not found', { status: 404 })
+}
+
 async function tryServeStaticAsset(
-  req: Request,
+  _req: Request,
   runtime: ServerRuntime,
+  _url: URL,
   pathname: string,
 ): Promise<Response | null> {
   if (!runtime.staticDir || !pathname.startsWith('/assets/')) return null
-  return await serveStaticFile(runtime.staticDir, pathname, req)
+  return await serveStaticFile(runtime.staticDir, pathname, _req)
 }
 
 async function tryServeUpload(
   req: Request,
   runtime: ServerRuntime,
+  _url: URL,
   pathname: string,
 ): Promise<Response | null> {
   if (!runtime.uploadsDir || !pathname.startsWith('/uploads/')) return null
@@ -113,6 +265,7 @@ async function tryServeUpload(
 async function tryServeAdminApp(
   req: Request,
   runtime: ServerRuntime,
+  _url: URL,
   pathname: string,
 ): Promise<Response | null> {
   const isAdminPath = pathname === '/admin' || pathname.startsWith('/admin/')
@@ -133,10 +286,11 @@ async function tryServeAdminApp(
  * published page — the dispatcher then falls through to the content-entry
  * lookup.
  */
-async function tryServePublishedPage(db: DbClient, url: URL): Promise<Response | null> {
-  const snapshot = await getPublishedPageBySlug(db, publicSlugFromPath(url.pathname))
+async function tryServePublishedPage(req: Request, runtime: ServerRuntime, url: URL, _pathname: string): Promise<Response | null> {
+  if (req.method !== 'GET') return null
+  const snapshot = await getPublishedPageBySlug(runtime.db, publicSlugFromPath(url.pathname))
   if (!snapshot) return null
-  return new Response(await renderPublishedSnapshot(snapshot, { db, url }), {
+  return new Response(await renderPublishedSnapshot(snapshot, { db: runtime.db, url }), {
     headers: { 'content-type': 'text/html; charset=utf-8' },
   })
 }
@@ -150,10 +304,12 @@ async function tryServePublishedPage(db: DbClient, url: URL): Promise<Response |
  * Returns `null` for paths that don't carry at least a `/table/slug`
  * shape; the dispatcher then continues to the setup-wizard redirect.
  */
-async function tryServeContentRoute(db: DbClient, url: URL): Promise<Response | null> {
+async function tryServeContentRoute(req: Request, runtime: ServerRuntime, url: URL, _pathname: string): Promise<Response | null> {
+  if (req.method !== 'GET') return null
   const route = contentRouteFromPath(url.pathname)
   if (!route) return null
 
+  const { db } = runtime
   const row = await getPublishedDataRowByRoute(db, route.tableRouteBase, route.rowSlug)
   if (row) {
     const siteSnapshot = await getLatestPublishedSiteSnapshot(db)
@@ -188,120 +344,16 @@ async function tryServeContentRoute(db: DbClient, url: URL): Promise<Response | 
  * they land in the setup wizard instead of seeing a confusing 404. Returns
  * null when the install is already past setup.
  */
-async function trySetupRedirect(db: DbClient): Promise<Response | null> {
-  const setupStatus = await getSetupStatus(db)
+async function trySetupRedirect(req: Request, runtime: ServerRuntime, _url: URL, _pathname: string): Promise<Response | null> {
+  if (req.method !== 'GET') return null
+  const setupStatus = await getSetupStatus(runtime.db)
   return setupStatus.needsSetup
     ? new Response(null, { status: 302, headers: { location: '/admin' } })
     : null
 }
 
 // ---------------------------------------------------------------------------
-// Dispatcher
-// ---------------------------------------------------------------------------
-
-export async function handleServerRequest(
-  req: Request,
-  runtime: ServerRuntime,
-): Promise<Response> {
-  const url = new URL(req.url)
-  const { pathname } = url
-  const { db } = runtime
-
-  if (pathname === '/health') {
-    return jsonResponse({ status: 'ok', ts: Date.now() })
-  }
-
-  // Delegated subsystems — each owns a URL prefix.
-  //
-  // Agent endpoints live under `/admin/api/agent` (not their own `/api/agent`
-  // prefix) so the session cookie — scoped to `Path=/admin` to keep it off
-  // the public site — is actually carried to them. Without this, the
-  // capability gate inside the handlers would 401 every request. Matched
-  // before the broader `/admin/api/cms/` check because the agent paths
-  // don't include `cms` and must not be swallowed by the CMS dispatcher.
-  if (pathname === '/admin/api/agent') {
-    // `runtime.db` here, not the destructured `db`, satisfies the F-0008
-    // architecture gate (agent-endpoint-auth.test.ts) which scans the
-    // router source for the literal `handleAgentRequest(req, runtime.db)`
-    // / `handleAgentToolResult(req, runtime.db)` calls. The gate exists
-    // to ensure the DbClient flows into the handlers' auth checks.
-    return handleAgentRequest(req, runtime.db)
-  }
-  if (pathname === '/admin/api/agent/tool-result') {
-    return handleAgentToolResult(req, runtime.db)
-  }
-  if (pathname.startsWith('/admin/api/cms/')) {
-    return handleCmsRequest(req, db, { uploadsDir: runtime.uploadsDir })
-  }
-
-  // Loop runtime — fixed CMS asset, served before per-site runtime
-  // assets so the request never falls through to the per-site lookup.
-  if (req.method === 'GET' && isLoopRuntimeAssetPath(pathname)) {
-    return serveLoopRuntimeAsset()
-  }
-  if (pathname.startsWith('/_pb/loop/')) {
-    return handleLoopRequest(req, url, { db })
-  }
-
-  // Frontend tracker — the runtime injected into published pages POSTs
-  // structured events here. No admin auth: the endpoint is public by design,
-  // events are scoped per plugin grant, and abuse mitigation belongs at the
-  // edge (rate limit / CSRF) for the host operator to configure.
-  if (isPublicTrackerPath(pathname)) {
-    return handlePublicTrackerRequest(req, db)
-  }
-
-  const runtimeAsset = await tryServeRuntimeAsset(req, db, pathname)
-  if (runtimeAsset) return runtimeAsset
-
-  // Per-site runtime dependency cache — served from the hashed
-  // `bun install` workspace under `/_pb/runtime/cache/<hash>/<...path>`.
-  // The publisher emits an `<script type="importmap">` mapping bare
-  // specifiers like `three` to URLs in this namespace, so plugin module
-  // scripts and frontend bundles share a single locally-installed copy
-  // of every site dependency.
-  if (isRuntimePackagePath(pathname)) {
-    return (await tryServeRuntimePackage(req, pathname)) ?? new Response('not found', { status: 404 })
-  }
-
-  // Per-site CSS bundle — `reset-<hash>.css`, `framework-<hash>.css`,
-  // `style-<hash>.css`. Filenames embed a content hash, so responses can use
-  // `Cache-Control: immutable` for a year. Stale-hash requests 404 so the
-  // browser falls back to refetching the HTML (which carries the new hash).
-  //
-  // The /_pb/css/ namespace is exclusive: any unknown path under it is a 404,
-  // never falls through to the public-slug handler. That prevents an
-  // unrelated path like `/_pb/css/anything.css` from accidentally rendering
-  // the homepage (page-slug router doesn't know about CSS conventions).
-  if (req.method === 'GET' && pathname.startsWith('/_pb/css/')) {
-    return (await serveSiteCss(db, pathname)) ?? new Response('Not found', { status: 404 })
-  }
-
-  const staticAsset = await tryServeStaticAsset(req, runtime, pathname)
-  if (staticAsset) return staticAsset
-
-  const upload = await tryServeUpload(req, runtime, pathname)
-  if (upload) return upload
-
-  const adminApp = await tryServeAdminApp(req, runtime, pathname)
-  if (adminApp) return adminApp
-
-  if (req.method === 'GET') {
-    const page = await tryServePublishedPage(db, url)
-    if (page) return page
-
-    const contentRoute = await tryServeContentRoute(db, url)
-    if (contentRoute) return contentRoute
-
-    const setupRedirect = await trySetupRedirect(db)
-    if (setupRedirect) return setupRedirect
-  }
-
-  return jsonResponse({ error: 'Not found' }, { status: 404 })
-}
-
-// ---------------------------------------------------------------------------
-// Helpers (long enough to live below the dispatcher for readability)
+// Helpers
 // ---------------------------------------------------------------------------
 
 function adminUiNotBuiltResponse(pathname: string): Response {
