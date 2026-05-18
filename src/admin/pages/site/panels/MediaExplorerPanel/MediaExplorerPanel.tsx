@@ -364,7 +364,7 @@ export function MediaExplorerPanel({
     if (selectedNode.moduleId === 'base.image' && bucket === 'images') {
       updateNodeProps(selectedNodeId, { src: publicPath })
     } else if (selectedNode.moduleId === 'base.video' && bucket === 'videos') {
-      updateNodeProps(selectedNodeId, { source: 'media', videoUrl: publicPath })
+      updateNodeProps(selectedNodeId, { videoUrl: publicPath })
     }
     setContextMenu(null)
   }

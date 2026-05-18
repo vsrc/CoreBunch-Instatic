@@ -1,19 +1,27 @@
 /**
  * base.video — video embed module.
  *
- * Two sources:
- *   - Media library — local `<video>` with a hand-picked poster image and
- *     the same responsive niceties as base.image where applicable
- *     (intrinsic `width` / `height` from the asset, optional `preload`,
- *     mandatory `playsinline` for iOS autoplay-on-mute scenarios).
- *   - YouTube — `<iframe>` to the standard embed URL. No poster /
- *     intrinsic dims (iframe handles its own preview).
+ * One field decides how the video is sourced: `videoUrl`. The publisher
+ * looks at the URL and emits the right markup:
+ *   - YouTube URL (watch / youtu.be / embed / shorts) → `<iframe>`.
+ *   - Anything else (a media-library `/uploads/...` path or an external
+ *     `.mp4` / `.webm` URL) → `<video>`.
+ *
+ * The author never has to pick "Media library vs. YouTube" — the URL is
+ * the source of truth.
+ *
+ * Performance: when a `poster` image is set, the YouTube iframe is wrapped
+ * in a `<div>` so the responsive poster (`srcset` from the variant ladder)
+ * renders immediately while the iframe itself is `loading="lazy"`. Visitors
+ * see our lightweight poster on first paint; YouTube's player only streams
+ * in when the element is in the viewport. JS-free — purely native browser
+ * lazy-loading + a z-stack so the iframe covers the poster once loaded.
  *
  * The publisher's `prefetchMediaAssets` pass attaches every resolved media
  * asset to `props._resolvedMediaByKey`. We read TWO entries: `videoUrl`
- * (for intrinsic width / height of the video itself) and `poster` (for the
- * picked still). Both are optional — if the user hasn't set them, the
- * markup falls back to the raw values and lets the browser figure it out.
+ * (for intrinsic width / height of the video itself, when it's a library
+ * upload) and `poster` (variant ladder + intrinsic dims). Both are
+ * optional — missing values fall back gracefully.
  */
 import type { ModuleDefinition } from '@core/module-engine/types'
 import type { RenderResolvedMedia } from '@core/publisher/render'
@@ -21,78 +29,61 @@ import { registry } from '@core/module-engine/registry'
 import { VideoSolidIcon } from 'pixel-art-icons/icons/video-solid'
 import { safeUrl } from '@modules/base/utils/escape'
 import { VideoEditor } from './VideoEditor'
+import { parseYoutubeId, youtubeEmbedUrl } from './youtube'
 
 interface VideoProps extends Record<string, unknown> {
-  source: 'media' | 'youtube'
-  youtubeId: string
+  /**
+   * Source URL. Accepts:
+   *   - A library path like `/uploads/intro.mp4` (resolved by the publisher)
+   *   - An external video URL (`https://example.com/clip.webm`)
+   *   - Any standard YouTube URL — auto-detected, rendered as an iframe
+   */
   videoUrl: string
-  /** Poster frame — picked from the Media library by the author. */
+  /**
+   * Poster frame. For uploaded videos, the browser's native poster.
+   * For YouTube URLs, also rendered behind the iframe so the page shows
+   * our responsive image immediately while YouTube lazy-loads.
+   */
   poster: string
   autoplay: boolean
   loop: boolean
   muted: boolean
   controls: boolean
-  /** Required for iOS so the video doesn't take over the screen. */
+  /** Required for iOS so an uploaded video doesn't take over the screen. */
   playsinline: boolean
-  /** Bandwidth hint: `'none'` for purely-decorative below-the-fold videos,
-   *  `'metadata'` for most hero videos, `'auto'` only when you really mean
-   *  it (e.g. the video is about to play on its own). */
+  /** Bandwidth hint for uploaded videos. Ignored for YouTube embeds. */
   preload: 'none' | 'metadata' | 'auto'
   /** Internal: attached by the publisher's prefetchMediaAssets pass. */
   _resolvedMediaByKey?: Record<string, RenderResolvedMedia>
 }
 
-function youtubeEmbedUrl(id: unknown, autoplay: unknown): string {
-  const safeId = encodeURIComponent(String(id ?? '').trim())
-  if (!safeId) return ''
-  return `https://www.youtube.com/embed/${safeId}${autoplay ? '?autoplay=1' : ''}`
-}
-
 export const VideoModule: ModuleDefinition<VideoProps> = {
   id: 'base.video',
   name: 'Video',
-  description: 'Embed a CMS media video or YouTube video.',
+  description: 'Embed an uploaded video, an external video URL, or a YouTube link.',
   category: 'Media',
-  version: '3.0.0',
+  version: '4.0.0',
   icon: VideoSolidIcon,
   trusted: true,
   canHaveChildren: false,
 
   schema: {
-    source: {
-      type: 'select',
-      label: 'Video source',
-      options: [
-        { label: 'Media library', value: 'media' },
-        { label: 'YouTube', value: 'youtube' },
-      ],
-    },
-    youtubeId: {
-      type: 'text',
-      label: 'YouTube video ID',
-      placeholder: 'dQw4w9WgXcQ',
-      condition: { field: 'source', eq: 'youtube' },
-    },
     videoUrl: {
       type: 'media',
       mediaKind: 'video',
       label: 'Video',
-      condition: { field: 'source', eq: 'media' },
+      description: 'Pick a file from the media library, paste an external URL, or paste a YouTube link.',
     },
     poster: {
       type: 'image',
       label: 'Poster image',
-      condition: { field: 'source', eq: 'media' },
+      description: 'Shown before the video starts. For YouTube, also shown while the player lazy-loads.',
     },
     autoplay: { type: 'toggle', label: 'Autoplay' },
     loop: { type: 'toggle', label: 'Loop' },
     muted: { type: 'toggle', label: 'Muted' },
     controls: { type: 'toggle', label: 'Show controls' },
-    playsinline: {
-      type: 'toggle',
-      label: 'Play inline (mobile)',
-      condition: { field: 'source', eq: 'media' },
-    },
+    playsinline: { type: 'toggle', label: 'Play inline (mobile)' },
     preload: {
       type: 'select',
       label: 'Preload',
@@ -101,13 +92,10 @@ export const VideoModule: ModuleDefinition<VideoProps> = {
         { label: 'Metadata', value: 'metadata' },
         { label: 'Auto', value: 'auto' },
       ],
-      condition: { field: 'source', eq: 'media' },
     },
   },
 
   defaults: {
-    source: 'media',
-    youtubeId: '',
     videoUrl: '',
     poster: '',
     autoplay: false,
@@ -120,20 +108,31 @@ export const VideoModule: ModuleDefinition<VideoProps> = {
 
   component: VideoEditor,
 
-  htmlTag: (props) => (String(props.source) === 'youtube' ? 'iframe' : 'video'),
+  htmlTag: (props) => {
+    const url = String(props.videoUrl ?? '')
+    if (parseYoutubeId(url)) {
+      // With a poster we wrap the iframe in a <div> so the responsive
+      // poster image can sit behind it (see render below). Without a
+      // poster the iframe is the root.
+      return String(props.poster ?? '') ? 'div' : 'iframe'
+    }
+    return 'video'
+  },
 
   render: (props) => {
-    const isYoutube = String(props.source) === 'youtube'
+    const rawUrl = String(props.videoUrl ?? '')
+    const youtubeId = parseYoutubeId(rawUrl)
 
-    if (isYoutube) {
-      const src = youtubeEmbedUrl(props.youtubeId, props.autoplay)
-      if (!src) return { html: '' }
-      return {
-        html: `<iframe src="${src}" title="YouTube video" frameborder="0" allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe>`,
-      }
+    if (youtubeId) {
+      return renderYoutube({
+        youtubeId,
+        autoplay: Boolean(props.autoplay),
+        posterUrl: String(props.poster ?? ''),
+        posterMedia: props._resolvedMediaByKey?.poster ?? null,
+      })
     }
 
-    const videoSrc = safeUrl(String(props.videoUrl ?? ''))
+    const videoSrc = safeUrl(rawUrl)
     if (!videoSrc) return { html: '<video></video>' }
 
     // Resolved video asset gives us intrinsic dimensions — emits
@@ -146,9 +145,9 @@ export const VideoModule: ModuleDefinition<VideoProps> = {
     // Poster picks the smallest variant that's still ≥ the video's
     // own width — keeps the still file lightweight while staying sharp
     // at the rendered size. Falls back to the raw publicPath if no
-    // variant ladder is available yet (poster picked but not yet
-    // re-processed, or an external URL).
-    const posterSrc = pickPosterVariantUrl(posterMedia) ?? safeUrl(String(props.poster ?? ''))
+    // variant ladder is available yet.
+    const posterSrc = pickPosterVariantUrl(posterMedia, videoMedia?.width ?? null)
+      ?? safeUrl(String(props.poster ?? ''))
 
     const width = videoMedia?.width ?? null
     const height = videoMedia?.height ?? null
@@ -170,23 +169,155 @@ export const VideoModule: ModuleDefinition<VideoProps> = {
   },
 }
 
+// ---------------------------------------------------------------------------
+// YouTube — facade render
+// ---------------------------------------------------------------------------
+
+interface YoutubeRenderInput {
+  youtubeId: string
+  autoplay: boolean
+  /** Raw author-set poster URL (already escapeProps-passed). */
+  posterUrl: string
+  /** Resolved poster asset (variants, intrinsic dims) if the publisher pre-pass ran. */
+  posterMedia: RenderResolvedMedia | null
+}
+
 /**
- * Poster picker — choose the smallest WebP variant that's still ≥ the
- * asset's intrinsic width. Targets sharp display without shipping a 4 K
- * still for a 1080 p video. Returns `null` when no usable variant exists
- * (caller falls back to the raw publicPath).
+ * Emit a YouTube iframe.
+ *
+ * With a poster: wrap the iframe in a `<div>` that also contains a
+ * responsive `<img>` of the poster. The poster paints immediately; the
+ * iframe is `loading="lazy"` so YouTube's player network requests only
+ * fire when the element is in the viewport. Once the iframe loads, it
+ * sits on top of the poster (CSS z-stack) and the visitor sees the real
+ * player. Zero JS in the published HTML — pure native browser behaviour.
+ *
+ * Without a poster: emit just the iframe, also `loading="lazy"`.
+ */
+function renderYoutube(input: YoutubeRenderInput): { html: string; css?: string } {
+  const embedSrc = youtubeEmbedUrl(input.youtubeId, input.autoplay)
+  if (!embedSrc) return { html: '' }
+
+  const iframeAttrs = [
+    `src="${embedSrc}"`,
+    `title="YouTube video"`,
+    `loading="lazy"`,
+    `frameborder="0"`,
+    `allow="autoplay; encrypted-media; fullscreen"`,
+    `allowfullscreen`,
+  ]
+  const iframeHtml = `<iframe ${iframeAttrs.join(' ')}></iframe>`
+
+  if (!input.posterUrl && !input.posterMedia) {
+    return { html: iframeHtml }
+  }
+
+  // Poster aspect target — derives the variant pick. YouTube embeds are
+  // 16:9 by default, so 1280 is the sensible "rendered hero width" hint.
+  const posterTargetWidth = input.posterMedia?.width ?? 1280
+  const posterSrc =
+    pickPosterVariantUrl(input.posterMedia, posterTargetWidth)
+    ?? safeUrl(input.posterUrl)
+
+  if (!posterSrc) {
+    // Poster prop set but URL didn't survive safeUrl — fall back to
+    // bare iframe rather than emitting an `<img src>` we can't trust.
+    return { html: iframeHtml }
+  }
+
+  const posterSrcset = input.posterMedia ? buildPosterSrcset(input.posterMedia) : null
+  const posterWidth = input.posterMedia?.width ?? null
+  const posterHeight = input.posterMedia?.height ?? null
+
+  const imgAttrs: string[] = [
+    `class="bv-yt-poster"`,
+    `src="${posterSrc}"`,
+    `alt=""`,
+    `loading="eager"`,
+    `fetchpriority="high"`,
+    `decoding="async"`,
+  ]
+  if (posterSrcset) {
+    imgAttrs.push(`srcset="${posterSrcset}"`, `sizes="100vw"`)
+  }
+  if (posterWidth !== null) imgAttrs.push(`width="${posterWidth}"`)
+  if (posterHeight !== null) imgAttrs.push(`height="${posterHeight}"`)
+
+  const html =
+    `<div class="bv-yt">`
+    + `<img ${imgAttrs.join(' ')}>`
+    + `<iframe class="bv-yt-frame" ${iframeAttrs.join(' ')}></iframe>`
+    + `</div>`
+
+  return { html, css: YOUTUBE_FACADE_CSS }
+}
+
+// Scoped to `.bv-yt` so the publisher's per-moduleId CSS dedup applies
+// (one block per page, not per instance). Constraint #310: this string
+// is props-independent — no template interpolation of `props.*`.
+const YOUTUBE_FACADE_CSS = `
+.bv-yt {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background-color: #000;
+  overflow: hidden;
+}
+.bv-yt > .bv-yt-poster,
+.bv-yt > .bv-yt-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  border: 0;
+}
+.bv-yt > .bv-yt-poster {
+  object-fit: cover;
+}
+.bv-yt > .bv-yt-frame {
+  background: transparent;
+  z-index: 1;
+}
+`.trim()
+
+// ---------------------------------------------------------------------------
+// Poster helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Pick the smallest variant ≥ the asset's intrinsic width (or the
+ * caller's target hint). Returns `null` when no usable URL is available.
  *
  * `safeUrl` is applied so the result is HTML-attribute-safe.
  */
-function pickPosterVariantUrl(media: RenderResolvedMedia | null): string | null {
+function pickPosterVariantUrl(
+  media: RenderResolvedMedia | null,
+  targetWidth: number | null,
+): string | null {
   if (!media) return null
   if (!media.variants.length) {
     return media.publicPath ? safeUrl(media.publicPath) : null
   }
-  const target = media.width ?? 1280
+  const target = targetWidth ?? media.width ?? 1280
   const ladder = media.variants.slice().sort((a, b) => a.width - b.width)
   const pick = ladder.find((v) => v.width >= target) ?? ladder[ladder.length - 1]
   return safeUrl(pick.path)
+}
+
+/**
+ * Build a `srcset` attribute from the variant ladder, plus the original
+ * as the largest entry (so high-DPI displays can pick the full file).
+ */
+function buildPosterSrcset(media: RenderResolvedMedia): string | null {
+  if (!media.variants.length) return null
+  const entries = media.variants
+    .slice()
+    .sort((a, b) => a.width - b.width)
+    .map((v) => `${safeUrl(v.path)} ${v.width}w`)
+  if (media.width) entries.push(`${safeUrl(media.publicPath)} ${media.width}w`)
+  return entries.join(', ')
 }
 
 registry.registerOrReplace(VideoModule)

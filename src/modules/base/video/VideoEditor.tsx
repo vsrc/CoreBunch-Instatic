@@ -11,21 +11,24 @@
  *   - the same `playsinline` / `autoplay` / `loop` / `muted` /
  *     `controls` props.
  *
+ * For YouTube URLs the canvas paints the responsive poster on top of a
+ * `loading="lazy"` iframe — same JS-free facade the published HTML
+ * uses, so authors get an honest preview of what visitors will see.
+ *
  * Component-only file so React Fast Refresh can hot-patch edits without
- * re-running module registration. Per Constraint #309, this file MUST NOT
- * export non-component values — `youtubeEmbedUrl` is duplicated in
- * `index.ts` for the publisher render path.
+ * re-running module registration. The `youtube.ts` sibling owns the URL
+ * helpers shared with `index.ts`.
  */
 import React, { useMemo } from 'react'
+import type { CSSProperties } from 'react'
 import type { ModuleComponentProps } from '@core/module-engine/types'
-import { cn } from '@ui/cn'
 import { useCmsMediaAssetByPath } from '@admin/pages/media/hooks/useCmsMediaAssetByPath'
-import { pickVariantUrl } from '@admin/pages/media/utils/variants'
-import styles from './video.module.css'
+import { buildVariantSrcset, pickVariantUrl } from '@admin/pages/media/utils/variants'
+import { CanvasModulePlaceholder } from '@ui/components/CanvasModulePlaceholder'
+import { VideoSolidIcon } from 'pixel-art-icons/icons/video-solid'
+import { parseYoutubeId, youtubeEmbedUrl } from './youtube'
 
 interface VideoProps extends Record<string, unknown> {
-  source: 'media' | 'youtube'
-  youtubeId: string
   videoUrl: string
   poster: string
   autoplay: boolean
@@ -42,61 +45,127 @@ interface VideoProps extends Record<string, unknown> {
 // target.
 const CANVAS_CSS_WIDTH = 480
 
-function youtubeEmbedUrl(id: unknown, autoplay: unknown): string {
-  const safeId = encodeURIComponent(String(id ?? '').trim())
-  if (!safeId) return ''
-  return `https://www.youtube.com/embed/${safeId}${autoplay ? '?autoplay=1' : ''}`
+// Inline styles for the YouTube facade — match the published CSS in
+// `index.ts`. The video module has no `.module.css` (the canvas surface
+// lives entirely in this component), so the few rules needed are
+// co-located as typed style objects.
+const FACADE_WRAP_STYLE: CSSProperties = {
+  position: 'relative',
+  display: 'block',
+  width: '100%',
+  aspectRatio: '16 / 9',
+  backgroundColor: '#000',
+  overflow: 'hidden',
+}
+const FACADE_LAYER_STYLE: CSSProperties = {
+  position: 'absolute',
+  inset: 0,
+  width: '100%',
+  height: '100%',
+  display: 'block',
+  border: 0,
+}
+const FACADE_POSTER_STYLE: CSSProperties = { ...FACADE_LAYER_STYLE, objectFit: 'cover' }
+const FACADE_FRAME_STYLE: CSSProperties = { ...FACADE_LAYER_STYLE, background: 'transparent', zIndex: 1 }
+// Transparent click-shield rendered on top of the iframe in the canvas
+// ONLY. The iframe has its own browsing context — even when we set
+// `pointer-events: none` on it, the YouTube player can still intercept
+// hover / wheel / focus in ways that block module selection. The shield
+// is a normal DOM element above the iframe, so canvas clicks bubble up
+// to the NodeRenderer wrapper cleanly. This element is editor-only —
+// the publisher's `render()` in index.ts does not emit it.
+const FACADE_SHIELD_STYLE: CSSProperties = {
+  ...FACADE_LAYER_STYLE,
+  zIndex: 2,
+  background: 'transparent',
+  cursor: 'pointer',
 }
 
 export const VideoEditor: React.FC<ModuleComponentProps<VideoProps>> = ({ props, mcClassName }) => {
-  const isYoutube = props.source === 'youtube'
+  const youtubeId = useMemo(() => parseYoutubeId(props.videoUrl || ''), [props.videoUrl])
 
-  // Resolve both assets in parallel via the per-path cache — same path
-  // ImageEditor uses, so 50 videos on a page share one fetch each.
-  const videoAsset = useCmsMediaAssetByPath(!isYoutube ? props.videoUrl || null : null)
-  const posterAsset = useCmsMediaAssetByPath(!isYoutube ? props.poster || null : null)
+  // Resolve both assets in parallel via the per-path cache. For YouTube
+  // URLs the videoUrl isn't a library asset, so that lookup returns null —
+  // harmless.
+  const videoAsset = useCmsMediaAssetByPath(!youtubeId ? props.videoUrl || null : null)
+  const posterAsset = useCmsMediaAssetByPath(props.poster || null)
 
   const posterUrl = useMemo(() => {
     if (!posterAsset) return props.poster || null
     return pickVariantUrl(posterAsset, CANVAS_CSS_WIDTH)
   }, [posterAsset, props.poster])
 
+  const posterSrcset = useMemo(
+    () => (posterAsset ? buildVariantSrcset(posterAsset) ?? null : null),
+    [posterAsset],
+  )
+
   const intrinsic = useMemo(() => {
     if (!videoAsset) return null
     return { width: videoAsset.width ?? undefined, height: videoAsset.height ?? undefined }
   }, [videoAsset])
 
-  if (isYoutube) {
-    const src = youtubeEmbedUrl(props.youtubeId, props.autoplay)
-    if (!src) {
+  // ─── YouTube ────────────────────────────────────────────────────────────
+  if (youtubeId) {
+    const src = youtubeEmbedUrl(youtubeId, props.autoplay)
+    if (posterUrl) {
       return (
-        <div className={cn(styles.placeholder, mcClassName)}>
-          <span className={styles.playIcon}>Play</span>
-          <span>YouTube ID required</span>
+        <div className={mcClassName} style={FACADE_WRAP_STYLE}>
+          <img
+            src={posterUrl}
+            srcSet={posterSrcset ?? undefined}
+            sizes={posterSrcset ? '100vw' : undefined}
+            alt=""
+            loading="eager"
+            decoding="async"
+            style={FACADE_POSTER_STYLE}
+          />
+          <iframe
+            src={src}
+            title="YouTube video"
+            loading="lazy"
+            frameBorder="0"
+            allow="autoplay; encrypted-media; fullscreen"
+            allowFullScreen
+            style={FACADE_FRAME_STYLE}
+          />
+          {/* Editor-only click-shield — see FACADE_SHIELD_STYLE comment. */}
+          <span aria-hidden="true" style={FACADE_SHIELD_STYLE} />
         </div>
       )
     }
     return (
-      <iframe
-        className={mcClassName}
-        src={src}
-        title="YouTube video"
-        frameBorder="0"
-        allow="autoplay; encrypted-media; fullscreen"
-        allowFullScreen
-      />
-    )
-  }
-
-  if (!props.videoUrl) {
-    return (
-      <div className={cn(styles.placeholder, mcClassName)}>
-        <span className={styles.playIcon}>Play</span>
-        <span>Video required</span>
+      <div className={mcClassName} style={FACADE_WRAP_STYLE}>
+        <iframe
+          src={src}
+          title="YouTube video"
+          loading="lazy"
+          frameBorder="0"
+          allow="autoplay; encrypted-media; fullscreen"
+          allowFullScreen
+          style={FACADE_FRAME_STYLE}
+        />
+        {/* Editor-only click-shield — even with `.nodeWrapper iframe`
+            pointer-events:none, YouTube's player can still swallow
+            canvas interaction. The shield guarantees clicks reach the
+            NodeRenderer wrapper so the module stays selectable. */}
+        <span aria-hidden="true" style={FACADE_SHIELD_STYLE} />
       </div>
     )
   }
 
+  // ─── No URL yet ─────────────────────────────────────────────────────────
+  if (!props.videoUrl) {
+    return (
+      <CanvasModulePlaceholder
+        className={mcClassName}
+        icon={<VideoSolidIcon size={16} />}
+        label="No video selected"
+      />
+    )
+  }
+
+  // ─── Uploaded / external video ──────────────────────────────────────────
   return (
     <video
       className={mcClassName}

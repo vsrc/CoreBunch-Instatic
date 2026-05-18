@@ -117,7 +117,6 @@ export function withBannedGlobals<T>(fn: () => T): T {
  * satisfies the condition (so the prop is visible / active in render()).
  *
  * Used by the URL-prop conformance test to ensure conditional URL props
- * (e.g. base.video's `videoUrl` with `condition: { field: 'source', eq: 'url' }`)
  * are actually rendered into HTML, making the safeUrl() call testable.
  *
  * Handles: eq, in, and, or. For notEq/notIn (hard to satisfy generically) returns {}.
@@ -282,9 +281,8 @@ export function runModuleConformanceSuite(def: AnyModuleDefinition): void {
     // This confirms safeUrl() (or equivalent) is CALLED at render time — not just
     // imported. The base.video bug (#445) would have been caught by this test.
     //
-    // If a URL prop has a declarative condition (e.g. videoUrl requires source==='url'),
-    // we activate that condition so the URL is actually rendered into HTML, making
-    // the safeUrl() call exercisable.
+    // If a URL prop has a declarative condition, we activate that condition so
+    // the URL is actually rendered into HTML, making the safeUrl() call exercisable.
     //
     // When the module does NOT render the URL in a given configuration, the unsafe
     // scheme won't appear in the output anyway — the test passes correctly.

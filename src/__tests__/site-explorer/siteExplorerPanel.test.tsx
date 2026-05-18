@@ -315,8 +315,6 @@ describe('SiteExplorerPanel', () => {
       id: 'video-node',
       moduleId: 'base.video',
       props: {
-        source: 'youtube',
-        youtubeId: '',
         videoUrl: '',
         autoplay: false,
         loop: false,
@@ -377,7 +375,6 @@ describe('SiteExplorerPanel', () => {
       fireEvent.click(screen.getByRole('menuitem', { name: /use in selected video/i }))
 
       const videoProps = useEditorStore.getState().site?.pages[0]?.nodes['video-node']?.props
-      expect(videoProps?.source).toBe('media')
       expect(videoProps?.videoUrl).toBe('/uploads/intro.mp4')
     } finally {
       globalThis.fetch = originalFetch
