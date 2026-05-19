@@ -28,20 +28,30 @@ describe('admin CMS route wiring', () => {
   })
 
   it('gates the CMS editor behind setup and login checks', () => {
+    // AdminEntry is the orchestrator: it consumes the boot hook (which
+    // resolves setup status + current user) and dispatches to the pre-auth
+    // form or the authenticated shell.
     const admin = readFileSync(join(root, 'src/admin/AdminEntry.tsx'), 'utf8')
+    const boot = readFileSync(join(root, 'src/admin/preauth/useAdminBoot.ts'), 'utf8')
+    const preAuth = readFileSync(join(root, 'src/admin/preauth/AdminPreAuthForm.tsx'), 'utf8')
 
-    expect(admin).toContain('getCmsSetupStatus')
-    expect(admin).toContain('getCurrentCmsUser')
-    expect(admin).toContain('setupCms')
-    expect(admin).toContain('loginCms')
+    // Boot hook is the only place that runs the unauthenticated probes.
+    expect(boot).toContain('getCmsSetupStatus')
+    expect(boot).toContain('getCurrentCmsUser')
+
+    // Pre-auth form is the only place that submits credentials.
+    expect(preAuth).toContain('setupCms')
+    expect(preAuth).toContain('loginCms')
+
+    // Orchestrator still owns the session provider and page dispatch.
     expect(admin).toContain('AdminSessionProvider')
     expect(admin).toContain('<SitePage />')
     expect(admin).toContain('<ContentPage />')
   })
 
   it('uses a submit button for setup and login forms', () => {
-    const admin = readFileSync(join(root, 'src/admin/AdminEntry.tsx'), 'utf8')
+    const preAuth = readFileSync(join(root, 'src/admin/preauth/AdminPreAuthForm.tsx'), 'utf8')
 
-    expect(admin).toContain('type="submit"')
+    expect(preAuth).toContain('type="submit"')
   })
 })

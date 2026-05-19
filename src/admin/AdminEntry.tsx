@@ -1,27 +1,14 @@
-import { lazy, Suspense, useEffect, useId, useState } from 'react'
-import type { FormEvent } from 'react'
-import { Button } from '@ui/components/Button'
-import { Input } from '@ui/components/Input'
-import { DatabaseSolidIcon } from 'pixel-art-icons/icons/database-solid'
-import { LoaderIcon } from 'pixel-art-icons/icons/loader'
-import {
-  getCmsPublicSite,
-  getCmsSetupStatus,
-  getCurrentCmsUser,
-  loginCms,
-  setupCms,
-  verifyCmsMfa,
-  type CmsCurrentUser,
-  type CmsPublicSite,
-} from '@core/persistence'
+import { lazy, Suspense, useState } from 'react'
+import type { CmsCurrentUser } from '@core/persistence'
 import { AppLoadingScreen } from './AppLoadingScreen'
 import type { AdminWorkspace } from './workspace'
 import { AdminSessionProvider } from './session'
 import { StepUpProvider } from './shared/StepUp'
 import { canAccessWorkspace, firstAccessibleWorkspace, workspacePath } from './access'
-import { Navigate } from './lib/routing'
-import { useInRouterContext } from './lib/routing'
+import { Navigate, useInRouterContext } from './lib/routing'
 import { SpotlightRoot } from './spotlight'
+import { AdminPreAuthForm, type PreAuthPhase } from './preauth/AdminPreAuthForm'
+import { useAdminBoot } from './preauth/useAdminBoot'
 import styles from './AdminEntry.module.css'
 
 // Section pages are split into per-workspace chunks so that admins who only
@@ -58,263 +45,42 @@ const DataPage = lazy(() =>
   import('./pages/data/DataPage').then((m) => ({ default: m.DataPage })),
 )
 
-type AdminPhase = 'loading' | 'setup' | 'login' | 'mfa' | 'editor'
 type AdminSection = AdminWorkspace
+
+// After boot, the pre-auth form can lift us into MFA or into the editor.
+// `null` means "follow whatever the boot hook resolved to" — the form has
+// not produced a transition yet.
+type PreAuthOverride =
+  | { phase: PreAuthPhase }
+  | { phase: 'editor'; user: CmsCurrentUser }
 
 interface AdminEntryProps {
   section?: AdminSection
 }
 
 export default function AdminEntry({ section = 'site' }: AdminEntryProps) {
-  const [phase, setPhase] = useState<AdminPhase>('loading')
-  const [siteName, setSiteName] = useState('My Site')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [mfaCode, setMfaCode] = useState('')
-  const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [currentUser, setCurrentUser] = useState<CmsCurrentUser | null>(null)
-  // Operator-provided site identity (logo + name) shown on the unauthenticated
-  // login / setup / MFA screens. Falls back to `{ null, null }` when the
-  // install hasn't picked a favicon — the brand row then renders the default
-  // DatabaseSolidIcon + "Page Builder CMS" text.
-  const [publicSite, setPublicSite] = useState<CmsPublicSite>({ name: null, faviconUrl: null })
-  const siteNameId = useId()
-  const emailId = useId()
-  const passwordId = useId()
-  const mfaCodeId = useId()
+  const boot = useAdminBoot()
+  const [override, setOverride] = useState<PreAuthOverride | null>(null)
 
-  useEffect(() => {
-    let cancelled = false
+  if (boot.status === 'loading') return <AppLoadingScreen />
 
-    async function loadAdminState() {
-      // Site identity (logo + name) is rendered on every pre-auth phase.
-      // Fetched in parallel with setup status / current-user so the brand
-      // row hydrates as soon as the network resolves — never blocks login.
-      void getCmsPublicSite()
-        .then((next) => {
-          if (!cancelled) setPublicSite(next)
-        })
-        .catch(() => {
-          // Brand row falls back to the default mark on failure.
-        })
+  const livePhase = override?.phase ?? boot.phase
+  const liveUser =
+    override?.phase === 'editor' ? override.user : boot.currentUser
 
-      try {
-        const status = await getCmsSetupStatus()
-        if (cancelled) return
-
-        if (status.needsSetup) {
-          setPhase('setup')
-          return
-        }
-
-        try {
-          const user = await getCurrentCmsUser()
-          if (!cancelled) {
-            setCurrentUser(user)
-            setPhase('editor')
-          }
-        } catch (_err) {
-          // No active admin session; show the login form.
-          if (!cancelled) {
-            setCurrentUser(null)
-            setPhase('login')
-          }
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'CMS is unavailable')
-          setPhase('login')
-        }
-      }
-    }
-
-    void loadAdminState()
-    return () => { cancelled = true }
-  }, [])
-
-  async function handleSetup(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (password.length < 12) {
-      setError('Password must be at least 12 characters')
-      return
-    }
-
-    setSubmitting(true)
-    setError(null)
-    try {
-      await setupCms({ siteName, email, password })
-      await loginCms({ email, password })
-      setCurrentUser(await getCurrentCmsUser())
-      setPhase('editor')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Setup failed')
-    } finally {
-      setSubmitting(false)
-    }
+  if (livePhase === 'editor') {
+    if (!liveUser) return <AppLoadingScreen />
+    return <AuthenticatedAdmin section={section} currentUser={liveUser} />
   }
-
-  async function handleLogin(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    setSubmitting(true)
-    setError(null)
-    try {
-      const result = await loginCms({ email, password })
-      if (result.mfaRequired) {
-        setPassword('')
-        setMfaCode('')
-        setPhase('mfa')
-        return
-      }
-      setCurrentUser(await getCurrentCmsUser())
-      setPhase('editor')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed')
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  async function handleMfaVerify(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    setSubmitting(true)
-    setError(null)
-    try {
-      await verifyCmsMfa({ code: mfaCode })
-      setCurrentUser(await getCurrentCmsUser())
-      setMfaCode('')
-      setPhase('editor')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'MFA verification failed')
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  if (phase === 'loading') return <AppLoadingScreen />
-  if (phase === 'editor') {
-    if (!currentUser) return <AppLoadingScreen />
-    return <AuthenticatedAdmin section={section} currentUser={currentUser} />
-  }
-
-  const isSetup = phase === 'setup'
-  const isMfa = phase === 'mfa'
-  const title = isSetup ? 'Set Up CMS' : isMfa ? 'Two-Factor Authentication' : 'Admin Login'
-  const submitLabel =
-    submitting ? (isSetup ? 'Setting up' : isMfa ? 'Verifying' : 'Signing in') :
-    isSetup ? 'Create Admin' :
-    isMfa ? 'Verify' :
-    'Sign In'
-
-  // Pre-auth brand row: when the install has picked a favicon, render it
-  // in place of the default icon AND swap the "Page Builder CMS" label for
-  // the operator-configured site name. When neither is set, keep the
-  // default mark + product name so a fresh clone still looks like itself.
-  const brandLabel = publicSite.name ?? 'Page Builder CMS'
 
   return (
-    <main className={styles.page}>
-      <section className={styles.panel} aria-labelledby="admin-entry-title">
-        <div className={styles.brandRow}>
-          {publicSite.faviconUrl ? (
-            <img
-              className={styles.brandFavicon}
-              src={publicSite.faviconUrl}
-              alt=""
-              aria-hidden="true"
-              draggable={false}
-            />
-          ) : (
-            <div className={styles.brandIcon} aria-hidden="true">
-              <DatabaseSolidIcon size={16} />
-            </div>
-          )}
-          <span>{brandLabel}</span>
-        </div>
-
-        <h1 id="admin-entry-title" className={styles.title}>{title}</h1>
-
-        <form
-          className={styles.form}
-          onSubmit={isSetup ? handleSetup : isMfa ? handleMfaVerify : handleLogin}
-        >
-          {isMfa ? (
-            <label className={styles.field} htmlFor={mfaCodeId}>
-              <span>Authentication code</span>
-              <Input
-                id={mfaCodeId}
-                value={mfaCode}
-                onChange={(event) => setMfaCode(event.target.value)}
-                required
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                data-testid="admin-mfa-code"
-              />
-            </label>
-          ) : isSetup && (
-            <label className={styles.field} htmlFor={siteNameId}>
-              <span>Site name</span>
-              <Input
-                id={siteNameId}
-                value={siteName}
-                onChange={(event) => setSiteName(event.target.value)}
-                required
-                autoComplete="organization"
-              />
-            </label>
-          )}
-
-          {!isMfa && (
-            <>
-              <label className={styles.field} htmlFor={emailId}>
-                <span>Email</span>
-                <Input
-                  id={emailId}
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  required
-                  type="email"
-                  autoComplete="email"
-                />
-              </label>
-
-              <label className={styles.field} htmlFor={passwordId}>
-                <span>Password</span>
-                <Input
-                  id={passwordId}
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  required
-                  minLength={isSetup ? 12 : undefined}
-                  type="password"
-                  autoComplete={isSetup ? 'new-password' : 'current-password'}
-                />
-              </label>
-            </>
-          )}
-
-          {error && (
-            <p role="alert" className={styles.error}>
-              {error}
-            </p>
-          )}
-
-          <Button
-            variant="primary"
-            size="md"
-            type="submit"
-            fullWidth
-            disabled={submitting}
-            aria-busy={submitting}
-          >
-            {submitting && (
-              <LoaderIcon size={14} className={styles.spinIcon} aria-hidden="true" />
-            )}
-            <span>{submitLabel}</span>
-          </Button>
-        </form>
-      </section>
-    </main>
+    <AdminPreAuthForm
+      phase={livePhase}
+      publicSite={boot.publicSite}
+      initialError={boot.initialError}
+      onPhaseChange={(phase) => setOverride({ phase })}
+      onAuthenticated={(user) => setOverride({ phase: 'editor', user })}
+    />
   )
 }
 

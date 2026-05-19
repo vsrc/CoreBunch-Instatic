@@ -1,3 +1,8 @@
+/* Shared "auth screen" panel styles used by both the unauthenticated
+   pre-auth form (login / setup / MFA) and the authenticated "access
+   unavailable" notice. Pre-auth-only styles (brand row, form, field,
+   spinner) live in preauth/AdminPreAuthForm.module.css. */
+
 .page {
   display: grid;
   min-height: 100vh;
@@ -17,38 +22,6 @@
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.42);
 }
 
-.brandRow {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 20px;
-  color: var(--editor-text-secondary);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.brandIcon {
-  display: grid;
-  width: 28px;
-  height: 28px;
-  place-items: center;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--editor-text);
-}
-
-/* Operator-provided favicon used as the login brand mark. Object-fit cover
-   so the asset crops cleanly regardless of aspect ratio; the rounded tile
-   keeps it visually paired with the default brandIcon background. */
-.brandFavicon {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  object-fit: cover;
-  flex-shrink: 0;
-  user-select: none;
-}
-
 .title {
   margin: 0 0 18px;
   color: var(--editor-text-bright);
@@ -57,38 +30,9 @@
   letter-spacing: 0;
 }
 
-.form {
-  display: grid;
-  gap: 14px;
-}
-
-.field {
-  display: grid;
-  gap: 6px;
-  color: var(--editor-text-secondary);
-  font-size: 12px;
-  font-weight: 600;
-}
-
 .error {
   margin: 0;
   color: var(--editor-danger-lighter);
   font-size: 12px;
   line-height: 1.45;
-}
-
-@keyframes pbAdminSpin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.spinIcon {
-  animation: pbAdminSpin 0.8s linear infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .spinIcon {
-    animation: none;
-  }
 }
