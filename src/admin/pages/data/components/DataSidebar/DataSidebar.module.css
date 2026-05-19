@@ -22,6 +22,21 @@
     gap: 6px;
 }
 
+/*
+ * Ghost variant has no built-in `aria-pressed="true"` style, so the active
+ * table would only show a transient hover background and be hard to tell
+ * apart from the rest of the list. Layer a surface fill on the selected
+ * row here — same pattern as the `.pill` chips in DataGrid.module.css.
+ */
+.tableButton[aria-pressed="true"] {
+    background: var(--editor-surface);
+    color: var(--editor-text-bright);
+}
+
+.tableButton[aria-pressed="true"]:hover {
+    background: var(--editor-surface);
+}
+
 .tableLabel {
     flex: 1;
     overflow: hidden;
@@ -66,4 +81,21 @@
 .footer {
     padding: 6px 8px 8px;
     flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
 }
+
+.footerButton {
+    /* explicit margin for the create button above the transfer actions */
+}
+
+.transferActions {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    border-top: 1px solid var(--editor-border);
+    padding-top: 4px;
+    margin-top: 2px;
+}
+

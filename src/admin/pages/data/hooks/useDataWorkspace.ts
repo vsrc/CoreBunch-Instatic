@@ -144,10 +144,16 @@ export function useDataWorkspace(initialTableSlug?: string): DataWorkspace {
   // ---------------------------------------------------------------------------
   // Table actions
   // ---------------------------------------------------------------------------
+  //
+  // Row state (rows / rowsError / loadingRows) is reset by the render-time
+  // `trackedTableId !== selectedTableId` block above whenever the selection
+  // actually changes — we MUST NOT pre-clear rows here, otherwise re-clicking
+  // the already-selected table (selectedTableId stays the same) would wipe
+  // rows without re-running the load-rows effect, leaving an empty grid that
+  // only recovers when the user navigates away and back.
   const selectTable = useCallback((tableId: string | null) => {
     setSelectedTableId(tableId)
     setSelectedRowId(null)
-    setRows([])
   }, [])
 
   // loadTables / loadRows are only called from event-handler callbacks

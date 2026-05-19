@@ -26,10 +26,10 @@ import {
 import { Button } from '@ui/components/Button'
 import { Checkbox } from '@ui/components/Checkbox'
 import { EmptyState } from '@ui/components/EmptyState'
+import { FloatingActionBar } from '@ui/components/FloatingActionBar'
 import { SearchBar } from '@ui/components/SearchBar'
 import { ArrowDownIcon } from 'pixel-art-icons/icons/arrow-down'
 import { ChevronDownIcon } from 'pixel-art-icons/icons/chevron-down'
-import { CloseIcon } from 'pixel-art-icons/icons/close'
 import { PlusIcon } from 'pixel-art-icons/icons/plus'
 import { TrashSolidIcon } from 'pixel-art-icons/icons/trash-solid'
 import type {
@@ -67,6 +67,8 @@ export interface DataGridProps {
   onOpenRow?: (rowId: string) => void
   /** Set a row's status. PostType only — enables bulk publish / unpublish. */
   onSetRowStatus?: (rowId: string, status: DataRowStatus) => Promise<DataRow>
+  /** Called from the bulk-action bar's "Export" button. */
+  onExportRows?: (rowIds: string[]) => void
 }
 
 // ---------------------------------------------------------------------------
@@ -162,6 +164,7 @@ export function DataGrid({
   onEditInContent,
   onOpenRow,
   onSetRowStatus,
+  onExportRows,
 }: DataGridProps): ReactElement {
   const isPostType = table.kind === 'postType'
   const isPageTable = table.kind === 'page'
@@ -674,35 +677,45 @@ export function DataGrid({
               </div>
             )}
 
-            {/* ── Empty state ────────────────────────────────────────────── */}
+            {/* ── Empty state ──────────────────────────────────────────────
+              * Outer span fills the full grid row (`grid-column: 1 / -1`).
+              * The inner EmptyState uses `position: sticky; left: 14px` so
+              * the message cluster stays pinned to the left edge of the
+              * scroll viewport during horizontal scroll — matching the
+              * primary cell + group header label behaviour. `plain` drops
+              * the card background so the table surface shows through.
+              */}
             {!loading && rowCount === 0 && (
-              <EmptyState
-                title={
-                  query.trim().length > 0 || statusFilter !== 'all'
-                    ? `No ${table.pluralLabel.toLowerCase()} match this view`
-                    : `No ${table.pluralLabel.toLowerCase()} yet`
-                }
-                description={
-                  readOnly
-                    ? undefined
-                    : query.trim().length > 0 || statusFilter !== 'all'
-                      ? 'Try clearing the search or switching views.'
-                      : 'Add the first row to get started.'
-                }
-                action={
-                  !readOnly && query.trim().length === 0 && statusFilter === 'all' ? (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => { void onAddRow() }}
-                    >
-                      <PlusIcon size={12} aria-hidden="true" />
-                      Add row
-                    </Button>
-                  ) : undefined
-                }
-                className={styles.emptyStateSpan}
-              />
+              <div className={styles.emptyStateSpan}>
+                <EmptyState
+                  plain
+                  title={
+                    query.trim().length > 0 || statusFilter !== 'all'
+                      ? `No ${table.pluralLabel.toLowerCase()} match this view`
+                      : `No ${table.pluralLabel.toLowerCase()} yet`
+                  }
+                  description={
+                    readOnly
+                      ? undefined
+                      : query.trim().length > 0 || statusFilter !== 'all'
+                        ? 'Try clearing the search or switching views.'
+                        : 'Add the first row to get started.'
+                  }
+                  action={
+                    !readOnly && query.trim().length === 0 && statusFilter === 'all' ? (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => { void onAddRow() }}
+                      >
+                        <PlusIcon size={12} aria-hidden="true" />
+                        Add row
+                      </Button>
+                    ) : undefined
+                  }
+                  className={styles.emptyStateInner}
+                />
+              </div>
             )}
 
             {/* ── Groups + rows ──────────────────────────────────────────── */}
@@ -720,63 +733,62 @@ export function DataGrid({
       )}
 
       {/* ── Floating bulk action bar ─────────────────────────────────────── */}
-      {selectedCount > 0 && (
-        <div className={styles.bulkBar} role="toolbar" aria-label="Bulk actions">
-          <span className={styles.bulkBarCount}>
-            <strong>{selectedCount}</strong> selected
-          </span>
-          <span className={styles.bulkBarSep} aria-hidden="true" />
-          <div className={styles.bulkBarActions}>
-            {hasPublishWorkflow && onSetRowStatus != null && (
-              <>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  shape="pill"
-                  className={styles.bulkBarBtn}
-                  onClick={() => { void handleBulkSetStatus('published') }}
-                >
-                  Publish
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  shape="pill"
-                  className={styles.bulkBarBtn}
-                  onClick={() => { void handleBulkSetStatus('draft') }}
-                >
-                  Move to draft
-                </Button>
-              </>
-            )}
-            {onDeleteRow != null && (
-              <Button
-                variant="ghost"
-                size="sm"
-                shape="pill"
-                tone="danger"
-                dangerHover
-                className={styles.bulkBarBtn}
-                onClick={handleBulkDelete}
-              >
-                <TrashSolidIcon size={11} aria-hidden="true" />
-                Delete
-              </Button>
-            )}
-          </div>
-          <span className={styles.bulkBarSep} aria-hidden="true" />
+      <FloatingActionBar
+        open={selectedCount > 0}
+        ariaLabel="Bulk row actions"
+        label={<><strong>{selectedCount}</strong> selected</>}
+        onClose={clearSelection}
+        closeLabel="Clear selection"
+      >
+        {hasPublishWorkflow && onSetRowStatus != null && (
+          <>
+            <Button
+              variant="ghost"
+              size="sm"
+              shape="pill"
+              className={styles.bulkBarBtn}
+              onClick={() => { void handleBulkSetStatus('published') }}
+            >
+              Publish
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              shape="pill"
+              className={styles.bulkBarBtn}
+              onClick={() => { void handleBulkSetStatus('draft') }}
+            >
+              Move to draft
+            </Button>
+          </>
+        )}
+        {onExportRows != null && (
           <Button
             variant="ghost"
             size="sm"
-            iconOnly
-            aria-label="Clear selection"
-            tooltip="Clear selection"
-            onClick={clearSelection}
+            shape="pill"
+            className={styles.bulkBarBtn}
+            onClick={() => onExportRows(Array.from(checkedIds))}
           >
-            <CloseIcon size={12} aria-hidden="true" />
+            <ArrowDownIcon size={11} aria-hidden="true" />
+            Export
           </Button>
-        </div>
-      )}
+        )}
+        {onDeleteRow != null && (
+          <Button
+            variant="ghost"
+            size="sm"
+            shape="pill"
+            tone="danger"
+            dangerHover
+            className={styles.bulkBarBtn}
+            onClick={handleBulkDelete}
+          >
+            <TrashSolidIcon size={11} aria-hidden="true" />
+            Delete
+          </Button>
+        )}
+      </FloatingActionBar>
     </div>
   )
 }
