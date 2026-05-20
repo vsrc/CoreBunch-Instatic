@@ -1,0 +1,59 @@
+/**
+ * FloatingActionBar — pill toolbar pinned to the bottom-center of the
+ * viewport.
+ *
+ * Visuals borrowed from the DataGrid bulk-action bar this component
+ * supersedes: dark surface, 1px subtle border, 20px radius, generous
+ * drop shadow + inset top-light for the floating-glass look.
+ */
+
+.bar {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 40px;
+    padding: 0 6px 0 14px;
+    background: var(--editor-surface);
+    border: 1px solid var(--editor-surface-3);
+    border-radius: 20px;
+    box-shadow:
+        0 10px 28px rgba(0, 0, 0, 0.55),
+        inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    /* Above editor panels but below the spotlight palette and global
+       modals. The 50 figure matches the dashboard block picker so the
+       two never collide visually. */
+    z-index: 50;
+    /* Don't let label words wrap onto a second line — the bar's
+       single-row geometry depends on it. Long callers should ellipsize
+       their label content themselves. */
+    white-space: nowrap;
+    max-width: calc(100vw - 32px);
+}
+
+.label {
+    font-size: 12.5px;
+    color: var(--editor-text);
+    font-weight: 500;
+}
+
+.label strong {
+    color: var(--editor-text-bright);
+    font-weight: 600;
+}
+
+.sep {
+    width: 1px;
+    height: 18px;
+    background: var(--editor-border-med);
+    flex-shrink: 0;
+}
+
+.actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}

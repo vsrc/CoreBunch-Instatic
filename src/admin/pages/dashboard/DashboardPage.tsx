@@ -27,6 +27,7 @@ import { AdminPageLayout } from '@admin/layouts/AdminPageLayout'
 import { useAuthenticatedAdminUser } from '@admin/sessionContext'
 import { useAdminNavigate } from '@admin/lib/useAdminNavigate'
 import { Button } from '@ui/components/Button'
+import { FloatingActionBar } from '@ui/components/FloatingActionBar'
 import { bindDashboardWidgetIconResolver } from '@core/plugins/runtime'
 import { useDashboardWidgets } from './hooks/useDashboardWidgets'
 import { useOnboardingState } from './hooks/useOnboardingState'
@@ -65,7 +66,8 @@ export function DashboardPage() {
   const {
     layout,
     addWidget,
-    reorder,
+    setItems,
+    moveWidget,
     resize,
     resizeRows,
     dismissOnboarding,
@@ -96,9 +98,9 @@ export function DashboardPage() {
     // inside the filter above, but a separate reconciliation effect
     // keeps render pure.
     if (visibleItems.length !== layout.items.length) {
-      reorder(visibleItems)
+      setItems(visibleItems)
     }
-  }, [visibleItems, layout.items, reorder])
+  }, [visibleItems, layout.items, setItems])
 
   const activeKeys = visibleItems.map((i) => i.id)
   const showOnboarding = !layout.onboardingDismissed && !facts.loading
@@ -127,18 +129,6 @@ export function DashboardPage() {
 
       {showOnboarding && (
         <OnboardingPanel facts={facts} onDismiss={dismissOnboarding} />
-      )}
-
-      {editing && (
-        <div className={styles.editBanner}>
-          <span>
-            <b>Customize mode.</b> Drag tiles to reorder, drag the right edge to resize, or open the
-            block library to add new widgets.
-          </span>
-          <Button variant="primary" size="sm" onClick={() => setPickerOpen(true)}>
-            <PlusIcon size={11} aria-hidden="true" /> Add block
-          </Button>
-        </div>
       )}
 
       <div className={styles.gridHeader}>
@@ -179,7 +169,7 @@ export function DashboardPage() {
         items={visibleItems}
         definitions={definitionsById}
         editing={editing}
-        onReorder={reorder}
+        onMove={moveWidget}
         onResize={resize}
         onResizeRows={resizeRows}
         onAddBlock={() => setPickerOpen(true)}
@@ -193,6 +183,32 @@ export function DashboardPage() {
           onClose={() => setPickerOpen(false)}
         />
       )}
+
+      {/* Floating customize-mode toolbar — replaces the old inline banner.
+          Same shared primitive the Data page uses for bulk row actions,
+          so the two surfaces share a single floating-bar visual. */}
+      <FloatingActionBar
+        open={editing}
+        ariaLabel="Customize dashboard"
+        label={<><strong>Customize mode</strong> — drag, resize, or add blocks.</>}
+      >
+        <Button
+          variant="ghost"
+          size="sm"
+          shape="pill"
+          onClick={() => setPickerOpen(true)}
+        >
+          <PlusIcon size={11} aria-hidden="true" /> Add block
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          shape="pill"
+          onClick={() => setEditing(false)}
+        >
+          Done
+        </Button>
+      </FloatingActionBar>
     </AdminPageLayout>
   )
 }
