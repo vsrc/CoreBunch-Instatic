@@ -28,7 +28,25 @@
  * Publishes are background jobs; the cost is acceptable.
  */
 
-import { getQuickJS, type QuickJSContext, type QuickJSWASMModule } from 'quickjs-emscripten'
+import { getQuickJS, shouldInterruptAfterDeadline, type QuickJSContext, type QuickJSWASMModule } from 'quickjs-emscripten'
+
+// ---------------------------------------------------------------------------
+// Resource limits — defense against runaway module-pack code.
+//
+// Mirrors the limits applied to full plugin VMs in quickjsHost.ts. The eval
+// deadline is shorter (2 s vs 5 s) because render() functions are simple
+// synchronous transforms with no host I/O — 2 s is still generous.
+// ---------------------------------------------------------------------------
+
+/** 64 MB max heap per module-pack VM. */
+const DEFAULT_MEMORY_LIMIT_BYTES = 64 * 1024 * 1024
+/** 1 MB max stack — plenty for render(), fatal for runaway recursion. */
+const DEFAULT_STACK_SIZE_BYTES = 1 * 1024 * 1024
+/**
+ * 2 second wall-clock deadline per eval call. Set BEFORE each evalCode /
+ * evalString invocation and cleared in a finally block after it returns.
+ */
+const DEFAULT_EVAL_TIMEOUT_MS = 2_000
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -235,14 +253,24 @@ export async function createModulePackVm(args: {
   const wasm = await getWasmModule()
   const ctx = wasm.newContext()
 
+  // Apply per-VM resource limits before any plugin code runs.
+  // setMemoryLimit / setMaxStackSize bind to the runtime; each newContext()
+  // creates its own runtime, so these limits are effectively per-VM.
+  ctx.runtime.setMemoryLimit(DEFAULT_MEMORY_LIMIT_BYTES)
+  ctx.runtime.setMaxStackSize(DEFAULT_STACK_SIZE_BYTES)
+
   try {
     // Evaluate the pack — IIFE wrap maps `export default ...` to a
     // `globalThis.__module_pack = ...` assignment.
     const wrappedSource = ensureModulePackIifeForm(args.packSource)
-    ctx.unwrapResult(ctx.evalCode(wrappedSource, `module-pack:${args.pluginId}`)).dispose()
+    withSyncDeadline(ctx, DEFAULT_EVAL_TIMEOUT_MS, () => {
+      ctx.unwrapResult(ctx.evalCode(wrappedSource, `module-pack:${args.pluginId}`)).dispose()
+    })
 
     // Then the bootstrap (defines __initPack, __renderModule, __previewModule).
-    ctx.unwrapResult(ctx.evalCode(BOOTSTRAP_SOURCE, 'modulepack-bootstrap.js')).dispose()
+    withSyncDeadline(ctx, DEFAULT_EVAL_TIMEOUT_MS, () => {
+      ctx.unwrapResult(ctx.evalCode(BOOTSTRAP_SOURCE, 'modulepack-bootstrap.js')).dispose()
+    })
 
     // Initialize the pack — pulls metadata out, builds the id-keyed lookup.
     const modulesJson = evalString(
@@ -284,16 +312,39 @@ export async function createModulePackVm(args: {
 }
 
 // ---------------------------------------------------------------------------
+// Deadline guard — installs a wall-clock interrupt handler on the runtime
+// for the duration of one synchronous eval, then removes it. The QuickJS VM
+// cooperatively polls the interrupt flag during execution; plugin code stuck
+// in a tight loop is aborted within the deadline.
+//
+// Sync variant of quickjsHost.ts's `withDeadline` — no async pump needed
+// because module-pack render() functions are fully synchronous.
+// ---------------------------------------------------------------------------
+
+function withSyncDeadline<T>(ctx: QuickJSContext, timeoutMs: number, body: () => T): T {
+  const deadline = Date.now() + timeoutMs
+  ctx.runtime.setInterruptHandler(shouldInterruptAfterDeadline(deadline))
+  try {
+    return body()
+  } finally {
+    try { ctx.runtime.removeInterruptHandler() } catch { /* runtime may already be disposed */ }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Sync eval helper — module pack code is fully synchronous (no host calls,
-// no Promises). One-shot evalCode + getString is enough.
+// no Promises). One-shot evalCode + getString is enough. Each call is wrapped
+// in a wall-clock deadline so a runaway render() is aborted cleanly.
 // ---------------------------------------------------------------------------
 
 function evalString(ctx: QuickJSContext, code: string): string {
-  const result = ctx.evalCode(code, 'modulepack-eval.js')
-  const handle = ctx.unwrapResult(result)
-  try {
-    return ctx.getString(handle)
-  } finally {
-    handle.dispose()
-  }
+  return withSyncDeadline(ctx, DEFAULT_EVAL_TIMEOUT_MS, () => {
+    const result = ctx.evalCode(code, 'modulepack-eval.js')
+    const handle = ctx.unwrapResult(result)
+    try {
+      return ctx.getString(handle)
+    } finally {
+      handle.dispose()
+    }
+  })
 }
