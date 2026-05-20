@@ -129,6 +129,21 @@ export const sqliteMigrations: Migration[] = [
         on sessions (user_id, expires_at)
         where revoked_at is null;
 
+      -- ─── User Preferences ─────────────────────────────────────────────────
+      -- Mirror of the PG user_preferences table — see migrations-pg.ts for
+      -- the full rationale. value_json is text here (parsed by the SQLite
+      -- adapter on read thanks to the _json suffix); updated_at is an ISO
+      -- string filled by current_timestamp. The composite primary key gives
+      -- us (user_id, key) uniqueness AND the user_id-prefix lookup index in
+      -- one declaration.
+      create table if not exists user_preferences (
+        user_id    text not null references users(id) on delete cascade,
+        key        text not null,
+        value_json text not null,
+        updated_at text not null default current_timestamp,
+        primary key (user_id, key)
+      );
+
       create table if not exists audit_events (
         id text primary key,
         actor_user_id text references users(id) on delete set null,

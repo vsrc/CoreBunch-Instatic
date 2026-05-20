@@ -1,12 +1,26 @@
 /**
- * useDashboardLayout — persisted state for the dashboard grid + onboarding
- * panel.
+ * useDashboardLayout — server-backed per-user dashboard state.
  *
- * The dashboard is a per-user preference, not a per-site setting — every
- * admin gets to arrange and resize their own widgets. We persist to
- * localStorage so the layout sticks across sessions without round-tripping
- * the server. (When the team-level "shared dashboard preset" feature lands
- * later, it would layer on top by writing into a CMS-side prefs row.)
+ * The dashboard layout is a per-user preference: every admin gets their own
+ * arrangement of widgets, persisted to the CMS database via the
+ * `user_preferences` table. Signing in from a new device restores the
+ * exact same layout — no localStorage, no per-browser drift.
+ *
+ * Flow:
+ *
+ *   • Mount: render the default layout immediately (no white-flash) and
+ *     fire a GET against the server in parallel. If the server has a
+ *     saved layout, swap it in once it arrives. If the user has never
+ *     saved one (404), the default we already rendered IS the answer.
+ *
+ *   • Mutate (addWidget / moveWidget / resize / dismissOnboarding / …):
+ *     update local state immediately (optimistic) and schedule a
+ *     debounced PUT. A burst of mutations during a drag-resize coalesces
+ *     to a single network call.
+ *
+ *   • Saves AFTER the initial GET ONLY. Otherwise the initial render
+ *     would over-write the freshly-fetched server state with the default
+ *     before the GET completes.
  *
  * Layout model — explicit grid positioning
  * ----------------------------------------
@@ -22,44 +36,21 @@
  * item itself is pinned in place during resolution — it never moves
  * away from where the user dropped or resized it to.
  *
- * Schema is validated via TypeBox with `parseJsonWithFallback` so any
- * corrupted blob falls back to the default layout rather than bricking
- * the page.
+ * Schema is validated via TypeBox at both the server boundary AND on
+ * read inside the persistence helpers; corrupted blobs surface as
+ * thrown errors which we log and recover from by keeping the in-memory
+ * default.
  */
-import { useCallback, useEffect, useState } from 'react'
-import { Type, type Static } from '@core/utils/typeboxHelpers'
-import { parseJsonWithFallback } from '@core/utils/jsonValidate'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import {
+  getUserPreference,
+  setUserPreference,
+  type DashboardLayoutPreference,
+} from '@core/persistence/userPreferences'
 
-// Bumped to v3 when explicit `col` / `row` positioning was added. Older
-// v2 entries lacked positions and would all render at (1, 1) on top of
-// each other; resetting to defaults gives them a sane curated layout
-// instead. Older `pb-admin-dashboard-layout-v2` / `-v1` keys are
-// orphaned (no migration helper) since this is per-user UI state, not
-// content.
-const STORAGE_KEY = 'pb-admin-dashboard-layout-v3'
-
-// `col`, `row`, `rows` are all optional ON THE WIRE so older persisted
-// layouts (v2 with only size+rows, v1 with only size) still parse —
-// `normalizeLayout` below fills in defaults. The exported `DashboardItem`
-// type is the normalized runtime shape (all four required).
-const PersistedDashboardItemSchema = Type.Object({
-  id: Type.String(),
-  size: Type.Number(),
-  rows: Type.Optional(Type.Number()),
-  col: Type.Optional(Type.Number()),
-  row: Type.Optional(Type.Number()),
-})
-
-// `onboardingCollapsed` is kept on the persisted schema as optional so
-// older localStorage entries from before the "hide steps" toggle was
-// removed still parse — `normalizeLayout` drops it.
-const PersistedDashboardLayoutSchema = Type.Object({
-  items: Type.Array(PersistedDashboardItemSchema),
-  onboardingDismissed: Type.Boolean(),
-  onboardingCollapsed: Type.Optional(Type.Boolean()),
-})
-
-type PersistedDashboardLayout = Static<typeof PersistedDashboardLayoutSchema>
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 
 export interface DashboardItem {
   id: string
@@ -76,6 +67,12 @@ export interface DashboardItem {
 export interface DashboardLayout {
   items: DashboardItem[]
   onboardingDismissed: boolean
+  /**
+   * Height (in pixels) of the bottom-docked Block library panel. The user
+   * resizes this via the panel's top drag-handle. Persisted per-user so the
+   * panel sticks to its preferred height across reloads and devices.
+   */
+  libraryHeight: number
 }
 
 /**
@@ -106,6 +103,67 @@ export const MIN_COLS = 3
 export const MAX_COLS = 12
 
 /**
+ * Default / clamped sizes for the bottom-docked Block library panel. The
+ * user can drag the top edge to resize between MIN and MAX; the value is
+ * persisted alongside the grid layout.
+ */
+export const LIBRARY_DEFAULT_HEIGHT = 340
+export const LIBRARY_MIN_HEIGHT = 200
+export const LIBRARY_MAX_HEIGHT = 720
+
+/**
+ * Stable id for the grid's single droppable surface. Lives here (rather
+ * than in `DashboardGrid.tsx`) because the page-level `onDragEnd`
+ * handler needs the id and Fast Refresh requires `.tsx` files to export
+ * components only — sharing constants with a sibling component file
+ * goes through the `.ts` neighbour.
+ */
+export const GRID_DROP_ID = '__dashboard_grid__'
+
+/**
+ * Snap a pointer offset (relative to the grid's top-left) to the
+ * nearest `{ col, row }` cell. Used by `DashboardPage`'s `onDragEnd`
+ * for both in-grid moves and library drops.
+ *
+ * We use `EDITING_GRID_GAP` (not `GRID_GAP`) because drag-and-drop
+ * only fires in customize mode, where the CSS widens the gap to 16px
+ * for handle accessibility. The snap math has to use the same value
+ * the layout actually rendered with, or the dropped card lands a
+ * column off after a few rows of drift.
+ */
+export function snapToCell(
+  offsetX: number,
+  offsetY: number,
+  gridWidth: number,
+  widgetSize: number,
+): { col: number; row: number } {
+  const colTrack = (gridWidth - (MAX_COLS - 1) * EDITING_GRID_GAP) / MAX_COLS
+  const colStep = colTrack + EDITING_GRID_GAP
+  const rowStep = GRID_ROW_HEIGHT + EDITING_GRID_GAP
+
+  // `round` snaps to the nearest line rather than `floor`-ing — feels
+  // closer to where the user "aimed" the drop. Clamp into the legal
+  // range so the widget stays inside the grid and within the 12-col
+  // bound given its width.
+  const rawCol = Math.round(offsetX / colStep) + 1
+  const rawRow = Math.round(offsetY / rowStep) + 1
+  const col = Math.max(1, Math.min(MAX_COLS - widgetSize + 1, rawCol))
+  const row = Math.max(1, rawRow)
+  return { col, row }
+}
+
+/**
+ * How long to wait after the most recent mutation before saving to the
+ * server. A drag-resize fires many setState calls; 600ms covers a typical
+ * gesture without making single-click changes feel laggy.
+ */
+const SAVE_DEBOUNCE_MS = 600
+
+// ---------------------------------------------------------------------------
+// Default layout
+// ---------------------------------------------------------------------------
+
+/**
  * Default layout uses ONLY first-party widget ids that the host ships
  * unconditionally. Plugin-owned widgets (Analytics → `visitors` /
  * `top-pages`, future plugins → their own ids) are NOT in the default
@@ -131,6 +189,7 @@ const DEFAULT_LAYOUT: DashboardLayout = {
     { id: 'domain',    col: 7,  row: 13, size: 6,  rows: 3 },
   ],
   onboardingDismissed: false,
+  libraryHeight: LIBRARY_DEFAULT_HEIGHT,
 }
 
 // ---------------------------------------------------------------------------
@@ -151,25 +210,32 @@ function overlaps(a: DashboardItem, b: DashboardItem): boolean {
 }
 
 /**
+ * Public helper — does the proposed rectangle (col/row/size/rows) overlap
+ * any item in the current layout, excluding `excludeId` (typically the
+ * widget currently being dragged so it doesn't collide with itself)?
+ *
+ * Exposed so `DashboardPage`'s `onDragMove` can decide whether to show
+ * the drop-preview ghost — the page invokes `addWidget` / `moveWidget`
+ * only on valid drops, and both of those functions also use this guard
+ * to reject the drop entirely if the destination is occupied.
+ */
+export function hasOverlapAt(
+  items: readonly DashboardItem[],
+  proposed: { col: number; row: number; size: number; rows: number },
+  excludeId: string | null,
+): boolean {
+  for (const item of items) {
+    if (excludeId !== null && item.id === excludeId) continue
+    if (overlaps(item, proposed)) return true
+  }
+  return false
+}
+
+/**
  * Push every item that overlaps `pinned` (or that overlaps an already-pushed
  * item) downward until the layout is overlap-free. The pinned item never
  * moves — that's the whole point: when the user drops or resizes a card,
  * the card stays exactly where they put it and the world bends around it.
- *
- * Algorithm:
- *
- *   1. Add `pinned` to a "settled" set.
- *   2. Sweep the remaining items in increasing (row, col) order.
- *   3. For each item, push its row down until it stops overlapping any
- *      already-settled item, then add it to the settled set.
- *
- * Sorting by (row, col) before the sweep keeps the result deterministic
- * — two different DnD sessions that land in the same final state always
- * produce the same array.
- *
- * The "push down only" choice (never left/right) trades some pack density
- * for predictability: the user already chose a column, so we never
- * silently shift them sideways.
  */
 function resolveCollisions(items: readonly DashboardItem[], pinnedId: string): DashboardItem[] {
   const pinned = items.find((i) => i.id === pinnedId)
@@ -183,31 +249,22 @@ function resolveCollisions(items: readonly DashboardItem[], pinnedId: string): D
   const settled: DashboardItem[] = [{ ...pinned }]
 
   for (const item of others) {
-    // Push `item` downward until it stops colliding with any settled
-    // sibling. Bounded loop guard so a degenerate input can't lock the
-    // tab — in practice resolution converges in 1–2 passes.
     let safety = 200
-    while (settled.some((s) => overlaps(s, item)) && safety-- > 0) {
-      // Find the deepest overlapping settled item and jump just past
-      // its bottom edge. This collapses the worst case from "scan
-      // every row one-by-one" to "one jump per blocker".
-      const blocker = settled
-        .filter((s) => overlaps(s, item))
-        .reduce((deepest, s) => (s.row + s.rows > deepest.row + deepest.rows ? s : deepest))
-      item.row = blocker.row + blocker.rows
+    while (safety-- > 0) {
+      const conflict = settled.find((s) => overlaps(item, s))
+      if (!conflict) break
+      item.row = conflict.row + conflict.rows
     }
     settled.push(item)
   }
 
   // Preserve original `items` order for stable React keys / DOM identity.
-  // The settled array's traversal order is the sorted sweep order, which
-  // is not what the caller passed in.
   const byId = new Map(settled.map((s) => [s.id, s]))
   return items.map((i) => byId.get(i.id) ?? i)
 }
 
 // ---------------------------------------------------------------------------
-// Normalisation (persisted → runtime)
+// Normalisation (server payload → runtime)
 // ---------------------------------------------------------------------------
 
 function normalizeItem(
@@ -218,9 +275,6 @@ function normalizeItem(
     id: item.id,
     size: item.size,
     rows: typeof item.rows === 'number' && item.rows >= MIN_ROWS ? item.rows : MIN_ROWS,
-    // For older layouts that lack `col` / `row`, stack each item in
-    // column 1 with an ever-increasing row — guarantees no overlap so
-    // the collision resolver doesn't have to fix imported data.
     col: typeof item.col === 'number' && item.col >= 1 ? item.col : 1,
     row: typeof item.row === 'number' && item.row >= 1
       ? item.row
@@ -228,32 +282,16 @@ function normalizeItem(
   }
 }
 
-function normalizeLayout(layout: PersistedDashboardLayout): DashboardLayout {
+function clampLibraryHeight(value: number | undefined): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return LIBRARY_DEFAULT_HEIGHT
+  return Math.max(LIBRARY_MIN_HEIGHT, Math.min(LIBRARY_MAX_HEIGHT, Math.round(value)))
+}
+
+function normalizeLayout(pref: DashboardLayoutPreference): DashboardLayout {
   return {
-    items: layout.items.map((item, idx) => normalizeItem(item, idx)),
-    onboardingDismissed: layout.onboardingDismissed,
-  }
-}
-
-function readFromStorage(): DashboardLayout {
-  if (typeof window === 'undefined') return DEFAULT_LAYOUT
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY)
-    if (!raw) return DEFAULT_LAYOUT
-    const parsed = parseJsonWithFallback(raw, PersistedDashboardLayoutSchema, DEFAULT_LAYOUT)
-    return normalizeLayout(parsed)
-  } catch (err) {
-    console.error('[dashboard] failed to read layout from localStorage:', err)
-    return DEFAULT_LAYOUT
-  }
-}
-
-function writeToStorage(layout: DashboardLayout): void {
-  if (typeof window === 'undefined') return
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(layout))
-  } catch (err) {
-    console.error('[dashboard] failed to persist layout to localStorage:', err)
+    items: pref.items.map((item, idx) => normalizeItem(item, idx)),
+    onboardingDismissed: pref.onboardingDismissed,
+    libraryHeight: clampLibraryHeight(pref.libraryHeight),
   }
 }
 
@@ -263,43 +301,148 @@ function writeToStorage(layout: DashboardLayout): void {
 
 export interface DashboardLayoutApi {
   layout: DashboardLayout
-  /** Append a widget if it's not already on the grid. Lands at row 1, col 1
-   *  by default; the caller can specify a position to drop into a specific
-   *  cell. Collision resolution pushes any overlapping siblings down. */
+  /**
+   * True while the initial server fetch is in flight. The hook always
+   * returns the default layout immediately so callers don't have to
+   * branch on this; expose it for callers that want a skeleton instead.
+   */
+  isLoading: boolean
+  /**
+   * Append a widget if it's not already on the grid.
+   *
+   *   • If `col` / `row` are provided (drag-and-drop from the library or
+   *     a programmatic placement), the widget lands at that cell and
+   *     collision resolution pushes any overlapping siblings down.
+   *
+   *   • If both are omitted (click-to-add from the library), the widget
+   *     lands in the first row below every existing widget — i.e. it
+   *     APPENDS rather than overlaps. No siblings get pushed down,
+   *     because nothing overlaps the empty space below them.
+   */
   addWidget: (id: string, size: number, rows?: number, col?: number, row?: number) => void
   /** Drop a widget from the grid. */
   removeWidget: (id: string) => void
   /** Replace the items array wholesale. Used by the page-level visibility
    *  filter that drops items whose definition is no longer registered. */
   setItems: (next: readonly DashboardItem[]) => void
-  /** Move a widget to a new grid position. Triggers collision resolution
-   *  that pushes any conflicting siblings downward; the moved widget stays
-   *  pinned at the target. */
+  /** Move a widget to a new grid position. */
   moveWidget: (id: string, col: number, row: number) => void
-  /** Update a widget's column span. Triggers collision resolution. */
+  /** Update a widget's column span. */
   resize: (id: string, size: number) => void
-  /** Update a widget's row span (vertical height). Triggers collision
-   *  resolution — the typical use case is "grow a card and the cards
-   *  below it slide further down". */
+  /** Update a widget's row span (vertical height). */
   resizeRows: (id: string, rows: number) => void
   /** Permanently dismiss the onboarding panel for this user. */
   dismissOnboarding: () => void
   /** Bring the onboarding panel back after dismissal. */
   restoreOnboarding: () => void
+  /**
+   * Set the bottom Block library panel's height in pixels. Clamped to the
+   * `LIBRARY_MIN_HEIGHT` / `LIBRARY_MAX_HEIGHT` range. Saves debounce-coalesce
+   * with the rest of the layout so a drag-resize gesture lands as one PUT.
+   */
+  setLibraryHeight: (next: number) => void
 }
 
 export function useDashboardLayout(): DashboardLayoutApi {
-  const [layout, setLayout] = useState<DashboardLayout>(() => readFromStorage())
+  // Optimistic render: start with the default layout so the dashboard
+  // paints immediately. The server fetch (in the effect below) swaps in
+  // the user's saved layout once it returns.
+  const [layout, setLayout] = useState<DashboardLayout>(DEFAULT_LAYOUT)
+  const [isLoading, setIsLoading] = useState(true)
 
+  // `hasLoadedRef` gates the save effect so the initial render doesn't
+  // immediately write the default back to the server, clobbering whatever
+  // the user had stored.
+  const hasLoadedRef = useRef(false)
+  // Pending debounce timer so successive mutations coalesce into one PUT.
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // 1. Initial load.
   useEffect(() => {
-    writeToStorage(layout)
+    let cancelled = false
+    void (async () => {
+      try {
+        const stored = await getUserPreference('dashboard-layout')
+        if (cancelled) return
+        if (stored) setLayout(normalizeLayout(stored))
+      } catch (err) {
+        console.error('[dashboard] failed to load layout from server:', err)
+      } finally {
+        if (!cancelled) {
+          hasLoadedRef.current = true
+          setIsLoading(false)
+        }
+      }
+    })()
+
+    // One-time cleanup of the pre-server-backed localStorage layout key.
+    // The hook no longer reads from localStorage; an orphan entry just
+    // wastes a few KB per browser. Pre-release, no migration code needed —
+    // just nuke it on mount.
+    if (typeof window !== 'undefined') {
+      try { window.localStorage.removeItem('pb-admin-dashboard-layout-v3') } catch { /* private browsing */ }
+    }
+
+    return () => { cancelled = true }
+  }, [])
+
+  // 2. Debounced save on every layout change AFTER initial load.
+  //    We don't save during loading because (a) the value is just the
+  //    default placeholder, and (b) it would race the initial GET.
+  useEffect(() => {
+    if (!hasLoadedRef.current) return
+    if (saveTimerRef.current !== null) clearTimeout(saveTimerRef.current)
+    saveTimerRef.current = setTimeout(() => {
+      saveTimerRef.current = null
+      void setUserPreference('dashboard-layout', layout).catch((err) => {
+        console.error('[dashboard] failed to save layout to server:', err)
+      })
+    }, SAVE_DEBOUNCE_MS)
+    return () => {
+      if (saveTimerRef.current !== null) {
+        clearTimeout(saveTimerRef.current)
+        saveTimerRef.current = null
+      }
+    }
+  }, [layout])
+
+  // 3. Flush any pending save on unmount so a quick mutate-then-navigate
+  //    doesn't lose the last change. Fire-and-forget — the request is
+  //    same-origin and the browser will complete it after the React tree
+  //    tears down. (For mobile-network reliability we could switch to
+  //    `navigator.sendBeacon`, but that requires a different payload
+  //    shape; punt until needed.)
+  useEffect(() => {
+    return () => {
+      if (saveTimerRef.current === null) return
+      clearTimeout(saveTimerRef.current)
+      saveTimerRef.current = null
+      if (!hasLoadedRef.current) return
+      void setUserPreference('dashboard-layout', layout).catch((err) => {
+        console.error('[dashboard] failed to flush layout on unmount:', err)
+      })
+    }
   }, [layout])
 
   const addWidget = useCallback(
-    (id: string, size: number, rows: number = 3, col: number = 1, row: number = 1) => {
+    (id: string, size: number, rows: number = 3, col?: number, row?: number) => {
       setLayout((curr) => {
         if (curr.items.some((i) => i.id === id)) return curr
-        const nextItems = [...curr.items, { id, size, rows, col, row }]
+        // When the caller doesn't pin a target cell (e.g. click-to-add
+        // from the library), append at the bottom — the first row below
+        // every existing widget. Otherwise nothing overlaps, so the
+        // collision resolver leaves everything in place. Defaulting to
+        // (1, 1) would land the new tile on top of the first existing
+        // widget and shove the entire layout down.
+        const targetCol = col ?? 1
+        const targetRow = row ?? curr.items.reduce(
+          (max, item) => Math.max(max, item.row + item.rows),
+          1,
+        )
+        const nextItems = [
+          ...curr.items,
+          { id, size, rows, col: targetCol, row: targetRow },
+        ]
         return { ...curr, items: resolveCollisions(nextItems, id) }
       })
     },
@@ -320,7 +463,6 @@ export function useDashboardLayout(): DashboardLayoutApi {
       if (!target) return curr
       const clampedCol = Math.max(1, Math.min(MAX_COLS - target.size + 1, col))
       const clampedRow = Math.max(1, row)
-      // Already at the target → noop (avoids spurious React updates).
       if (target.col === clampedCol && target.row === clampedRow) return curr
       const nextItems = curr.items.map((i) =>
         i.id === id ? { ...i, col: clampedCol, row: clampedRow } : i,
@@ -333,7 +475,6 @@ export function useDashboardLayout(): DashboardLayoutApi {
     setLayout((curr) => {
       const target = curr.items.find((i) => i.id === id)
       if (!target || target.size === size) return curr
-      // Clamp so size + col doesn't extend past column 12.
       const clampedSize = Math.max(MIN_COLS, Math.min(MAX_COLS - target.col + 1, size))
       const nextItems = curr.items.map((i) =>
         i.id === id ? { ...i, size: clampedSize } : i,
@@ -362,8 +503,17 @@ export function useDashboardLayout(): DashboardLayoutApi {
     setLayout((curr) => ({ ...curr, onboardingDismissed: false }))
   }, [])
 
+  const setLibraryHeight = useCallback((next: number) => {
+    setLayout((curr) => {
+      const clamped = clampLibraryHeight(next)
+      if (curr.libraryHeight === clamped) return curr
+      return { ...curr, libraryHeight: clamped }
+    })
+  }, [])
+
   return {
     layout,
+    isLoading,
     addWidget,
     removeWidget,
     setItems,
@@ -372,5 +522,6 @@ export function useDashboardLayout(): DashboardLayoutApi {
     resizeRows,
     dismissOnboarding,
     restoreOnboarding,
+    setLibraryHeight,
   }
 }

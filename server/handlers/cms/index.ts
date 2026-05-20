@@ -33,6 +33,7 @@ import type { CmsHandlerOptions } from './shared'
 import { handleSetupRoutes } from './setup'
 import { handleAuthRoutes } from './auth'
 import { handleMeRoutes } from './me'
+import { handleUserPreferencesRoutes } from './userPreferences'
 import { handleUsersRoutes } from './users'
 import { handleRolesRoutes } from './roles'
 import { handleAuditRoutes } from './audit'
@@ -75,6 +76,10 @@ export async function handleCmsRequest(
     (await handleSetupRoutes(req, db))
     ?? (await handleAuthRoutes(req, db))
     ?? (await handleMeRoutes(req, db, options))
+    // User preferences sit next to /me/* because they share the same
+    // self-targeted "anything an authenticated user can do to their own
+    // account" surface. Routes mount under `/admin/api/cms/me/preferences/`.
+    ?? (await handleUserPreferencesRoutes(req, db))
     ?? (await handleUsersRoutes(req, db))
     ?? (await handleRolesRoutes(req, db))
     ?? (await handleAuditRoutes(req, db))
