@@ -1,25 +1,174 @@
 /**
- * Activity widget — recent edits / publishes / installs feed. The first
- * cut renders a static demo; once the audit log endpoint is on the admin
- * shell this swaps to a live `useAuditFeed()` hook.
+ * Activity widget — recent edits, publishes, plugin lifecycle, and
+ * user/role changes pulled from `audit_events`. Reads from
+ * `useDashboardStats().recentActivity` (one shared fetch with the
+ * other widgets) so the dashboard makes a single network round-trip
+ * on mount.
+ *
+ * Login/logout events are intentionally excluded server-side — those
+ * belong in Account → Sign-in history. The widget is about
+ * *operational* changes to the site.
  */
 import { DashboardSolidIcon } from 'pixel-art-icons/icons/dashboard-solid'
+import { SettingsCogSolidIcon } from 'pixel-art-icons/icons/settings-cog-solid'
 import type { ReactNode } from 'react'
 import type { DashboardWidgetRendererProps } from '@core/dashboard'
+import { UserAvatar } from '@admin/shared/UserAvatar'
 import { Widget } from '@ui/components/Widget'
+import { Skeleton, SkeletonCircle } from '@ui/components/Skeleton'
+import {
+  useRecentActivityStats,
+  type DashboardActivityEntry,
+} from '../hooks/useDashboardStats'
 import styles from './widgets.module.css'
 
-interface FeedItem { who: string; body: ReactNode; time: string }
+// Number of skeleton feed rows shown while loading — matches the
+// typical viewport of the Activity widget (5–6 rows).
+const SKELETON_ROWS = 6
 
-const ROWS: readonly FeedItem[] = [
-  { who: 'AT', body: <>edited <code>/pricing</code></>, time: '2m' },
-  { who: 'KP', body: <>published <code>/blog/launching-page-builder</code></>, time: '24m' },
-  { who: 'AI', body: <>imported framework variables <em>v1.4</em></>, time: '1h' },
-  { who: 'AT', body: <>installed plugin <code>seo-meta</code></>, time: '3h' },
-  { who: 'SY', body: <>backup completed <em>3.2 MB</em></>, time: 'yest.' },
-]
+/**
+ * Diameter of the actor avatar in the feed row. Picked to fit the
+ * existing 22px-tall row chrome without changing line-height. The
+ * `<UserAvatar>` primitive double-scales the requested size for the
+ * Gravatar URL, so a 22px CSS avatar fetches a 44px image — crisp on
+ * retina.
+ */
+const AVATAR_SIZE = 22
+
+/**
+ * Pick the verb that fronts each row body. The server has already
+ * resolved the target into `targetCode` / `targetText`; this only
+ * picks the right English verb for the action.
+ *
+ * Unknown / future actions fall through to a humanised version of
+ * the action string itself ("plugin.foobar" → "plugin foobar") so a
+ * newly-added audit event still renders something useful before the
+ * widget is updated.
+ */
+function actionVerb(action: string): string {
+  switch (action) {
+    case 'data.row.create':
+      return 'created'
+    case 'data.row.update':
+      return 'edited'
+    case 'data.row.delete':
+      return 'deleted'
+    case 'data.row.publish':
+      return 'published'
+    case 'data.row.schedule':
+      return 'scheduled'
+    case 'data.row.schedule.cancel':
+      return 'unscheduled'
+    case 'data.row.status':
+      return 'changed status of'
+    case 'data.row.move':
+      return 'moved'
+    case 'data.author.assign':
+      return 'reassigned author of'
+    case 'data.table.create':
+      return 'created collection'
+    case 'data.table.update':
+      return 'edited collection'
+    case 'data.table.delete':
+      return 'deleted collection'
+    case 'publish':
+      return 'published the site'
+    case 'plugin.install':
+      return 'installed plugin'
+    case 'plugin.update':
+      return 'updated plugin'
+    case 'plugin.enable':
+      return 'enabled plugin'
+    case 'plugin.disable':
+      return 'disabled plugin'
+    case 'plugin.delete':
+      return 'removed plugin'
+    case 'plugin.pack.install':
+      return 'installed plugin pack'
+    case 'plugin.settings.update':
+      return 'updated settings for'
+    case 'user.create':
+      return 'added user'
+    case 'user.update':
+      return 'updated user'
+    case 'user.delete':
+      return 'removed user'
+    case 'user.suspend':
+      return 'suspended user'
+    case 'password.change':
+      return 'changed password for'
+    case 'role.create':
+      return 'created role'
+    case 'role.update':
+      return 'updated role'
+    case 'role.delete':
+      return 'removed role'
+    case 'role.assign':
+      return 'assigned role'
+    default:
+      return action.replace(/[._]/g, ' ')
+  }
+}
+
+function renderBody(entry: DashboardActivityEntry): ReactNode {
+  const verb = actionVerb(entry.action)
+  if (entry.targetCode) {
+    return (
+      <>
+        {verb} <code>{entry.targetCode}</code>
+      </>
+    )
+  }
+  if (entry.targetText) {
+    return (
+      <>
+        {verb} <em>{entry.targetText}</em>
+      </>
+    )
+  }
+  return verb
+}
+
+/**
+ * Short relative-time label sized for the widget's narrow column.
+ *
+ *   < 1m         → "now"
+ *   < 60m        → "<n>m"
+ *   < 24h        → "<n>h"
+ *   < 7d         → "<n>d"
+ *   < 30d        → "yest." / "<n>d"
+ *   anything else → coarse "MMM D" date
+ *
+ * Strictly past-only — `audit_events` are stamped at write time, so
+ * a future timestamp would mean clock skew; in that case we just
+ * render "now" rather than a misleading "in 3h".
+ */
+function formatRelative(iso: string): string {
+  const ts = Date.parse(iso)
+  if (Number.isNaN(ts)) return ''
+  const deltaMs = Date.now() - ts
+  if (deltaMs < 0) return 'now'
+
+  const min = deltaMs / 60_000
+  if (min < 1) return 'now'
+  if (min < 60) return `${Math.round(min)}m`
+
+  const hr = min / 60
+  if (hr < 24) return `${Math.round(hr)}h`
+
+  const day = hr / 24
+  if (day < 2) return 'yest.'
+  if (day < 30) return `${Math.round(day)}d`
+
+  return new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+}
 
 export function ActivityWidget({ span, editing }: DashboardWidgetRendererProps) {
+  const stats = useRecentActivityStats()
+  const rows = stats?.rows ?? []
+  const isLoading = stats === null
+  const isEmpty = !isLoading && rows.length === 0
+
   return (
     <Widget
       widgetId="activity"
@@ -28,13 +177,45 @@ export function ActivityWidget({ span, editing }: DashboardWidgetRendererProps) 
       tint="peach"
       span={span}
       editing={editing}
+      loading={isLoading}
     >
       <div className={styles.feed}>
-        {ROWS.map((r, i) => (
+        {isLoading && Array.from({ length: SKELETON_ROWS }, (_, i) => (
+          // Match `.feedRow` shape: avatar + 2-line body + relative time.
+          // Vary the body width slightly per row so the feed reads as
+          // "different messages loading" rather than a perfectly
+          // uniform stack.
           <div key={i} className={styles.feedRow}>
-            <span className={styles.feedAvatar}>{r.who}</span>
-            <span className={styles.feedBody}>{r.body}</span>
-            <span className={styles.feedTime}>{r.time}</span>
+            <SkeletonCircle size={AVATAR_SIZE} />
+            <span className={styles.feedBody}>
+              <Skeleton width={`${60 + (i % 4) * 8}%`} height="0.85em" />
+            </span>
+            <span className={styles.feedTime}>
+              <Skeleton width={28} height="0.75em" />
+            </span>
+          </div>
+        ))}
+        {isEmpty && (
+          <p className={styles.feedTime} style={{ padding: '12px 0' }}>
+            Nothing has happened yet — edits, publishes, and plugin changes
+            will appear here.
+          </p>
+        )}
+        {!isLoading && !isEmpty && rows.map((r) => (
+          <div key={r.id} className={styles.feedRow}>
+            {r.actor ? (
+              <UserAvatar
+                user={r.actor}
+                size={AVATAR_SIZE}
+                alt={`Avatar for ${r.actor.displayName || r.actor.email}`}
+              />
+            ) : (
+              <span className={styles.feedSystemAvatar} title="System" aria-hidden="true">
+                <SettingsCogSolidIcon size={12} />
+              </span>
+            )}
+            <span className={styles.feedBody}>{renderBody(r)}</span>
+            <span className={styles.feedTime}>{formatRelative(r.createdAt)}</span>
           </div>
         ))}
       </div>

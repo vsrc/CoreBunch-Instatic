@@ -20,7 +20,7 @@ interface SlotOutletProps extends Record<string, unknown> {
   slotName: string
 }
 
-export const SlotOutletEditor: React.FC<ModuleComponentProps<SlotOutletProps>> = ({ props }) => {
+export const SlotOutletEditor: React.FC<ModuleComponentProps<SlotOutletProps>> = ({ props, nodeWrapperProps }) => {
   const isVCEditMode = useEditorStore((s) => s.activeDocument?.kind === 'visualComponent')
 
   if (!isVCEditMode) return null
@@ -29,6 +29,7 @@ export const SlotOutletEditor: React.FC<ModuleComponentProps<SlotOutletProps>> =
 
   return (
     <CanvasModulePlaceholder
+      {...nodeWrapperProps}
       variant="inline"
       icon={<TargetSolidIcon size={12} color="currentColor" />}
       label={`Slot: ${slotName}`}

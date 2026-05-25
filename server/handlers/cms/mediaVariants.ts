@@ -1,35 +1,35 @@
 /**
  * mediaVariants — server-side responsive image + BlurHash pipeline.
  *
- * Runs synchronously inside the upload + replace-file handlers. Given the
- * raw bytes of an uploaded image we:
+ * Coordinates a single upload's variant generation:
  *
- *   1. Probe intrinsic dimensions via `sharp`.
- *   2. Encode a BlurHash (~30-char placeholder for the published page +
- *      every admin preview surface so the loading flash goes away).
- *   3. Generate one WebP variant for each target width that is < the
- *      original width. The set covers the common breakpoints we serve plus
- *      a tiny 64-wide thumb the admin grid + picker use.
+ *   1. Decide whether to run the local ladder. When a Tier-3 variant
+ *      delegate (Cloudflare Images / Imgix / Bunny Optimizer / …) is
+ *      elected we skip local sharp encoding entirely and emit
+ *      URL-template variants pointing at the delegate's service.
+ *   2. Hand the source bytes to a `Bun.Worker` (see
+ *      `imageVariantWorkerHost.ts`) which probes intrinsic dimensions,
+ *      encodes a BlurHash placeholder, and — when the local ladder is
+ *      in use — produces one WebP per target width.
+ *   3. Stream each returned variant through `dispatchUpload(role:
+ *      'variant')` so plugin storage adapters receive bytes for variants
+ *      the same way they do for originals.
  *
- * Variant bytes are streamed to the storage adapter elected for the
- * `'variant'` role via `dispatchUpload(role: 'variant')`. The default
- * local-disk adapter writes each WebP next to the original under
- * `<uploadsDir>/<originalStem>-w<width>.webp`. A plugin storage adapter
- * (S3, R2, …) routes variants to its own backend without any change in
- * this pipeline — that's the point of dispatch.
+ * **Why the worker:** sharp + libvips on a typical 4 MP JPEG is ~200–500 ms
+ * of CPU on the main thread, which blocks every visitor request and the
+ * admin API for the duration. Offloading to a `Bun.Worker` keeps the main
+ * thread free while uploads serialise inside the pool. The host is still
+ * the only side with a DB client and storage-adapter access — the worker
+ * just does the CPU work.
  *
- * Why synchronous? Sharp + libvips processes a typical 4 MP JPEG into the
- * full ladder in ~200–500 ms. We already block the upload response on the
- * disk write; folding variants into the same critical path keeps the
- * implementation simple and gives the user one "uploading" → "done"
- * transition. If real-world uploads cross multi-second territory we move
- * this to a background job (out of scope for v1).
+ * The default local-disk adapter writes each WebP next to the original at
+ * `<uploadsDir>/<originalStem>-w<width>.webp`. The dispatch step is
+ * adapter-agnostic; this module never touches the filesystem directly.
  */
-import sharp from 'sharp'
-import { encode as encodeBlurHash } from 'blurhash'
 import type { DbClient } from '../../db/client'
 import { dispatchDelete, dispatchUpload } from './mediaUploadDispatch'
 import { getElectedVariantDelegate, type ElectedVariantDelegate } from '../../repositories/mediaStorageAdapters'
+import { runImageVariantJob, isImageVariantOk } from './imageVariantWorkerHost'
 
 /**
  * Target widths for the responsive variant ladder. Chosen to cover the
@@ -96,9 +96,16 @@ function variantStorageBase(storagePath: string): string {
  * storage adapter by this point (default local-disk).
  *
  * On any non-image input (GIF, SVG — though we don't accept SVG today) or
- * on any sharp failure, returns `null` so the caller falls back to a plain
- * row with no variants. Callers MUST handle the null case — the admin grid
- * still renders fine without variants, it just loads the original.
+ * on any worker failure, returns `null` so the caller falls back to a
+ * plain row with no variants. Callers MUST handle the null case — the
+ * admin grid still renders fine without variants, it just loads the
+ * original.
+ *
+ * Trust boundary: the worker probes dimensions, encodes the BlurHash, and
+ * (when no delegate is elected) produces the WebP ladder bytes. The host
+ * stays the sole owner of the DB client and storage-adapter dispatch.
+ * Delegate election runs host-side first so the worker can skip the
+ * encode entirely when a Tier-3 delegate is taking over the ladder.
  */
 export async function processImageVariants(
   db: DbClient,
@@ -107,87 +114,82 @@ export async function processImageVariants(
   parentStoragePath: string,
 ): Promise<ImageProcessingResult | null> {
   try {
-    // Pull intrinsic dimensions first. `sharp.metadata()` is cheap (header
-    // only) and tells us whether we have something processable.
-    const image = sharp(bytes)
-    const metadata = await image.metadata()
-    const originalWidth = metadata.width
-    const originalHeight = metadata.height
-    if (!originalWidth || !originalHeight) return null
-
-    // ── BlurHash ─────────────────────────────────────────────────────────
-    // Encode a downsampled raw RGBA buffer. `fit: 'fill'` is intentional —
-    // BlurHash is rendered into a container whose aspect ratio matches the
-    // FULL image (because the consumer also knows `width` / `height`), so
-    // we don't need aspect-preserving downsampling here. Crucially, the
-    // blurhash encoder requires the input buffer to be EXACTLY
-    // `width * height * 4` bytes; `fit: 'inside'` would silently shrink one
-    // dimension and produce a smaller buffer that the encoder then
-    // rejects with `Width and height must match the pixels array`.
-    const { data: blurBytes } = await sharp(bytes)
-      .resize(BLURHASH_SAMPLE_WIDTH, BLURHASH_SAMPLE_HEIGHT, { fit: 'fill' })
-      .ensureAlpha()
-      .raw()
-      .toBuffer({ resolveWithObject: true })
-    const blurHash = encodeBlurHash(
-      new Uint8ClampedArray(blurBytes.buffer, blurBytes.byteOffset, blurBytes.byteLength),
-      BLURHASH_SAMPLE_WIDTH,
-      BLURHASH_SAMPLE_HEIGHT,
-      BLURHASH_X_COMPONENTS,
-      BLURHASH_Y_COMPONENTS,
-    )
-
-    // ── Variant ladder ───────────────────────────────────────────────────
-    // If a Tier-3 variant delegate is elected, we SKIP local sharp resizing
-    // entirely and emit URL-template variants pointing at the delegate's
-    // service (Cloudflare Images / Imgix / Bunny Optimizer / …). No bytes
-    // are produced or stored for variants in that case.
-    //
-    // Otherwise we run the local ladder, streaming each WebP through
-    // `dispatchUpload(role: 'variant')` so plugin storage adapters get
-    // bytes for variants the same way they do for originals.
+    // Decide whether to spend CPU on a local ladder. A Tier-3 variant
+    // delegate (Cloudflare Images / Imgix / Bunny Optimizer / …)
+    // generates variants on demand at the CDN edge, so local generation
+    // would race + double-write. The worker still produces metadata +
+    // BlurHash in either case.
     const delegate = await getElectedVariantDelegate(db)
+
+    // Copy the source bytes into a fresh ArrayBuffer the worker can take
+    // ownership of via transfer. Allocating + copying (rather than
+    // `bytes.buffer.slice(...)`) keeps the caller's `Uint8Array` view
+    // intact AND gives us a definite `ArrayBuffer` (not the wider
+    // `ArrayBuffer | SharedArrayBuffer` that `.buffer` resolves to).
+    const sourceBuffer = new ArrayBuffer(bytes.byteLength)
+    new Uint8Array(sourceBuffer).set(bytes)
+
+    const response = await runImageVariantJob({
+      bytes: sourceBuffer,
+      generateLadder: !delegate,
+      targetWidths: TARGET_WIDTHS,
+      webpQuality: WEBP_QUALITY,
+      blurhashConfig: {
+        x: BLURHASH_X_COMPONENTS,
+        y: BLURHASH_Y_COMPONENTS,
+        sampleWidth: BLURHASH_SAMPLE_WIDTH,
+        sampleHeight: BLURHASH_SAMPLE_HEIGHT,
+      },
+    })
+
+    if (!isImageVariantOk(response)) {
+      console.error('[mediaVariants] worker failed:', response.error)
+      return null
+    }
+
+    // Delegate path: variant ladder is URLs into the delegate's service,
+    // not host-stored bytes. The worker returned no variant bytes for
+    // this case (we passed `generateLadder: false`).
     if (delegate) {
-      const variants = buildDelegateVariants(delegate, parentStoragePath, originalWidth, originalHeight)
+      const variants = buildDelegateVariants(delegate, parentStoragePath, response.width, response.height)
       return {
-        width: originalWidth,
-        height: originalHeight,
-        blurHash,
+        width: response.width,
+        height: response.height,
+        blurHash: response.blurHash,
         variants,
       }
     }
 
+    // Local-ladder path: stream each WebP returned by the worker through
+    // `dispatchUpload(role: 'variant')` so plugin storage adapters get
+    // bytes for variants the same way they do for originals.
     const base = variantStorageBase(parentStoragePath)
     const variants: MediaVariantRecord[] = []
-    for (const width of TARGET_WIDTHS) {
-      if (width >= originalWidth) continue
-      const suggested = `${base}-w${width}.webp`
-      const variantBytes = await sharp(bytes)
-        .resize({ width, withoutEnlargement: true })
-        .webp({ quality: WEBP_QUALITY })
-        .toBuffer({ resolveWithObject: true })
+    for (const v of response.variants) {
+      const suggested = `${base}-w${v.width}.webp`
+      const variantBytes = new Uint8Array(v.bytes)
       const dispatched = await dispatchUpload(db, {
-        bytes: new Uint8Array(variantBytes.data),
+        bytes: variantBytes,
         mimeType: 'image/webp',
         suggestedStoragePath: suggested,
         role: 'variant',
         variantOf: parentStoragePath,
       })
       variants.push({
-        width: variantBytes.info.width,
-        height: variantBytes.info.height,
+        width: v.width,
+        height: v.height,
         format: 'webp',
         path: dispatched.publicUrl,
-        sizeBytes: variantBytes.data.byteLength,
+        sizeBytes: variantBytes.byteLength,
         storagePath: dispatched.storagePath,
         storageAdapterId: dispatched.storageAdapterId,
       })
     }
 
     return {
-      width: originalWidth,
-      height: originalHeight,
-      blurHash,
+      width: response.width,
+      height: response.height,
+      blurHash: response.blurHash,
       variants,
     }
   } catch (err) {

@@ -23,6 +23,7 @@
  */
 
 import { registry } from '@core/module-engine/registry'
+import type { NodeWrapperProps as NodeWrapperPropsType } from '@core/module-engine/types'
 import type { VCNode } from '@core/visualComponents/schemas'
 import { classNamesForClassIds, type ClassRegistry } from '@core/page-tree/classNames'
 
@@ -35,15 +36,22 @@ interface VCInlineTreeProps {
   classes: ClassRegistry
   /** Class string from the page-level ref node (its own classIds resolved) — merged onto the VC root */
   rootMcClassName?: string
+  /**
+   * Editor wrapper bag (data-node-id, onClick, etc.) for the PAGE-LEVEL
+   * ref node — forwarded onto the VC's resolved root element so the canvas
+   * selection logic targets the rendered ref instead of a dropped wrapper.
+   */
+  rootNodeWrapperProps?: NodeWrapperPropsType
 }
 
-export function VCInlineTree({ nodes, rootNodeId, classes, rootMcClassName }: VCInlineTreeProps) {
+export function VCInlineTree({ nodes, rootNodeId, classes, rootMcClassName, rootNodeWrapperProps }: VCInlineTreeProps) {
   return (
     <VCNodeRenderer
       nodeId={rootNodeId}
       nodes={nodes}
       classes={classes}
       extraClassName={rootMcClassName}
+      extraNodeWrapperProps={rootNodeWrapperProps}
     />
   )
 }
@@ -58,9 +66,16 @@ interface VCNodeRendererProps {
   classes: ClassRegistry
   /** Extra class string merged onto this node's mcClassName (root-only). */
   extraClassName?: string
+  /**
+   * Editor wrapper bag forwarded onto the ROOT-only node so the canvas
+   * selection logic targets the rendered VC root element. Child nodes
+   * inside the VC tree aren't independently selectable in page mode, so
+   * we don't forward this further down the recursion.
+   */
+  extraNodeWrapperProps?: NodeWrapperPropsType
 }
 
-function VCNodeRenderer({ nodeId, nodes, classes, extraClassName }: VCNodeRendererProps) {
+function VCNodeRenderer({ nodeId, nodes, classes, extraClassName, extraNodeWrapperProps }: VCNodeRendererProps) {
   const node = nodes[nodeId]
   if (!node) return null
   if (node.hidden) return null
@@ -84,6 +99,7 @@ function VCNodeRenderer({ nodeId, nodes, classes, extraClassName }: VCNodeRender
       nodeId={node.id}
       isSelected={false}
       mcClassName={mcClassName}
+      nodeWrapperProps={extraNodeWrapperProps}
     >
       {children}
     </ComponentType>

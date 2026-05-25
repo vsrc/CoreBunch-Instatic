@@ -27,7 +27,6 @@ export const ButtonModule: ModuleDefinition<ButtonProps> = {
   icon: CursorClickSolidIcon,
   trusted: true,
   canHaveChildren: false,
-  inlineEditable: true,
 
   schema: {
     label: { type: 'text', label: 'Label', placeholder: 'Button text...' },

@@ -31,6 +31,7 @@ import {
   PluginContext,
   type PluginContextValue,
 } from '@admin/plugin-host-hooks'
+import { ensurePluginRuntime } from '@admin/pluginRuntimeBootstrap'
 import styles from '../../PluginsPage.module.css'
 
 interface PluginPageRendererProps {
@@ -163,7 +164,13 @@ function PluginAppPage({
       version: page.pluginVersion,
       updatedAt: page.pluginUpdatedAt,
     })
-    void loadPluginAdminAppComponent(page, importModule, cacheKey)
+    // `ensurePluginRuntime` MUST resolve before the plugin module is
+    // dynamically imported — the plugin's bundle does `import * as React
+    // from 'react'`, which the import-map shims at `/runtime/*.js`
+    // resolve via `globalThis.__pagebuilder`. Without the runtime
+    // installed, the shims throw at module-evaluation time.
+    void ensurePluginRuntime()
+      .then(() => loadPluginAdminAppComponent(page, importModule, cacheKey))
       .then((loaded) => {
         if (cancelled) return
         setLoadState({ kind: 'react', Component: loaded.Component, key: pageKey })

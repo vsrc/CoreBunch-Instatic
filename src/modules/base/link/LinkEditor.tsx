@@ -20,13 +20,14 @@ interface LinkProps extends Record<string, unknown> {
   target: '_blank' | '_self' | '_parent'
 }
 
-export const LinkEditor: React.FC<ModuleComponentProps<LinkProps>> = ({ props, children, mcClassName }) => {
+export const LinkEditor: React.FC<ModuleComponentProps<LinkProps>> = ({ props, children, mcClassName, nodeWrapperProps }) => {
   const rel = props.target === '_blank' ? 'noopener noreferrer' : undefined
   const hasChildren = Array.isArray(children) ? children.length > 0 : children != null
   const content = hasChildren ? children : (props.text ?? 'Link text')
   return React.createElement(
     'a',
     {
+      ...nodeWrapperProps,
       href: props.href || '#',
       target: props.target,
       rel,

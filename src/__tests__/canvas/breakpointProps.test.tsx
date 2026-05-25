@@ -6,6 +6,7 @@ import { DndContext } from '@dnd-kit/core'
 import { useEditorStore } from '@site/store/store'
 import { BreakpointFrame } from '@site/canvas/BreakpointFrame'
 import { CanvasRoot } from '@site/canvas/CanvasRoot'
+import { getCanvasFrameDocument, queryCanvasNodeInFrame } from './iframeCanvasQuery'
 import '@modules/base'
 
 /** CanvasRoot uses useDroppable and must be rendered inside a DndContext. */
@@ -68,8 +69,12 @@ describe('canvas breakpoint rendering', () => {
     )
 
     // The mobile frame must render the BASE text — never the stale override.
-    expect(screen.getByText('Desktop headline')).toBeTruthy()
-    expect(screen.queryByText('Mobile headline')).toBeNull()
+    // The page tree now lives inside the breakpoint's iframe, so `screen`
+    // (rooted at document.body) can't see it — query the iframe directly.
+    const mobileDoc = getCanvasFrameDocument('mobile')
+    expect(mobileDoc).toBeTruthy()
+    expect(mobileDoc!.body.textContent).toContain('Desktop headline')
+    expect(mobileDoc!.body.textContent).not.toContain('Mobile headline')
   })
 
   it('activates the clicked breakpoint when selecting a node inside that frame', () => {
@@ -83,7 +88,7 @@ describe('canvas breakpoint rendering', () => {
 
     renderCanvas()
 
-    const mobileNode = document.querySelector(`[data-breakpoint-id="mobile"] [data-node-id="${textId}"]`)
+    const mobileNode = queryCanvasNodeInFrame('mobile', textId)
     expect(mobileNode).toBeTruthy()
 
     fireEvent.click(mobileNode!)
@@ -103,8 +108,8 @@ describe('canvas breakpoint rendering', () => {
 
     renderCanvas()
 
-    const mobileNode = document.querySelector(`[data-breakpoint-id="mobile"] [data-node-id="${textId}"]`)
-    const desktopNode = document.querySelector(`[data-breakpoint-id="desktop"] [data-node-id="${textId}"]`)
+    const mobileNode = queryCanvasNodeInFrame('mobile', textId)
+    const desktopNode = queryCanvasNodeInFrame('desktop', textId)
     expect(mobileNode).toBeTruthy()
     expect(desktopNode).toBeTruthy()
 

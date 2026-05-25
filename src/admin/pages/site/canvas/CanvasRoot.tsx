@@ -37,8 +37,11 @@ import { CanvasNotch } from './CanvasNotch'
 import { CanvasModeToggle } from './CanvasModeToggle'
 import { CanvasBreakpointSelector } from './CanvasBreakpointSelector'
 import { CanvasSelectionContext, CanvasViewportActionsContext } from './CanvasContexts'
-import { ClassStyleInjector } from './ClassStyleInjector'
-import { UserStylesheetInjector } from './UserStylesheetInjector'
+// Class / user-stylesheet injectors are now mounted per breakpoint frame
+// (inside each iframe's document) by `IframeFrameSurface`. CanvasRoot no
+// longer injects site CSS into the editor's document — that path was a
+// stopgap before the iframe cut-over. See
+// `docs/features/canvas-iframe-per-frame.md`.
 import { PluginCanvasOverlayLayer } from './PluginCanvasOverlayLayer'
 import { CanvasRenameDialog } from './CanvasRenameDialog'
 import { useCanvasRenameDialog } from './useCanvasRenameDialog'
@@ -122,11 +125,9 @@ export function CanvasRoot({ editable = true }: CanvasRootProps) {
   const setFocusedPanel = useEditorStore((s) => s.setFocusedPanel)
   const setActiveDocument = useEditorStore((s) => s.setActiveDocument)
   const activeDocument = useEditorStore((s) => s.activeDocument)
-  const setInlineEditing = useEditorStore((s) => s.setInlineEditing)
   const templatePreviewContext = useTemplatePreviewContext(canvasPage)
   // Permission context — controls which double-click actions are available:
   //   canEditStructure → enter VC canvas (structural navigation)
-  //   canEditContent   → enter inline text edit on text-like modules
   const permissions = useEditorPermissions()
   // Auto-dim non-active breakpoints when a layer is selected and the
   // properties panel is open — gated by the `dimInactiveBreakpoints` user
@@ -232,41 +233,21 @@ export function CanvasRoot({ editable = true }: CanvasRootProps) {
   /**
    * Double-click on a canvas node.
    *
-   * Three behaviours, in priority order:
-   *   1. `base.visual-component-ref` + caller can edit structure → enter VC canvas mode.
-   *   2. text-like module (base.text / base.button) + caller can edit content
-   *      → open inline text edit on that node.
-   *   3. Otherwise — no-op.
+   * Intentionally a no-op for now. The previous behaviours — entering VC
+   * canvas mode on `base.visual-component-ref`, and opening inline text
+   * edit on text-like modules — were both removed. VC entry still works
+   * from the Site panel and from Spotlight; inline text editing was
+   * removed pending a re-design (see
+   * `docs/features/canvas-iframe-per-frame.md` for context).
    *
-   * The structural branch requires `canEditStructure`; entering the VC editor
-   * is fundamentally structural. The inline-edit branch only requires
-   * `canEditContent` — that's the whole point of the Client role.
+   * The plumbing (`SelectionContext.onNodeDoubleClick`, the
+   * `onDoubleClick` / `onDoubleClickCapture` entries on `nodeWrapperProps`)
+   * stays in place so a future double-click behaviour can be wired in
+   * without revisiting every module.
    */
-  const onNodeDoubleClick = useCallback(
-    (nodeId: string, _e: React.MouseEvent) => {
-      // Imperative store access — correct in event handlers
-      const state = useEditorStore.getState()
-      const node = selectActiveCanvasPage(state)?.nodes[nodeId]
-      if (!node) return
-
-      if (node.moduleId === 'base.visual-component-ref') {
-        if (!permissions.canEditStructure) return
-        const componentId = node.props.componentId
-        if (typeof componentId === 'string' && componentId) {
-          setActiveDocument({ kind: 'visualComponent', vcId: componentId })
-        }
-        return
-      }
-
-      // Inline text editing — opt-in per module via `inlineEditable: true`
-      // on the ModuleDefinition. Today: base.text and base.button declare it.
-      const definition = registry.get(node.moduleId)
-      if (definition?.inlineEditable && permissions.canEditContent) {
-        setInlineEditing(nodeId)
-      }
-    },
-    [permissions.canEditContent, permissions.canEditStructure, setActiveDocument, setInlineEditing],
-  )
+  const onNodeDoubleClick = useCallback((_nodeId: string, _e: React.MouseEvent) => {
+    // no-op
+  }, [])
 
   // Context carries only stable callbacks — selectedNodeId/hoveredNodeId are
   // intentionally excluded (Perf fix — Contribution #495). Each NodeRenderer
@@ -353,13 +334,9 @@ export function CanvasRoot({ editable = true }: CanvasRootProps) {
           }
         `}</style>
 
-          {/* Phase C — CSS class styles injected into document.head.
-            ClassStyleInjector emits class-registry CSS first; the user-authored
-            stylesheets injector mounts after so user CSS wins specificity
-            ties — same source-order behaviour as the published `<link>` tags
-            (reset → framework → style → userStyles). */}
-          <ClassStyleInjector />
-          <UserStylesheetInjector />
+          {/* Site CSS (class registry + user stylesheets) lives inside each
+            breakpoint iframe now — mounted per-frame by IframeFrameSurface
+            so the canvas sees the same cascade the published page sees. */}
 
           {/* Insert toolbar and breakpoint context selector are design-only —
             preview has its own chrome inside CanvasModeToggle. */}

@@ -47,17 +47,17 @@ describe('media signed-redirect serving', () => {
   it('the redirect route is registered in the route table', async () => {
     const source = await read('server/router.ts')
     // The route must be listed BEFORE tryServeUpload (the /uploads/* path)
-    // and BEFORE tryServePublishedPage (the public-slug fallthrough) so a
-    // namespace clash can't accidentally consume it.
+    // and BEFORE tryServePublicRoute (the public-slug + content-row
+    // fallthrough) so a namespace clash can't accidentally consume it.
     const tableMatch = source.match(/const routes:\s*readonly[^=]*=\s*\[([\s\S]*?)\]/)
     expect(tableMatch).not.toBeNull()
     const table = tableMatch![1]
     const mediaIdx = table.indexOf('tryServeMediaRedirect')
     const uploadIdx = table.indexOf('tryServeUpload')
-    const slugIdx = table.indexOf('tryServePublishedPage')
+    const publicIdx = table.indexOf('tryServePublicRoute')
     expect(mediaIdx).toBeGreaterThan(-1)
     expect(uploadIdx).toBeGreaterThan(mediaIdx)
-    expect(slugIdx).toBeGreaterThan(mediaIdx)
+    expect(publicIdx).toBeGreaterThan(mediaIdx)
   })
 
   it('dispatchUpload substitutes the host-owned URL for non-public-url adapters', async () => {

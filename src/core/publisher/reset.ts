@@ -93,83 +93,9 @@ export const PUBLISHER_RESET_CSS = [
   ':where(table) { border-collapse: collapse; }',
 ].join('\n')
 
-/**
- * Returns the publisher reset, scoped under the given selector prefix.
- *
- * Used by the design canvas to constrain the reset to the breakpoint frame
- * viewports (`[data-breakpoint-id]`) so it doesn't bleed into editor chrome.
- *
- * Each rule in `PUBLISHER_RESET_CSS` is rewritten as:
- *
- *   `<prefix> :where(...) { ... }`
- *
- * `:where()` keeps the contributed specificity at 0, so the only specificity
- * comes from the prefix itself — typically `[data-breakpoint-id]` (0,1,0).
- * That beats the editor `globals.css` rules (`* { margin:0 }` → 0,0,1) inside
- * the canvas while still losing to any user class (`.my-class` → 0,1,0)
- * declared after the reset (last-declared-wins on ties).
- *
- * The `:where(html, body)` and `:where(body)` rules are dropped from the
- * scoped output — there is no `<html>` / `<body>` inside the breakpoint frame
- * (the canvas root is just a `<div>`), so those selectors would never match.
- * Their effects are picked up via the prefix-only fallthrough below.
- */
-export function scopedPublisherResetCss(scopeSelector: string): string {
-  const trimmedScope = scopeSelector.trim()
-  if (!trimmedScope) return PUBLISHER_RESET_CSS
-
-  const lines: string[] = []
-
-  // Body-equivalent rule on the scope itself. The breakpoint viewport `<div>`
-  // plays the role of `<body>` for the rendered page tree, so we apply the
-  // body baseline (font, line-height, smoothing) directly on the scope.
-  //
-  // `color: #000` is critical here: the editor's `globals.css` sets
-  // `body { color: var(--editor-text) }` (near-white `#ededed` for the dark
-  // editor chrome), and that color cascades into the canvas viewport unless
-  // we override it. The published page's `<body>` has no `color` set by the
-  // reset so it picks up the UA default (black on white). Pinning black
-  // here makes the canvas match what visitors see — without this, an
-  // unstyled `<h1>` on a fresh page renders near-invisible white-on-white
-  // in the canvas while the published page shows it as black.
-  lines.push(
-    `${trimmedScope} {` +
-      ' color: #000;' +
-      ' line-height: 1.5;' +
-      ' font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;' +
-      ' -webkit-font-smoothing: antialiased;' +
-      ' -moz-osx-font-smoothing: grayscale;' +
-      ' }',
-  )
-
-  // Universal rules (box-sizing, margin/padding zero) scoped under the prefix.
-  lines.push(`${trimmedScope} :where(*, *::before, *::after) { box-sizing: border-box; }`)
-  lines.push(`${trimmedScope} :where(*) { margin: 0; padding: 0; }`)
-
-  // Media inside the canvas viewport. `height: auto` matches the
-  // unscoped reset — see PUBLISHER_RESET_CSS above for why it's
-  // required when the published HTML carries `width`/`height` attrs.
-  lines.push(
-    `${trimmedScope} :where(img, picture, video, canvas, svg) { display: block; max-width: 100%; height: auto; }`,
-  )
-
-  // Form controls.
-  lines.push(
-    `${trimmedScope} :where(input, button, textarea, select) { font: inherit; color: inherit; }`,
-  )
-  lines.push(`${trimmedScope} :where(button) { background: none; border: 0; cursor: pointer; }`)
-
-  // Text wrapping.
-  lines.push(
-    `${trimmedScope} :where(p, h1, h2, h3, h4, h5, h6) { overflow-wrap: break-word; }`,
-  )
-
-  // Lists.
-  lines.push(`${trimmedScope} :where(ol, ul, menu) { list-style: none; }`)
-
-  // Links and tables.
-  lines.push(`${trimmedScope} :where(a) { color: inherit; text-decoration: inherit; }`)
-  lines.push(`${trimmedScope} :where(table) { border-collapse: collapse; }`)
-
-  return lines.join('\n')
-}
+// `scopedPublisherResetCss` is gone. It used to wrap every reset rule in a
+// `[data-breakpoint-id]` prefix so the canvas could share a document with
+// the editor chrome without the reset bleeding into toolbars/panels. The
+// canvas now renders each breakpoint frame inside its own iframe, so the
+// reset can simply be the unscoped `PUBLISHER_RESET_CSS` — same bytes the
+// publisher ships, same cascade. See `docs/features/canvas-iframe-per-frame.md`.

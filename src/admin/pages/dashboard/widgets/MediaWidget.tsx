@@ -21,10 +21,11 @@ import type { DashboardWidgetRendererProps } from '@core/dashboard'
 import { Widget } from '@ui/components/Widget'
 import { Image } from '@ui/components/Image'
 import { Button } from '@ui/components/Button'
+import { Skeleton } from '@ui/components/Skeleton'
 import { listCmsMediaAssets, type CmsMediaAsset } from '@core/persistence/cmsMedia'
 import { MediaViewerWindow } from '@admin/pages/media/components/MediaViewerWindow/MediaViewerWindow'
 import { useStandaloneMediaEditor } from '@admin/pages/media/hooks/useStandaloneMediaEditor'
-import { useDashboardStats } from '../hooks/useDashboardStats'
+import { useMediaStats } from '../hooks/useDashboardStats'
 import styles from './widgets.module.css'
 
 // Indexes that get the accent tint vs. the muted surface in the
@@ -42,10 +43,11 @@ function formatSize(bytes: number): string {
 }
 
 export function MediaWidget({ span, editing }: DashboardWidgetRendererProps) {
-  const stats = useDashboardStats()
-  const count = stats?.media.count
-  const totalBytes = stats?.media.totalBytes
-  const thumbs = stats?.media.latestThumbs ?? []
+  const stats = useMediaStats()
+  const isLoading = stats === null
+  const count = stats?.count
+  const totalBytes = stats?.totalBytes
+  const thumbs = stats?.latestThumbs ?? []
 
   // Full asset list — lazy-loaded on first thumbnail click so we can
   // hand the MediaViewerWindow a real `CmsMediaAsset` (the dashboard
@@ -111,11 +113,6 @@ export function MediaWidget({ span, editing }: DashboardWidgetRendererProps) {
     setViewerAssetId(null)
   }, [])
 
-  const sub = (() => {
-    if (count === undefined || totalBytes === undefined) return <span>Loading…</span>
-    return <span>files · {formatSize(totalBytes)}</span>
-  })()
-
   return (
     <>
       <Widget
@@ -125,8 +122,30 @@ export function MediaWidget({ span, editing }: DashboardWidgetRendererProps) {
         tint="peach"
         span={span}
         editing={editing}
+        loading={isLoading}
       >
-        <StatValue value={count === undefined ? '—' : count.toLocaleString()} sub={sub} />
+        {isLoading ? (
+          <>
+            <Skeleton width={88} height={32} />
+            <Skeleton width="55%" height="0.9em" />
+            {/* 8×2 grid of skeleton cells — same shape as the
+                real mosaic. */}
+            <div className={styles.mediaGrid} aria-hidden="true">
+              {Array.from({ length: 16 }, (_, i) => (
+                <Skeleton
+                  key={i}
+                  width="100%"
+                  height="100%"
+                  className={styles.mediaCell}
+                />
+              ))}
+            </div>
+          </>
+        ) : (<>
+        <StatValue
+          value={(count ?? 0).toLocaleString()}
+          sub={<span>files · {formatSize(totalBytes ?? 0)}</span>}
+        />
         {thumbs.length > 0 ? (
           <div className={styles.mediaGrid}>
             {/* Render up to 16 real thumbs via the srcset-aware <Image>
@@ -182,6 +201,7 @@ export function MediaWidget({ span, editing }: DashboardWidgetRendererProps) {
             })}
           </div>
         )}
+        </>)}
       </Widget>
 
       <MediaViewerWindow

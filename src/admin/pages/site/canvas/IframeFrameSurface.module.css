@@ -1,0 +1,31 @@
+/* IframeFrameSurface — the per-breakpoint iframe element.
+ *
+ * Sizing mirrors the previous `.viewport` div: width is driven by the
+ * `--bp-width` CSS var via inline style on the iframe (so each breakpoint
+ * sets its own logical viewport width), and the iframe is at least a full
+ * editor viewport tall so empty pages still have a recognisable frame.
+ * Width / shadow / border-radius come straight across from
+ * BreakpointFrame.module.css's `.viewport` rule so the visual chrome of an
+ * iframe-rendered frame and the legacy div-rendered frame are
+ * indistinguishable to the author.
+ */
+
+.iframe {
+  /* `height` is set imperatively by `IframeFrameSurface` to match the
+   * iframe's content height — see the "Iframe height tracking" effect.
+   * `min-height: 120px` is a safety net so a completely empty page (e.g.
+   * a freshly created blank template) still draws a visible frame the
+   * author can drop content into; once any content is added the
+   * measurement loop takes over and the frame grows to fit. */
+  min-height: 120px;
+  background: var(--editor-accent);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+  /* `overflow: hidden` would clip pop-out chrome inside the iframe (e.g.
+   * a sticky nav that overlaps the page bottom). We rely on the iframe's
+   * height matching its content height so there's nothing to clip. */
+  overflow: visible;
+  position: relative;
+  border: 0;
+  display: block;
+}

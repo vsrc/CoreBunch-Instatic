@@ -20,12 +20,13 @@ interface SlotInstanceProps extends Record<string, unknown> {
 export const SlotInstanceEditor: React.FC<ModuleComponentProps<SlotInstanceProps>> = ({
   props,
   children,
+  nodeWrapperProps,
 }) => {
   const slotName =
     typeof props.slotName === 'string' && props.slotName ? props.slotName : 'children'
 
   return (
-    <div className={styles.container}>
+    <div {...nodeWrapperProps} className={styles.container}>
       <div className={styles.header}>
         <TargetSolidIcon size={11} color="currentColor" aria-hidden="true" />
         <span className={styles.label}>Slot: {slotName}</span>

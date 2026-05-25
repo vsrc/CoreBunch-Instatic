@@ -25,12 +25,13 @@ import { CanvasModulePlaceholder } from '@ui/components/CanvasModulePlaceholder'
 import { BoxStackSolidIcon } from 'pixel-art-icons/icons/box-stack-solid'
 import { resolveHtmlTag } from '@modules/base/utils/htmlTag'
 
-export const LoopEditor: React.FC<ModuleComponentProps> = ({ props, children, mcClassName }) => {
+export const LoopEditor: React.FC<ModuleComponentProps> = ({ props, children, mcClassName, nodeWrapperProps, nodeId }) => {
   const hasChildren = React.Children.count(children) > 0
 
   if (!hasChildren) {
     return (
       <CanvasModulePlaceholder
+        {...nodeWrapperProps}
         className={mcClassName}
         icon={<BoxStackSolidIcon size={16} color="currentColor" />}
         label="Empty loop"
@@ -38,6 +39,20 @@ export const LoopEditor: React.FC<ModuleComponentProps> = ({ props, children, mc
     )
   }
 
+  // Emit the same `data-pb-loop` / `data-pb-loop-page` attributes the
+  // publisher writes in `renderLoop()`. Without these the canvas DOM
+  // diverges from the published DOM and user CSS targeting
+  // `[data-pb-loop] > article` (a common grid-of-cards pattern) doesn't
+  // match in the editor preview.
   const Tag = resolveHtmlTag(props.tag, props.customTag)
-  return React.createElement(Tag, { className: mcClassName }, children)
+  return React.createElement(
+    Tag,
+    {
+      ...nodeWrapperProps,
+      className: mcClassName,
+      'data-pb-loop': nodeId,
+      'data-pb-loop-page': '1',
+    },
+    children,
+  )
 }

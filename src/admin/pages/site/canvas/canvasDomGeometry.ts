@@ -24,34 +24,67 @@ export function getViewportLocalPoint(
 export function measureCanvasNodeClientUnionRect(
   viewport: HTMLElement,
   nodeIds: readonly string[],
+  /**
+   * Optional iframe hosting the canvas content. When provided, `[data-node-id]`
+   * lookups happen inside `iframe.contentDocument` and each measured rect is
+   * translated from iframe-internal coordinates into editor-document
+   * coordinates (by adding the iframe's own client rect AND multiplying by
+   * the canvas zoom — inner rects come back unscaled, since the iframe
+   * document is its own viewport).
+   */
+  iframe?: HTMLIFrameElement | null,
 ): CanvasRect | null {
   let union: CanvasRect | null = null
+  const queryScope: ParentNode | null = iframe?.contentDocument ?? viewport
+  const iframeRect = iframe?.getBoundingClientRect() ?? null
+  // See the analogous comment in BreakpointSelectionOverlay.positionRing:
+  // the iframe ELEMENT is scaled by the canvas transform, but
+  // `getBoundingClientRect()` inside the iframe document returns rects in
+  // the iframe's own (un-transformed) viewport. We must multiply each inner
+  // rect by `iframeRect.width / iframe.offsetWidth` before adding the
+  // iframe's outer offset so the result stays in consistent editor-doc px.
+  const iframeScale =
+    iframe && iframe.offsetWidth > 0 && iframeRect ? iframeRect.width / iframe.offsetWidth : 1
 
   for (const id of nodeIds) {
-    const target = getCanvasNodeRenderElement(viewport, id)
+    const target = getCanvasNodeRenderElement(queryScope, id)
     if (!target) continue
 
-    const rect = target.getBoundingClientRect()
-    if (rect.width === 0 && rect.height === 0) continue
+    const rectInsideScope = target.getBoundingClientRect()
+    if (rectInsideScope.width === 0 && rectInsideScope.height === 0) continue
 
-    const next = {
-      left: rect.left,
-      top: rect.top,
-      right: rect.right,
-      bottom: rect.bottom,
-      width: rect.width,
-      height: rect.height,
-    }
+    // Translate iframe-internal coords to editor-document coords by
+    // multiplying by the canvas zoom and adding the iframe's own client
+    // rect. For the legacy in-document path (no iframe), the rect is
+    // already in editor coords so we skip the translation.
+    const rect = iframeRect
+      ? {
+          left: iframeRect.left + rectInsideScope.left * iframeScale,
+          top: iframeRect.top + rectInsideScope.top * iframeScale,
+          right: iframeRect.left + rectInsideScope.right * iframeScale,
+          bottom: iframeRect.top + rectInsideScope.bottom * iframeScale,
+          width: rectInsideScope.width * iframeScale,
+          height: rectInsideScope.height * iframeScale,
+        }
+      : {
+          left: rectInsideScope.left,
+          top: rectInsideScope.top,
+          right: rectInsideScope.right,
+          bottom: rectInsideScope.bottom,
+          width: rectInsideScope.width,
+          height: rectInsideScope.height,
+        }
+
     union = union
       ? {
-          left: Math.min(union.left, next.left),
-          top: Math.min(union.top, next.top),
-          right: Math.max(union.right, next.right),
-          bottom: Math.max(union.bottom, next.bottom),
-          width: Math.max(union.right, next.right) - Math.min(union.left, next.left),
-          height: Math.max(union.bottom, next.bottom) - Math.min(union.top, next.top),
+          left: Math.min(union.left, rect.left),
+          top: Math.min(union.top, rect.top),
+          right: Math.max(union.right, rect.right),
+          bottom: Math.max(union.bottom, rect.bottom),
+          width: Math.max(union.right, rect.right) - Math.min(union.left, rect.left),
+          height: Math.max(union.bottom, rect.bottom) - Math.min(union.top, rect.top),
         }
-      : next
+      : rect
   }
 
   return union
@@ -60,9 +93,24 @@ export function measureCanvasNodeClientUnionRect(
 export function measureCanvasDropCandidates(
   viewport: HTMLElement,
   tree: NodeTree<PageNode>,
+  /**
+   * Iframe hosting the canvas content. When provided, drop-candidate lookups
+   * happen inside the iframe's document and each rect is translated into
+   * editor coords before being made viewport-local. `null` / undefined falls
+   * back to the legacy in-document path.
+   */
+  iframe?: HTMLIFrameElement | null,
 ): CanvasDropCandidate[] {
   const depths = buildDepthMap(tree)
-  const wrappers = Array.from(viewport.querySelectorAll<HTMLElement>(CANVAS_NODE_SELECTOR))
+  const queryScope: ParentNode = iframe?.contentDocument ?? viewport
+  const wrappers = Array.from(queryScope.querySelectorAll<HTMLElement>(CANVAS_NODE_SELECTOR))
+  const iframeRect = iframe?.getBoundingClientRect() ?? null
+  // Inner rects come back unscaled (iframe document is its own viewport);
+  // multiply by the canvas zoom recovered from the iframe element before
+  // adding the iframe's outer offset. See the matching comment in
+  // `measureCanvasNodeClientUnionRect`.
+  const iframeScale =
+    iframe && iframe.offsetWidth > 0 && iframeRect ? iframeRect.width / iframe.offsetWidth : 1
   const candidates: CanvasDropCandidate[] = []
 
   for (const wrapper of wrappers) {
@@ -72,13 +120,29 @@ export function measureCanvasDropCandidates(
     if (!node || node.hidden) continue
 
     const target = getRenderedElement(wrapper)
-    const targetRect = target.getBoundingClientRect()
-    if (targetRect.width === 0 && targetRect.height === 0) continue
+    const rectInsideScope = target.getBoundingClientRect()
+    if (rectInsideScope.width === 0 && rectInsideScope.height === 0) continue
+
+    // Translate iframe-internal coords into editor coords: multiply by the
+    // canvas zoom, then add the iframe's outer offset.
+    // `clientRectToViewportRect` only reads `left`/`top`/`width`/`height`
+    // so we hand it a plain object — happy-dom doesn't expose DOMRect as a
+    // global, ruling out `new DOMRect()`.
+    const editorRect: ClientRectLike = iframeRect
+      ? {
+          left: iframeRect.left + rectInsideScope.left * iframeScale,
+          top: iframeRect.top + rectInsideScope.top * iframeScale,
+          right: iframeRect.left + rectInsideScope.right * iframeScale,
+          bottom: iframeRect.top + rectInsideScope.bottom * iframeScale,
+          width: rectInsideScope.width * iframeScale,
+          height: rectInsideScope.height * iframeScale,
+        }
+      : rectInsideScope
 
     candidates.push({
       nodeId,
       depth: depths.get(nodeId) ?? 0,
-      rect: clientRectToViewportRect(viewport, targetRect),
+      rect: clientRectToViewportRect(viewport, editorRect),
       axis: inferCanvasDropAxis(target),
     })
   }
@@ -87,10 +151,10 @@ export function measureCanvasDropCandidates(
 }
 
 function getCanvasNodeRenderElement(
-  viewport: HTMLElement,
+  scope: ParentNode,
   nodeId: string,
 ): HTMLElement | null {
-  const wrapper = viewport.querySelector<HTMLElement>(
+  const wrapper = scope.querySelector<HTMLElement>(
     `[data-node-id="${escapeAttribute(nodeId)}"]`,
   )
   if (!wrapper) return null
@@ -98,13 +162,36 @@ function getCanvasNodeRenderElement(
 }
 
 function getRenderedElement(wrapper: HTMLElement): HTMLElement {
+  // Duck-type check rather than `child instanceof HTMLElement`. Cross-frame
+  // checks (iframe page tree vs editor window) fail with `instanceof`
+  // because each window has its own constructor — see the matching note in
+  // `BreakpointSelectionOverlay.positionRing`.
   const child = wrapper.firstElementChild
-  return child instanceof HTMLElement ? child : wrapper
+  if (child && typeof (child as { getBoundingClientRect?: unknown }).getBoundingClientRect === 'function') {
+    return child as HTMLElement
+  }
+  return wrapper
+}
+
+/**
+ * Subset of `DOMRect` that `clientRectToViewportRect` actually reads. Using
+ * a structural type lets callers pass either a real `DOMRect` (from
+ * `getBoundingClientRect()`) or a plain object built by the iframe-coord
+ * translation path above — both work, and we don't need `new DOMRect(...)`
+ * which isn't available in every test environment.
+ */
+interface ClientRectLike {
+  left: number
+  top: number
+  right: number
+  bottom: number
+  width: number
+  height: number
 }
 
 function clientRectToViewportRect(
   viewport: HTMLElement,
-  rect: DOMRect,
+  rect: ClientRectLike,
 ): CanvasRect {
   const viewportRect = viewport.getBoundingClientRect()
   const scale = getViewportScale(viewport, viewportRect)

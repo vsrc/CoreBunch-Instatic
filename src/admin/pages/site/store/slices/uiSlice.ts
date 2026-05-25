@@ -166,20 +166,6 @@ export interface UiSlice {
    */
   dataSidebarCollapsed: boolean
   setDataSidebarCollapsed: (collapsed: boolean) => void
-
-  /**
-   * Node currently being edited inline on the canvas, or `null`.
-   *
-   * Set by the canvas double-click handler when the user opens inline edit
-   * mode for a text-like module (base.text, base.button, …). Each module's
-   * editor component checks `props.isInlineEditing` and renders its
-   * primary content prop as `contentEditable` when true.
-   *
-   * Cleared on blur / Escape / canvas-deselect / page switch.
-   */
-  inlineEditingNodeId: string | null
-  /** Open / close inline edit on a node. Pass `null` to exit edit mode. */
-  setInlineEditing: (nodeId: string | null) => void
 }
 
 const PANEL_FOCUS_ORDER: FocusedPanel[] = ['canvas', 'domTree', 'properties']
@@ -249,12 +235,6 @@ export const createUiSlice: EditorStoreSliceCreator<UiSlice> = (set, get) => ({
   activeDocument: null,
   selectedSelectorClassId: null,
   dataSidebarCollapsed: false,
-  inlineEditingNodeId: null,
-
-  setInlineEditing: (nodeId) => {
-    if (Object.is(get().inlineEditingNodeId, nodeId)) return
-    set({ inlineEditingNodeId: nodeId })
-  },
 
   setDomTreePanel: (partial) => {
     // Guard: skip the set() call entirely when every supplied field already

@@ -13,10 +13,11 @@ interface ContentProps extends Record<string, unknown> {
   html: string
 }
 
-export const ContentEditor: React.FC<ModuleComponentProps<ContentProps>> = ({ props, mcClassName }) => {
+export const ContentEditor: React.FC<ModuleComponentProps<ContentProps>> = ({ props, mcClassName, nodeWrapperProps }) => {
   if (!props.html) {
     return (
       <CanvasModulePlaceholder
+        {...nodeWrapperProps}
         className={mcClassName}
         icon={<TextPlusIcon size={16} />}
         label="Content body"
@@ -26,6 +27,7 @@ export const ContentEditor: React.FC<ModuleComponentProps<ContentProps>> = ({ pr
 
   return (
     <article
+      {...nodeWrapperProps}
       className={mcClassName}
       dangerouslySetInnerHTML={{ __html: props.html }}
     />

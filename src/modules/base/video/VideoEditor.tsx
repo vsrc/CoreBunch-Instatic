@@ -81,7 +81,7 @@ const FACADE_SHIELD_STYLE: CSSProperties = {
   cursor: 'pointer',
 }
 
-export const VideoEditor: React.FC<ModuleComponentProps<VideoProps>> = ({ props, mcClassName }) => {
+export const VideoEditor: React.FC<ModuleComponentProps<VideoProps>> = ({ props, mcClassName, nodeWrapperProps }) => {
   const youtubeId = useMemo(() => parseYoutubeId(props.videoUrl || ''), [props.videoUrl])
 
   // Resolve both assets in parallel via the per-path cache. For YouTube
@@ -110,7 +110,7 @@ export const VideoEditor: React.FC<ModuleComponentProps<VideoProps>> = ({ props,
     const src = youtubeEmbedUrl(youtubeId, props.autoplay)
     if (posterUrl) {
       return (
-        <div className={mcClassName} style={FACADE_WRAP_STYLE}>
+        <div {...nodeWrapperProps} className={mcClassName} style={FACADE_WRAP_STYLE}>
           <img
             src={posterUrl}
             srcSet={posterSrcset ?? undefined}
@@ -135,7 +135,7 @@ export const VideoEditor: React.FC<ModuleComponentProps<VideoProps>> = ({ props,
       )
     }
     return (
-      <div className={mcClassName} style={FACADE_WRAP_STYLE}>
+      <div {...nodeWrapperProps} className={mcClassName} style={FACADE_WRAP_STYLE}>
         <iframe
           src={src}
           title="YouTube video"
@@ -158,6 +158,7 @@ export const VideoEditor: React.FC<ModuleComponentProps<VideoProps>> = ({ props,
   if (!props.videoUrl) {
     return (
       <CanvasModulePlaceholder
+        {...nodeWrapperProps}
         className={mcClassName}
         icon={<VideoSolidIcon size={16} />}
         label="No video selected"
@@ -168,6 +169,7 @@ export const VideoEditor: React.FC<ModuleComponentProps<VideoProps>> = ({ props,
   // ─── Uploaded / external video ──────────────────────────────────────────
   return (
     <video
+      {...nodeWrapperProps}
       className={mcClassName}
       src={props.videoUrl}
       poster={posterUrl ?? undefined}

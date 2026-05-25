@@ -1,15 +1,25 @@
 /**
- * ClassStyleInjector — injects/updates user class CSS into the document
- * whenever the site's class registry changes.
+ * ClassStyleInjector — injects/updates user class CSS into the target
+ * document whenever the site's class registry changes.
  *
  * This is a pure side-effect component (renders null). It subscribes to
  * `site.classes` via a stable selector and imperatively manages a single
- * <style id="mc-classes"> element in document.head.
+ * <style id="mc-classes"> element in the target document's <head>.
+ *
+ * Multi-document support
+ * ──────────────────────
+ * Each breakpoint frame in the canvas is its own iframe, with its own document.
+ * `IframeFrameSurface` mounts one of these injectors per frame, targeting the
+ * iframe's document. When no `targetDocument` prop is passed, the injector
+ * falls back to the editor's main document — used by code paths that aren't
+ * inside an iframe (none right now, but kept as a safe default).
  *
  * Architecture:
- * - One <style> tag, kept in sync on every class registry change.
+ * - One <style> tag per target document, kept in sync on every class
+ *   registry change.
  * - CSS is generated from CSSPropertyBag by camelCase → kebab-case conversion.
- * - @media blocks are emitted for breakpoint overrides (uses site.breakpoints).
+ * - @media / `[data-breakpoint-id]` blocks are emitted for breakpoint overrides
+ *   (uses site.breakpoints).
  * - No FOUC: the style element is created synchronously before first paint.
  *
  * Security (Constraint #228):
@@ -26,6 +36,15 @@ import { useEffect } from 'react'
 import { useEditorStore } from '@site/store/store'
 import { generateCanvasClassCSS, generatePreviewClassCSS } from './canvasClassCss'
 
+interface ClassStyleInjectorProps {
+  /**
+   * Document to inject the <style> tag into. Defaults to the editor's main
+   * document. Pass an iframe's `contentDocument` to scope the injection to
+   * a single breakpoint frame.
+   */
+  targetDocument?: Document
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -41,7 +60,7 @@ const PREVIEW_STYLE_TAG_ID = 'mc-classes-preview'
  */
 const EMPTY_BREAKPOINTS: Array<{ id: string; width: number }> = []
 
-export function ClassStyleInjector() {
+export function ClassStyleInjector({ targetDocument }: ClassStyleInjectorProps = {}) {
   // Subscribe to class registry — shallow equality so we only re-run when
   // the classes object reference changes (Immer always creates a new ref on mutation)
   const classes = useEditorStore((s) => s.site?.classes ?? null)
@@ -54,13 +73,14 @@ export function ClassStyleInjector() {
   const previewClassStyles = useEditorStore((s) => s.previewClassStyles)
 
   useEffect(() => {
-    // Get or create the <style> element
-    let styleEl = document.getElementById(STYLE_TAG_ID) as HTMLStyleElement | null
+    const targetDoc = targetDocument ?? document
+    // Get or create the <style> element inside the target document.
+    let styleEl = targetDoc.getElementById(STYLE_TAG_ID) as HTMLStyleElement | null
     if (!styleEl) {
-      styleEl = document.createElement('style')
+      styleEl = targetDoc.createElement('style')
       styleEl.id = STYLE_TAG_ID
       styleEl.setAttribute('data-source', 'ClassStyleInjector')
-      document.head.appendChild(styleEl)
+      targetDoc.head.appendChild(styleEl)
     }
 
     if (!classes || Object.keys(classes).length === 0) {
@@ -86,23 +106,24 @@ export function ClassStyleInjector() {
       frameworkPreferences,
       fonts,
     )
-  }, [classes, breakpoints, frameworkColors, frameworkTypography, frameworkSpacing, frameworkPreferences, fonts])
+  }, [targetDocument, classes, breakpoints, frameworkColors, frameworkTypography, frameworkSpacing, frameworkPreferences, fonts])
 
   // Preview overlay — a higher-specificity rule emitted while a user is
   // hovering a suggestion in a property control (e.g. spacing token
   // dropdown). Lives in its own <style> tag so it can be toggled cleanly
   // without re-running the main class-CSS generation.
   useEffect(() => {
-    let previewEl = document.getElementById(PREVIEW_STYLE_TAG_ID) as HTMLStyleElement | null
+    const targetDoc = targetDocument ?? document
+    let previewEl = targetDoc.getElementById(PREVIEW_STYLE_TAG_ID) as HTMLStyleElement | null
     if (!previewClassStyles) {
       if (previewEl) previewEl.textContent = ''
       return
     }
     if (!previewEl) {
-      previewEl = document.createElement('style')
+      previewEl = targetDoc.createElement('style')
       previewEl.id = PREVIEW_STYLE_TAG_ID
       previewEl.setAttribute('data-source', 'ClassStyleInjector:preview')
-      document.head.appendChild(previewEl)
+      targetDoc.head.appendChild(previewEl)
     }
     const cls = classes?.[previewClassStyles.classId]
     if (!cls) {
@@ -113,15 +134,18 @@ export function ClassStyleInjector() {
       breakpointId: previewClassStyles.breakpointId ?? null,
       styles: previewClassStyles.styles,
     })
-  }, [classes, previewClassStyles])
+  }, [targetDocument, classes, previewClassStyles])
 
-  // Cleanup: remove the style elements when the component unmounts
+  // Cleanup: remove the style elements when the component unmounts. We
+  // capture `targetDocument` into the effect so cleanup targets the same
+  // document the effect installed to, even if the prop later changed.
   useEffect(() => {
+    const targetDoc = targetDocument ?? document
     return () => {
-      document.getElementById(STYLE_TAG_ID)?.remove()
-      document.getElementById(PREVIEW_STYLE_TAG_ID)?.remove()
+      targetDoc.getElementById(STYLE_TAG_ID)?.remove()
+      targetDoc.getElementById(PREVIEW_STYLE_TAG_ID)?.remove()
     }
-  }, [])
+  }, [targetDocument])
 
   return null
 }

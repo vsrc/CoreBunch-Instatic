@@ -30,6 +30,7 @@ export const ContainerEditor: React.FC<ModuleComponentProps<ContainerProps>> = (
   props,
   children,
   mcClassName,
+  nodeWrapperProps,
 }) => {
   const Tag = resolveHtmlTag(props.tag, props.customTag)
   const isEmpty = React.Children.count(children) === 0
@@ -37,6 +38,7 @@ export const ContainerEditor: React.FC<ModuleComponentProps<ContainerProps>> = (
   return React.createElement(
     Tag,
     {
+      ...nodeWrapperProps,
       className: mcClassName,
       'data-canvas-empty-container': isEmpty ? 'true' : undefined,
     },

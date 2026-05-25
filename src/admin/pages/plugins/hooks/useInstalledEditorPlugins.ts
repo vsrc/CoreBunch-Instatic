@@ -3,6 +3,7 @@ import { activateInstalledEditorPlugins } from '@core/plugins/editorPluginLoader
 import { bindDashboardWidgetIconResolver } from '@core/plugins/runtime'
 import { editorPluginModuleComponentFactory } from '@site/canvas/pluginModuleComponentFactory'
 import { resolveDashboardWidgetIcon } from '@admin/pages/dashboard/widgetIcons'
+import { ensurePluginRuntime } from '@admin/pluginRuntimeBootstrap'
 import { CMS_PLUGINS_CHANGED_EVENT } from '@plugins/utils/pluginEvents'
 import { setEditorActivationFailures } from './editorPluginActivationErrors'
 
@@ -23,6 +24,15 @@ export function useInstalledEditorPlugins(): void {
     let cancelled = false
 
     async function activatePlugins() {
+      // The runtime MUST be ready before any plugin module dynamic-imports
+      // (the plugin bundle's `import * as React from 'react'` statements
+      // resolve via the `/runtime/*.js` shims, which read
+      // `globalThis.__pagebuilder`). The first call here triggers the
+      // download of the plugin host UI + host hooks + plugin SDK chunks;
+      // subsequent calls (on PLUGIN_CHANGED rebroadcasts, on every page
+      // mount) receive the cached resolved promise instantly.
+      await ensurePluginRuntime()
+      if (cancelled) return
       const result = await activateInstalledEditorPlugins({
         componentFactory: editorPluginModuleComponentFactory,
       })

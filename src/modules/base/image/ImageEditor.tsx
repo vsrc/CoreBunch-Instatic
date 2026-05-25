@@ -35,7 +35,7 @@ interface ImageProps extends Record<string, unknown> {
 // initial `src`.
 const CANVAS_CSS_WIDTH = 320
 
-export const ImageEditor: React.FC<ModuleComponentProps<ImageProps>> = ({ props, mcClassName }) => {
+export const ImageEditor: React.FC<ModuleComponentProps<ImageProps>> = ({ props, mcClassName, nodeWrapperProps }) => {
   // Resolve the asset row server-side metadata is cached in a module-
   // level map, so dozens of image modules on one page share a single
   // round trip. `null` until the cache is populated — render shows the
@@ -57,6 +57,7 @@ export const ImageEditor: React.FC<ModuleComponentProps<ImageProps>> = ({ props,
   if (!props.src) {
     return (
       <CanvasModulePlaceholder
+        {...nodeWrapperProps}
         className={mcClassName}
         icon={<ImageSolidIcon size={16} />}
         label="No image selected"
@@ -74,6 +75,7 @@ export const ImageEditor: React.FC<ModuleComponentProps<ImageProps>> = ({ props,
   if (!responsive) {
     return (
       <img
+        {...nodeWrapperProps}
         src={props.src}
         alt={alt}
         className={mcClassName}
@@ -93,6 +95,7 @@ export const ImageEditor: React.FC<ModuleComponentProps<ImageProps>> = ({ props,
 
   return (
     <img
+      {...nodeWrapperProps}
       src={responsive.src}
       srcSet={responsive.srcset ?? undefined}
       sizes={responsive.srcset ? '100vw' : undefined}

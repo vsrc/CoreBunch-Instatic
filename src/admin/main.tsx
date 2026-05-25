@@ -7,6 +7,7 @@ import { ErrorBoundary, flattenErrorChain, logErrorChain } from '@ui/components/
 import { ToastProvider, pushToast } from '@ui/components/Toast'
 import '../styles/globals.css'
 
+
 // `installPluginRuntime()` used to be called here, eagerly. That dragged
 // the whole plugin-host-hooks module (which imports `useEditorStore` from
 // `@site/store/store`) into the first-paint bundle — roughly 116 KB of
@@ -83,6 +84,70 @@ const root = createRoot(rootElement, {
 // In practice the eager bundle is small enough (~96 KB gz / 36 ms of
 // actual JS execution per our CPU profile) that the user does not see a
 // frame drop. Subsequent renders still run in concurrent mode.
+// Eliminate the concurrent-mode re-render that fires after AuthenticatedAdmin's
+// prewarmedLazy Suspense resolves.
+//
+// Sequence WITHOUT this preload:
+//   1. flushSync render boots AdminEntry → status='loading' → AppLoadingScreen.
+//   2. useAdminBoot's useEffect resolves /me → flushSync setState → editor.
+//   3. AdminEntry re-renders → tries to render AuthenticatedAdmin → throws
+//      (prewarmedLazy hasn't loaded yet) → Suspense fallback.
+//   4. AuthenticatedAdmin chunk loads → Suspense promise resolves → React
+//      schedules a re-render. THIS RE-RENDER GOES THROUGH THE CONCURRENT
+//      SCHEDULER (Suspense's retry is concurrent by default), which can
+//      defer the commit ~280–300 ms behind layout / paint / prefetch work.
+//
+// Sequence WITH this preload (when authenticated):
+//   1. main.tsx awaits AuthenticatedAdmin's chunk before mounting React.
+//      The chunk is in HTTP cache (SSR prefetch hint) so this typically
+//      resolves in <5 ms.
+//   2. flushSync render boots AdminEntry → status='loading'.
+//   3. useAdminBoot's useEffect resolves /me → flushSync setState → editor.
+//   4. AdminEntry re-renders → prewarmedLazy.cached IS set → renders
+//      AuthenticatedAdmin synchronously, NO Suspense round-trip.
+//   5. Whole tree commits within flushSync → no concurrent-scheduler
+//      delay. Dashboard paint follows in the next animation frame (~16 ms
+//      instead of ~300 ms).
+//
+// Unauthenticated users (no cookie) skip the preload entirely — they
+// don't pay for the AuthenticatedAdmin chunk on the login screen.
+// `window.__pbAuthed` is injected by `server/static.ts` ONLY when the
+// request carried a valid session cookie. We can't read the cookie
+// directly (it's HttpOnly), so the server tells us via this flag.
+//
+// We await BOTH the AuthenticatedAdmin chunk AND the section page chunk
+// matching the URL. Without the section preload, AuthenticatedAdmin's
+// inner `<Suspense fallback={<AppLoadingScreen />}>` boundary catches
+// the cold-render of DashboardPage / SitePage / etc., and Suspense's
+// retry runs in concurrent mode — the same ~300 ms commit deferral
+// that we just removed for AuthenticatedAdmin. Preloading the section
+// page lets the prewarmedLazy synchronous fast-path engage on the very
+// first render, so the whole tree commits inside flushSync.
+//
+// The mapping below is hand-maintained — `import('./pages/' + section + '/...')`
+// would silently break Vite/Rolldown's static-analysis chunk-resolution.
+// Adding a new workspace section requires one new entry here.
+if (typeof window !== 'undefined' && (window as unknown as { __pbAuthed?: number }).__pbAuthed === 1) {
+  const pathname = window.location.pathname
+  const sectionImport: Promise<unknown> = (() => {
+    if (pathname.startsWith('/admin/dashboard')) return import('./pages/dashboard/DashboardPage')
+    if (pathname.startsWith('/admin/site')) return import('./pages/site/SitePage')
+    if (pathname.startsWith('/admin/content')) return import('./pages/content/ContentPage')
+    if (pathname.startsWith('/admin/data')) return import('./pages/data/DataPage')
+    if (pathname.startsWith('/admin/media')) return import('./pages/media/MediaPage')
+    if (pathname.startsWith('/admin/plugins/')) return import('./pages/plugins/PluginPage')
+    if (pathname.startsWith('/admin/plugins')) return import('./pages/plugins/PluginsPage')
+    if (pathname.startsWith('/admin/users')) return import('./pages/users/UsersPage')
+    if (pathname.startsWith('/admin/account')) return import('./pages/account/AccountPage')
+    // `/admin/` or `/admin` redirect to `/admin/dashboard` — preload dashboard.
+    return import('./pages/dashboard/DashboardPage')
+  })()
+  await Promise.all([
+    import('./AuthenticatedAdmin'),
+    sectionImport,
+  ])
+}
+
 flushSync(() => {
   root.render(
     <StrictMode>

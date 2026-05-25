@@ -88,17 +88,21 @@
     border-top: 0;
 }
 
-.feedAvatar {
+/* System-initiated audit events (no actor user) render with a small
+ * cog icon in the same 22px slot the shared <UserAvatar> primitive
+ * occupies for real users. Circular to match UserAvatar's pill
+ * geometry so the column reads as a single avatar rail regardless of
+ * row type. */
+.feedSystemAvatar {
     width: 22px;
     height: 22px;
-    border-radius: 6px;
+    border-radius: 999px;
     display: grid;
     place-items: center;
-    background: var(--editor-surface);
+    background: var(--editor-surface-2);
     border: 1px solid var(--editor-border);
-    font-family: var(--font-mono);
-    font-size: 10px;
     color: var(--editor-text-secondary);
+    flex-shrink: 0;
 }
 
 .feedBody {

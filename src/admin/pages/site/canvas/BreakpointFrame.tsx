@@ -5,6 +5,11 @@
  * One BreakpointFrame is rendered per breakpoint, positioned side-by-side
  * inside CanvasTransformLayer (so they're panned/zoomed together).
  *
+ * The viewport itself is an iframe (see `IframeFrameSurface`) so the
+ * canvas DOM matches the published HTML exactly — `body` is the page body,
+ * not the editor chrome. See `docs/features/canvas-iframe-per-frame.md`
+ * for the rationale.
+ *
  * Frame is design-only after the canvas-view redesign: preview mode now
  * lives in its own surface (CanvasPreviewSurface) which owns a single
  * full-bleed iframe instead of one iframe per breakpoint frame. See the
@@ -12,12 +17,13 @@
  * for why preview no longer reuses these frames.
  */
 
-import { useRef, type CSSProperties } from 'react'
+import { useCallback, useRef, useState, type CSSProperties } from 'react'
 import type { Page, Breakpoint } from '@core/page-tree'
 import type { TemplateRenderDataContext } from '@core/templates/dynamicBindings'
 import { NodeRenderer } from './NodeRenderer'
 import { BreakpointSelectionOverlay } from './BreakpointSelectionOverlay'
 import { CanvasBreakpointContext, CanvasTemplateContext } from './CanvasContexts'
+import { IframeFrameSurface, type IframeFrameSurfaceHandle } from './IframeFrameSurface'
 import { PlusBoxSolidIcon } from 'pixel-art-icons/icons/plus-box-solid'
 import { Button } from '@ui/components/Button'
 import { EmptyState } from '@ui/components/EmptyState'
@@ -45,10 +51,19 @@ export function BreakpointFrame({
   // --bp-width drives both label width and viewport width via CSS (dynamic value)
   const bpStyle = { '--bp-width': `${breakpoint.width}px` } as CSSProperties
 
-  // Ref to the viewport `<div>` — passed to the selection overlay so ring
-  // positions are computed relative to this frame (handles canvas pan/zoom
-  // for free, since the viewport itself is transformed with the canvas).
-  const viewportRef = useRef<HTMLDivElement>(null)
+  // Outer viewport `<div>` wrapping the iframe. The selection overlay still
+  // measures the viewport (not the iframe) for zoom/pan/toolbar positioning;
+  // the iframe handle below is just for translating *inside-iframe* element
+  // rects into editor coordinates.
+  const viewportRef = useRef<HTMLDivElement | null>(null)
+  // Handle to the iframe surface; the selection overlay reads the iframe
+  // element so it can translate inside-iframe element rects into editor
+  // viewport coordinates.
+  const iframeHandleRef = useRef<IframeFrameSurfaceHandle | null>(null)
+  // Track the iframe element separately for the selection overlay's
+  // `getBoundingClientRect()` call. State (not ref) so the overlay re-renders
+  // when the iframe mounts.
+  const [iframeEl, setIframeEl] = useState<HTMLIFrameElement | null>(null)
 
   // Breakpoint chrome (active highlight + label-click-to-activate) is a style
   // editing affordance — picking the "active" breakpoint controls where per-
@@ -56,6 +71,20 @@ export function BreakpointFrame({
   // pure Viewers; they get plain frames without an active-state outline.
   const permissions = useEditorPermissions()
   const breakpointChromeVisible = permissions.canEditStyle || permissions.canEditStructure
+
+  const handleIframeRef = useCallback((handle: IframeFrameSurfaceHandle | null) => {
+    iframeHandleRef.current = handle
+    setIframeEl(handle?.iframeElement ?? null)
+  }, [])
+
+  const handleEmptyFrameClick = useCallback(() => {
+    if (!breakpointChromeVisible) return
+    onActivate(breakpoint.id)
+  }, [breakpointChromeVisible, onActivate, breakpoint.id])
+
+  const rootNode = page.nodes[page.rootNodeId]
+  const showEmptyState =
+    rootNode?.moduleId === 'base.body' && rootNode.children.length === 0
 
   return (
     <div
@@ -86,46 +115,40 @@ export function BreakpointFrame({
         </div>
       )}
 
-      {/* Viewport frame */}
+      {/* Iframe viewport — see IframeFrameSurface for why this is an iframe
+          instead of a plain `<div>`. The outer wrapper div is still here so
+          the selection overlay has a positioning context and so the
+          breakpoint's `data-breakpoint-id` is observable to canvas-level
+          DOM tools that don't cross the iframe boundary. */}
       <div
         ref={viewportRef}
         data-breakpoint-id={breakpoint.id}
         className={cn(
           styles.viewport,
-          // Only style/structure editors see the "active breakpoint" outline.
           isActive && breakpointChromeVisible && styles.viewportActive,
         )}
-        onClick={(e) => {
-          if (!breakpointChromeVisible) return
-          // Click on empty frame area → activate this breakpoint
-          onActivate(breakpoint.id)
-          e.stopPropagation()
-        }}
       >
-        {/* Empty canvas state — shown only when the page is a base.body
-            wrapper with no children. Visual Components whose rootNode is
-            not base.body (e.g. a single Button converted via Componentize)
-            use the rootNode itself as the rendered content, so the empty
-            state would be misleading there. */}
-        {(() => {
-          const rootNode = page.nodes[page.rootNodeId]
-          return rootNode?.moduleId === 'base.body' && rootNode.children.length === 0
-            ? <EmptyCanvasState />
-            : null
-        })()}
+        <IframeFrameSurface
+          ref={handleIframeRef}
+          breakpointId={breakpoint.id}
+          width={breakpoint.width}
+          onClick={handleEmptyFrameClick}
+        >
+          {showEmptyState && <EmptyCanvasState />}
+          <CanvasTemplateContext.Provider value={templateContext}>
+            <CanvasBreakpointContext.Provider value={breakpoint.id}>
+              <NodeRenderer nodeId={page.rootNodeId} />
+            </CanvasBreakpointContext.Provider>
+          </CanvasTemplateContext.Provider>
+        </IframeFrameSurface>
 
-        <CanvasTemplateContext.Provider value={templateContext}>
-          <CanvasBreakpointContext.Provider value={breakpoint.id}>
-            <NodeRenderer nodeId={page.rootNodeId} />
-          </CanvasBreakpointContext.Provider>
-        </CanvasTemplateContext.Provider>
-
-        {/* Selection / hover rings, rendered as an absolutely-positioned
-            overlay so the wrapper divs (`NodeWrapper`) can stay
-            `display: contents`. See BreakpointSelectionOverlay.tsx. */}
+        {/* Selection / hover rings — rendered in the parent document but
+            positioned over the iframe. The overlay handles the iframe-rect
+            → editor-viewport coordinate translation. */}
         <BreakpointSelectionOverlay
           breakpointId={breakpoint.id}
           viewportRef={viewportRef}
+          iframeElement={iframeEl}
         />
       </div>
     </div>

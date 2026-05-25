@@ -36,7 +36,7 @@
  * Routes into the editor through the existing soft-nav helpers so the
  * Site editor's heavy bundle doesn't load on the dashboard.
  */
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   DndContext,
   DragOverlay,
@@ -122,6 +122,34 @@ export function DashboardPage() {
   const [editing, setEditing] = useState(false)
   const [libraryOpen, setLibraryOpenRaw] = useState(false)
   const [range, setRange] = useState<RangeKey>('today')
+
+  // Deferred mount of non-critical dashboard children — drag-and-drop
+  // surfaces (BlockLibrary, DragOverlay), the FloatingActionBar, and the
+  // OnboardingPanel. None of them are visible on the first paint of a
+  // returning user's dashboard (BlockLibrary is bottom-docked + hidden
+  // until the user opens it; DragOverlay only renders during a drag;
+  // FloatingActionBar requires customize mode; OnboardingPanel is
+  // dismissed once and forgotten by most users), but their initial
+  // construction is the heaviest part of DashboardPage's reconciliation
+  // pass. Keeping them off the first render trims ~250 ms from the React
+  // commit + layout / paint cycle on cold load.
+  //
+  // We flip `mounted` in a `useEffect` (which fires after first paint)
+  // gated by `requestAnimationFrame` so the post-paint render lands on
+  // the very next frame. The fallback `setTimeout(0)` covers browsers
+  // without `rAF` (none of the targets in 2026 — the fallback only fires
+  // in tests / SSR).
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => {
+    const w = window as unknown as { requestAnimationFrame?: (cb: () => void) => number }
+    if (typeof w.requestAnimationFrame === 'function') {
+      const handle = w.requestAnimationFrame(() => setMounted(true))
+      return () => cancelAnimationFrame(handle)
+    }
+    const id = setTimeout(() => setMounted(true), 0)
+    return () => clearTimeout(id)
+  }, [])
+
 
   /**
    * Opening the block library forces customize mode on. Without that
@@ -408,7 +436,7 @@ export function DashboardPage() {
         <span className={styles.crumbsCurrent}>Dashboard</span>
       </div>
 
-      {showOnboarding && (
+      {mounted && showOnboarding && (
         <OnboardingPanel facts={facts} onDismiss={dismissOnboarding} />
       )}
 
@@ -476,19 +504,27 @@ export function DashboardPage() {
               Mounts with `pillIn` animation, unmounts instantly — no
               exit animation, so a grid-to-grid move doesn't flash a
               "library closing" animation for a library the user never
-              opened. */}
-        <BlockLibrary
-          panelOpen={libraryOpen}
-          dragging={activeId !== null}
-          draggingFromGrid={
-            activeId !== null && !activeId.startsWith(LIBRARY_DRAG_PREFIX)
-          }
-          availableWidgets={availableWidgets}
-          height={layout.libraryHeight}
-          onHeightChange={setLibraryHeight}
-          onAdd={(id, defaultSize) => addWidget(id, defaultSize)}
-          onClose={() => setLibraryOpen(false)}
-        />
+              opened.
+
+            Gated behind `mounted` so this heavyweight subtree (577 LOC,
+            multiple `useDelayedUnmount` instances, plenty of dnd-kit
+            droppable/draggable hooks) is omitted from the first
+            reconciliation pass. It mounts on the next animation frame
+            via the effect above. */}
+        {mounted && (
+          <BlockLibrary
+            panelOpen={libraryOpen}
+            dragging={activeId !== null}
+            draggingFromGrid={
+              activeId !== null && !activeId.startsWith(LIBRARY_DRAG_PREFIX)
+            }
+            availableWidgets={availableWidgets}
+            height={layout.libraryHeight}
+            onHeightChange={setLibraryHeight}
+            onAdd={(id, defaultSize) => addWidget(id, defaultSize)}
+            onClose={() => setLibraryOpen(false)}
+          />
+        )}
 
         <DragOverlay>{overlayContent}</DragOverlay>
       </DndContext>
@@ -498,8 +534,14 @@ export function DashboardPage() {
           block" affordance, and the minimized pill owns the drag
           interaction. The floating bar only appears when neither is on
           screen (i.e., customize mode is on but the user hasn't opened
-          the library and isn't currently dragging). */}
-      <FloatingActionBar
+          the library and isn't currently dragging).
+
+          Gated behind `mounted` — the toolbar starts at `open={false}`
+          on first paint anyway (editing defaults to false), so the
+          component would render nothing visible but still allocate its
+          portal root + animation state. Deferring it spares the first
+          reconciliation pass. */}
+      {mounted && <FloatingActionBar
         open={editing && !libraryOpen && activeId === null}
         ariaLabel="Customize dashboard"
         label={<><strong>Customize mode</strong> — drag, resize, or add blocks.</>}
@@ -520,7 +562,7 @@ export function DashboardPage() {
         >
           Done
         </Button>
-      </FloatingActionBar>
+      </FloatingActionBar>}
     </AdminPageLayout>
   )
 }

@@ -15,25 +15,40 @@
  * The component is loaded by `AdminEntry` via React.lazy when (and only
  * when) the boot probe resolves to `phase === 'editor'`.
  *
- * Workspace pages are EAGERLY imported (not behind `React.lazy`). The
- * earlier `React.lazy` approach had a subtle problem: even after a
- * pre-warm completed the underlying module, React.lazy's loader returns
- * a NEW `import(...).then(...)` chain on every call — the `.then` step
- * is a fresh microtask, which causes Suspense to fall back to its
- * `AppLoadingScreen` for ONE TICK on every navigation, even when the
- * module is already cached. The user perceives that one-tick flash as
- * a "loading screen flicker" between every nav click. Eager imports
- * fold the workspace pages directly into AuthenticatedAdmin's chunk —
- * Suspense doesn't fire at all on navigation, transitions are truly
- * synchronous, and the nav feels instant.
+ * Workspace pages — the navigation-feel optimization
+ * --------------------------------------------------
+ * Each workspace page is wrapped with `prewarmedLazy(...)`. The pattern
+ * is "load the active page first, others in idle time after":
  *
- * Cost: the AuthenticatedAdmin chunk gets bigger (the 9 page chunks
- * are merged into it). Pre-release, on a self-hosted broadband target,
- * that's the right trade. AdminCanvasLayout / CodeMirrorEditor remain
- * lazy inside SitePage so the editor still loads on demand — what's
- * eager here is just the top-level workspace shells.
+ *   1. The page the user is on (e.g., DashboardPage when section ===
+ *      'dashboard') loads first. React renders it; `prewarmedLazy`'s
+ *      cold-path triggers `.preload()` and suspends to the nearest
+ *      Suspense boundary until the import lands. The DASHBOARD chunk
+ *      gets vite's CPU / the HTTP connection slot to itself — no 8
+ *      sibling compilations competing for resources.
+ *
+ *   2. After the active page paints (i.e., the user actually sees the
+ *      dashboard), an effect fires `requestIdleCallback` to schedule
+ *      `.preload()` calls for the OTHER 8 workspace pages. They load
+ *      in the background while the user is reading the dashboard.
+ *
+ *   3. When the user clicks any nav link, the target page's cached
+ *      component renders synchronously via `prewarmedLazy`'s
+ *      fast-path. No microtask, no Suspense fallback, no flash.
+ *
+ * Why this beats React.lazy + module-load auto-prewarm:
+ *   - React.lazy returns a fresh `.then()` chain on every render → one-
+ *     tick Suspense flash on every nav even with cached chunks.
+ *   - Auto-prewarming at construction time (the previous version of
+ *     this file) fires all 9 imports simultaneously, which makes the
+ *     active page COMPETE for vite-CPU / HTTP connections with 8
+ *     sibling chunks. The user perceives the active page as slower.
+ *
+ * Cost: same as before — every authenticated user eventually downloads
+ * + compiles all workspace page chunks. The difference is the SCHEDULE:
+ * active first, others in idle time. Total wire bytes are unchanged.
  */
-import { Suspense } from 'react'
+import { Suspense, useEffect } from 'react'
 import type { CmsCurrentUser } from '@core/persistence'
 import { AppLoadingScreen } from './AppLoadingScreen'
 import type { AdminWorkspace } from './workspace'
@@ -42,34 +57,161 @@ import { StepUpProvider } from './shared/StepUp'
 import { canAccessWorkspace, firstAccessibleWorkspace, workspacePath } from './access'
 import { Navigate, useInRouterContext } from './lib/routing'
 import { SpotlightRoot } from './spotlight'
-import { installPluginRuntime } from './pluginRuntimeBootstrap'
+import { prewarmedLazy } from './lib/prewarmedLazy'
 import styles from './AdminEntry.module.css'
 
-// Eager imports — see the docstring above for why.
-import { DashboardPage } from './pages/dashboard/DashboardPage'
-import { SitePage } from './pages/site/SitePage'
-import { ContentPage } from './pages/content/ContentPage'
-import { MediaPage } from './pages/media/MediaPage'
-import { PluginsPage } from './pages/plugins/PluginsPage'
-import { PluginPage } from './pages/plugins/PluginPage'
-import { UsersPage } from './pages/users/UsersPage'
-import { AccountPage } from './pages/account/AccountPage'
-import { DataPage } from './pages/data/DataPage'
+// The 9 workspace pages — pre-warmed AND synchronously-renderable once
+// loaded. See file header for the rationale.
+const DashboardPage = prewarmedLazy(
+  () => import('./pages/dashboard/DashboardPage').then((m) => ({ default: m.DashboardPage })),
+  { displayName: 'DashboardPage' },
+)
+const SitePage = prewarmedLazy(
+  () => import('./pages/site/SitePage').then((m) => ({ default: m.SitePage })),
+  { displayName: 'SitePage' },
+)
+const ContentPage = prewarmedLazy(
+  () => import('./pages/content/ContentPage').then((m) => ({ default: m.ContentPage })),
+  { displayName: 'ContentPage' },
+)
+const MediaPage = prewarmedLazy(
+  () => import('./pages/media/MediaPage').then((m) => ({ default: m.MediaPage })),
+  { displayName: 'MediaPage' },
+)
+const PluginsPage = prewarmedLazy(
+  () => import('./pages/plugins/PluginsPage').then((m) => ({ default: m.PluginsPage })),
+  { displayName: 'PluginsPage' },
+)
+const PluginPage = prewarmedLazy(
+  () => import('./pages/plugins/PluginPage').then((m) => ({ default: m.PluginPage })),
+  { displayName: 'PluginPage' },
+)
+const UsersPage = prewarmedLazy(
+  () => import('./pages/users/UsersPage').then((m) => ({ default: m.UsersPage })),
+  { displayName: 'UsersPage' },
+)
+const AccountPage = prewarmedLazy(
+  () => import('./pages/account/AccountPage').then((m) => ({ default: m.AccountPage })),
+  { displayName: 'AccountPage' },
+)
+const DataPage = prewarmedLazy(
+  () => import('./pages/data/DataPage').then((m) => ({ default: m.DataPage })),
+  { displayName: 'DataPage' },
+)
 
-// Populate globalThis.__pagebuilder for plugin chunks. Idempotent — runs
-// only when this lazy chunk evaluates, which is AFTER login. Plugins are
-// loaded by AuthenticatedAdmin's downstream children (e.g. PluginsPage),
-// so the runtime is always ready before any plugin chunk evaluates.
-installPluginRuntime()
+// Plugin runtime (globalThis.__pagebuilder) is now installed LAZILY by
+// `ensurePluginRuntime()` in `pluginRuntimeBootstrap.ts`. The two callers
+// that need it (useInstalledEditorPlugins, PluginPageRenderer) await it
+// before triggering their plugin dynamic-imports. Eagerly installing
+// here dragged the editor store (109 KB) + plugin host UI + plugin SDK
+// into the dashboard's critical path — every cold-load of /admin/dashboard
+// blocked on that download + parse even though the dashboard doesn't use
+// any of it.
+
+// Module-evaluation-time preload of the active page's `prewarmedLazy`.
+//
+// `main.tsx` already `await`s `import('./pages/<section>/<Section>Page')`
+// so the chunk is in the browser's module cache by the time
+// AuthenticatedAdmin's module loads. But the `prewarmedLazy.cached`
+// field is set inside the wrapper's `.then(...)` callback — the
+// `import(...)` promise itself resolves synchronously, but the `.then`
+// creates a microtask gap. If React's first render of the page lands
+// BEFORE that microtask completes, prewarmedLazy throws to Suspense,
+// the fallback renders, the microtask resolves, then Suspense retries
+// — and that retry runs in CONCURRENT mode (Suspense's retry never
+// goes through `flushSync`). The concurrent-mode commit defers behind
+// browser layout / paint / chunk-parse work by ~280 ms on cold load.
+//
+// Firing `.preload()` here, at module evaluation, queues the `.then()`
+// microtask BEFORE React renders. The microtask completes in the same
+// task as the module load, so by the time React calls the prewarmedLazy
+// wrapper, `cached` is set and the render goes through the synchronous
+// fast-path — no Suspense round-trip, no concurrent re-render.
+//
+// We pick the wrapper by URL pathname; the others stay dormant until
+// either the user navigates to them (`prewarmedLazy`'s cold path) or
+// the `requestIdleCallback` background-preload effect fires below.
+if (typeof window !== 'undefined') {
+  const pathname = window.location.pathname
+  const activePage =
+    pathname.startsWith('/admin/site') ? SitePage :
+    pathname.startsWith('/admin/content') ? ContentPage :
+    pathname.startsWith('/admin/data') ? DataPage :
+    pathname.startsWith('/admin/media') ? MediaPage :
+    pathname.startsWith('/admin/plugins/') ? PluginPage :
+    pathname.startsWith('/admin/plugins') ? PluginsPage :
+    pathname.startsWith('/admin/users') ? UsersPage :
+    pathname.startsWith('/admin/account') ? AccountPage :
+    DashboardPage
+  void activePage.preload().catch(() => {
+    // Cold-render retry will re-fire preload via prewarmedLazy's throw.
+  })
+}
 
 interface AuthenticatedAdminProps {
   section: AdminWorkspace
   currentUser: CmsCurrentUser
 }
 
+// Every prewarmedLazy-wrapped workspace page, in one list so the
+// background-preload scheduler can iterate without naming each one.
+// Order matches the rough frequency of use (Site / Content / Data are
+// the canonical creator workflows; Plugins / Users / Account are
+// admin-only one-offs) — `requestIdleCallback` doesn't promise a
+// specific order, but if the browser starts firing requests round-
+// robin, this puts the most-likely-next pages first.
+const ALL_WORKSPACE_PAGES = [
+  SitePage,
+  ContentPage,
+  DataPage,
+  DashboardPage,
+  MediaPage,
+  PluginsPage,
+  UsersPage,
+  AccountPage,
+  PluginPage,
+]
+
 export default function AuthenticatedAdmin({ section, currentUser }: AuthenticatedAdminProps) {
   const inRouter = useInRouterContext()
   const fallbackWorkspace = firstAccessibleWorkspace(currentUser)
+
+  // Schedule background preloads for non-active workspace pages AFTER
+  // the active page has rendered + painted. `useEffect` fires after
+  // the browser's first paint of the active page, so the user sees the
+  // dashboard (or whatever section they landed on) before we kick off
+  // network/CPU work for the other 8.
+  //
+  // `requestIdleCallback` is the right primitive here — it fires when
+  // the browser has truly idle main-thread time. In dev mode that's
+  // after vite has finished compiling everything the active page
+  // needs; in prod it's almost immediately after paint. Fallback to
+  // setTimeout for browsers that don't support it (Safari < 17).
+  useEffect(() => {
+    type IdleCb = (cb: () => void, options?: { timeout?: number }) => unknown
+    const w = window as unknown as { requestIdleCallback?: IdleCb }
+    const fire = () => {
+      for (const page of ALL_WORKSPACE_PAGES) {
+        // `.preload()` is idempotent — the active page's preload is
+        // already in flight (or resolved), this just returns the same
+        // promise. The other 8 actually fire their imports here.
+        void page.preload().catch(() => {
+          // Best-effort. A single failed background preload is not
+          // fatal — the page will retry via its render-path preload
+          // when the user actually navigates to it.
+        })
+      }
+    }
+    if (typeof w.requestIdleCallback === 'function') {
+      // The `timeout: 2000` cap means even on a busy main thread we
+      // start within 2s of paint. That's the latest a typical user
+      // takes to click their first nav link, so we're racing them
+      // exactly the right amount.
+      w.requestIdleCallback(fire, { timeout: 2000 })
+    } else {
+      setTimeout(fire, 300)
+    }
+  }, [])
 
   if (!canAccessWorkspace(currentUser, section)) {
     if (inRouter && fallbackWorkspace) {
@@ -96,10 +238,15 @@ export default function AuthenticatedAdmin({ section, currentUser }: Authenticat
           workspace. */}
       <StepUpProvider>
         <SpotlightRoot>
-          {/* Suspense kept for downstream `lazy()` inside pages (e.g.
-              SitePage → AdminCanvasLayout). The page components themselves
-              are eager (see the file header), so workspace-to-workspace
-              navigation does NOT fall back through here. */}
+          {/* Suspense catches:
+                - First-visit cold-path of a prewarmedLazy page (it throws
+                  the pending import promise the first time). On subsequent
+                  visits the prewarmedLazy renders synchronously and this
+                  boundary never fires.
+                - Downstream `React.lazy()` inside pages (e.g. SitePage →
+                  AdminCanvasLayout / CodeMirrorEditor). Those remain
+                  legitimately lazy because the editor canvas is huge
+                  (~600 KB raw) and shouldn't ship until needed. */}
           <Suspense fallback={<AppLoadingScreen />}>
             {section === 'dashboard' ? <DashboardPage /> :
               section === 'site' ? <SitePage /> :

@@ -1,11 +1,24 @@
 /**
- * Dashboard stats endpoint.
+ * Dashboard stats endpoints — per-domain.
  *
- *   GET /admin/api/cms/dashboard/stats
+ *   GET /admin/api/cms/dashboard/pages
+ *   GET /admin/api/cms/dashboard/posts
+ *   GET /admin/api/cms/dashboard/media
+ *   GET /admin/api/cms/dashboard/plugins
+ *   GET /admin/api/cms/dashboard/publish-lineup
+ *   GET /admin/api/cms/dashboard/activity
  *
- * Returns the aggregated counters the admin dashboard widgets surface
- * (Pages / Posts / Media). One round-trip per dashboard mount —
- * subsequent widget updates re-fetch via `useDashboardStats`.
+ * One endpoint per dashboard widget data domain. Each runs only the
+ * queries that domain needs, so:
+ *   1. The client fires all six in parallel from the widget hooks.
+ *      Cheap domains (Pages: two counts) resolve in ~10 ms; the
+ *      expensive Activity feed (audit_events scan + 50-row projection)
+ *      takes ~150 ms. The dashboard fills in progressively as data
+ *      arrives, instead of stalling on the slowest widget.
+ *   2. A widget that doesn't appear in the user's grid never causes
+ *      its endpoint to be called. Adding a new widget that pulls
+ *      data from a new source means a new endpoint, not bloating an
+ *      existing aggregate.
  *
  * No filtering / range tabs yet — the dashboard's "Today / 7d / 30d"
  * range affects only the analytics widgets (which live in the plugin's
@@ -15,13 +28,15 @@
 import type { DbClient } from '../../db/client'
 import { requireAuthenticatedUser } from '../../auth/authz'
 import { jsonResponse, methodNotAllowed } from '../../http'
+import type { AuditAction } from '../../repositories/audit'
+import { computeGravatarHash } from '../../repositories/users'
 import { CMS_API_PREFIX } from './shared'
 
 // ---------------------------------------------------------------------------
 // Response shapes
 // ---------------------------------------------------------------------------
 
-interface PagesStats {
+export interface PagesStats {
   total: number
   published: number
   drafts: number
@@ -33,7 +48,7 @@ interface PagesStats {
   deltaPublishedThisWeek: number
 }
 
-interface PostsStats {
+export interface PostsStats {
   total: number
   /** Number of `kind: 'postType'` tables. */
   categories: number
@@ -45,7 +60,7 @@ interface PostsStats {
   daily28: number[]
 }
 
-interface MediaStatsThumb {
+export interface MediaStatsThumb {
   id: string
   publicPath: string
   altText: string
@@ -55,7 +70,7 @@ interface MediaStatsThumb {
   variants: Array<{ width: number; height: number; format: string; path: string }>
 }
 
-interface MediaStats {
+export interface MediaStats {
   count: number
   totalBytes: number
   /**
@@ -71,7 +86,7 @@ interface MediaStats {
  * but trimmed to the fields the Plugins widget actually renders —
  * manifest/permissions/settings stay server-side so the payload is small.
  */
-interface PluginsStatsRow {
+export interface PluginsStatsRow {
   id: string
   name: string
   version: string
@@ -83,7 +98,7 @@ interface PluginsStatsRow {
   state: 'active' | 'disabled' | 'error'
 }
 
-interface PluginsStats {
+export interface PluginsStats {
   total: number
   active: number
   disabled: number
@@ -110,23 +125,74 @@ interface PluginsStats {
  *   say "in 12m" / "2h ago" without the server having to know the
  *   user's clock.
  */
-interface PublishLineupRow {
+export interface PublishLineupRow {
   id: string
   path: string
   status: 'scheduled' | 'published' | 'draft'
   at: string | null
 }
 
-interface PublishLineupStats {
+export interface PublishLineupStats {
   rows: PublishLineupRow[]
 }
 
-export interface DashboardStats {
-  pages: PagesStats
-  posts: PostsStats
-  media: MediaStats
-  plugins: PluginsStats
-  publishLineup: PublishLineupStats
+/**
+ * Compact actor record for the Activity widget — the exact slice of
+ * fields the shared `<UserAvatar>` primitive needs to render an image
+ * (uploaded avatar → Gravatar → initials), plus the strings the
+ * widget uses for its `title` tooltip.
+ *
+ * Shape matches `Pick<CmsCurrentUser, 'avatarUrl' | 'gravatarHash' |
+ * 'displayName' | 'email'>` so the widget can pass the object straight
+ * to `<UserAvatar user={…} />` without an adapter step.
+ *
+ * `gravatarHash` is computed server-side from the actor's normalized
+ * email (same helper as `server/repositories/users.ts`) so we don't
+ * leak the raw email to clients that don't need it.
+ */
+export interface RecentActivityActor {
+  displayName: string
+  email: string
+  avatarUrl: string | null
+  gravatarHash: string
+}
+
+/**
+ * One row in the dashboard "Activity" widget feed. A flattened,
+ * widget-ready projection of `audit_events` — server-side we already
+ * know who did what and to which target, so we ship the resolved
+ * actor record + targetCode/targetText and the widget just picks a
+ * verb per action.
+ *
+ *   • `actor`         — current display name / email / avatar info
+ *     for the actor user, or `null` for system-initiated events
+ *     (`actor_user_id is null` in the row). The widget renders a
+ *     fallback icon for the null case.
+ *   • `targetCode`    — string to render in <code> styling (paths,
+ *     plugin ids, slugs). Null when the action has no code-flavoured
+ *     target (e.g. "site was published").
+ *   • `targetText`    — string to render in plain/em styling (display
+ *     names for user/role events, free-form text). Null when no text
+ *     target applies.
+ *   • `createdAt`     — ISO datetime. The widget formats this as
+ *     a short relative label ("2m" / "1h" / "yest.").
+ *
+ * The widget never reads `metadata` directly — every field it needs
+ * has been resolved on the server against the *current* users / tables
+ * maps, so a row whose actor user was later deleted still renders
+ * with the snapshot label the audit event carried.
+ */
+export interface RecentActivityEntry {
+  id: string
+  action: AuditAction
+  actor: RecentActivityActor | null
+  targetCode: string | null
+  targetText: string | null
+  createdAt: string
+}
+
+export interface RecentActivityStats {
+  rows: RecentActivityEntry[]
 }
 
 // ---------------------------------------------------------------------------
@@ -459,19 +525,285 @@ async function readLatestImageThumbs(db: DbClient, limit: number): Promise<Media
   }))
 }
 
+/**
+ * Recent activity for the dashboard widget — a curated slice of
+ * `audit_events`, joined to current `users` / `data_tables` so the
+ * widget can render each row without extra lookups.
+ *
+ *   • We deliberately skip the `login.*` and `logout` events: those
+ *     belong in Account → Sign-in history. The dashboard activity feed
+ *     is about *operational* changes to the site (edits, publishes,
+ *     plugin lifecycle, user/role mutations).
+ *   • We pre-build `targetCode` / `targetText` from each event's
+ *     metadata + the current table/user maps. For `data.row.*` events
+ *     that means resolving `tableId + slug → /route_base/slug` exactly
+ *     like the publish lineup widget does.
+ */
+async function readRecentActivity(db: DbClient): Promise<RecentActivityStats> {
+  const widgetLimit = 10
+  // Pull an oversized window so we can drop login.* noise (filtered in JS;
+  // see below) and still have enough rows to fill the widget. 50 is the
+  // practical ceiling: even a busy admin afternoon rarely produces more
+  // than that, and the audit_events table already has an index on
+  // `created_at desc` so this is a cheap scan.
+  const fetchLimit = 50
+
+  type ActivityRow = {
+    id: string
+    actor_user_id: string | null
+    action: AuditAction
+    target_type: string | null
+    target_id: string | null
+    metadata_json: unknown
+    created_at: string | Date
+    actor_display_name: string | null
+    actor_email: string | null
+    actor_avatar_path: string | null
+    target_user_display_name: string | null
+    target_user_email: string | null
+  }
+
+  // `where action in (...)` would be dialect-painful (Postgres requires
+  // ANY($n::text[]) and SQLite needs an inline expansion that the tagged-
+  // template binding here can't produce). The set is small and bounded,
+  // so we filter client-side after the query — same end result, dialect-
+  // naive query.
+  //
+  // The actor join also pulls `media_assets.public_path` for the actor's
+  // uploaded avatar (via `users.avatar_media_id`) so the widget can
+  // render the same `<UserAvatar>` primitive the toolbar and Users page
+  // use — uploaded image first, Gravatar fallback (computed from email
+  // below), then initials.
+  const { rows } = await db<ActivityRow>`
+    select e.id,
+           e.actor_user_id,
+           e.action,
+           e.target_type,
+           e.target_id,
+           e.metadata_json,
+           e.created_at,
+           u.display_name as actor_display_name,
+           u.email as actor_email,
+           am.public_path as actor_avatar_path,
+           tu.display_name as target_user_display_name,
+           tu.email as target_user_email
+    from audit_events e
+    left join users u on u.id = e.actor_user_id
+    left join media_assets am on am.id = u.avatar_media_id
+    left join users tu on tu.id = e.target_id and e.target_type = 'user'
+    order by e.created_at desc
+    limit ${fetchLimit}
+  `
+
+  const visible = rows.filter((r) => !isDashboardActivityNoise(r.action)).slice(0, widgetLimit)
+
+  // Look up the route_base for every data.* event in one shot so we can
+  // build "/blog/launching-..." paths without an N+1.
+  const tableIds = new Set<string>()
+  for (const r of visible) {
+    if (r.action.startsWith('data.row.') || r.action === 'data.author.assign') {
+      const meta = metadataAsRecord(r.metadata_json)
+      const tableId = readString(meta, 'tableId')
+      if (tableId) tableIds.add(tableId)
+    }
+  }
+  const routeBaseById = new Map<string, string | null>()
+  for (const id of tableIds) {
+    const { rows: tableRows } = await db<{ route_base: string | null }>`
+      select route_base from data_tables where id = ${id}
+    `
+    routeBaseById.set(id, tableRows[0]?.route_base ?? null)
+  }
+
+  return {
+    rows: visible.map((r): RecentActivityEntry => projectActivityRow(r, routeBaseById)),
+  }
+}
+
+/**
+ * `login.*` and `logout` events live in Account → Sign-in history. The
+ * dashboard Activity widget is about *operational* changes to the site,
+ * so we skip them — they would otherwise drown out the signal on a
+ * busy login day.
+ */
+function isDashboardActivityNoise(action: AuditAction): boolean {
+  return action.startsWith('login.') || action === 'logout'
+}
+
+function projectActivityRow(
+  row: {
+    id: string
+    actor_user_id: string | null
+    action: AuditAction
+    target_type: string | null
+    target_id: string | null
+    metadata_json: unknown
+    created_at: string | Date
+    actor_display_name: string | null
+    actor_email: string | null
+    actor_avatar_path: string | null
+    target_user_display_name: string | null
+    target_user_email: string | null
+  },
+  routeBaseById: Map<string, string | null>,
+): RecentActivityEntry {
+  const metadata = metadataAsRecord(row.metadata_json)
+  const target = activityTarget(row.action, row.target_id, metadata, routeBaseById, {
+    targetUserLabel: userDisplayLabel(row.target_user_display_name, row.target_user_email),
+  })
+
+  return {
+    id: row.id,
+    action: row.action,
+    actor: buildActor(row),
+    targetCode: target.code,
+    targetText: target.text,
+    createdAt: typeof row.created_at === 'string' ? row.created_at : row.created_at.toISOString(),
+  }
+}
+
+/**
+ * Build the actor payload for an audit row. Returns null for
+ * system-initiated events (no actor user). When the actor user has
+ * since been deleted the join columns come back null too; we surface
+ * that as a system row rather than ghosting the row with placeholder
+ * text — the widget already has a clean fallback.
+ */
+function buildActor(row: {
+  actor_user_id: string | null
+  actor_display_name: string | null
+  actor_email: string | null
+  actor_avatar_path: string | null
+}): RecentActivityActor | null {
+  if (row.actor_user_id === null || row.actor_email === null) return null
+  return {
+    displayName: row.actor_display_name ?? '',
+    email: row.actor_email,
+    avatarUrl: row.actor_avatar_path,
+    gravatarHash: computeGravatarHash(row.actor_email),
+  }
+}
+
+function metadataAsRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {}
+}
+
+function readString(metadata: Record<string, unknown>, key: string): string | null {
+  const v = metadata[key]
+  return typeof v === 'string' && v.trim() ? v : null
+}
+
+function userDisplayLabel(displayName: string | null, email: string | null): string | null {
+  const cleanName = displayName?.trim() ?? ''
+  if (cleanName) return cleanName
+  if (email && email.trim()) return email
+  return null
+}
+
+function buildRowPath(
+  tableId: string,
+  slug: string,
+  routeBaseById: Map<string, string | null>,
+): string {
+  const routeBase = routeBaseById.get(tableId) ?? null
+  const safeSlug = slug || '(no slug)'
+  const base = routeBase && routeBase.trim().length > 0 ? routeBase : `/${tableId}`
+  const normalizedBase = base.startsWith('/') ? base : `/${base}`
+  const trimmedBase = normalizedBase.endsWith('/') ? normalizedBase.slice(0, -1) : normalizedBase
+  return `${trimmedBase}/${safeSlug}`
+}
+
+/**
+ * Resolve the `targetCode` / `targetText` pair for a single activity
+ * row. The split between the two fields is the widget's contract:
+ * `targetCode` renders in <code> styling (paths, slugs, plugin ids);
+ * `targetText` renders in plain styling (human names). Each action
+ * picks one or the other — never both.
+ */
+function activityTarget(
+  action: AuditAction,
+  targetId: string | null,
+  metadata: Record<string, unknown>,
+  routeBaseById: Map<string, string | null>,
+  context: { targetUserLabel: string | null },
+): { code: string | null; text: string | null } {
+  // Data-row events: render a code-styled path so the row reads
+  // "edited /blog/launching-page-builder".
+  if (action.startsWith('data.row.') || action === 'data.author.assign') {
+    const tableId = readString(metadata, 'tableId')
+    const slug = readString(metadata, 'slug')
+    if (tableId && slug !== null) {
+      return { code: buildRowPath(tableId, slug ?? '', routeBaseById), text: null }
+    }
+    return { code: null, text: null }
+  }
+
+  // Data-table events: target_id is the collection id, metadata.name
+  // is the human label. Prefer the human label when present.
+  if (action.startsWith('data.table.')) {
+    const name = readString(metadata, 'name')
+    if (name) return { code: null, text: name }
+    return { code: targetId ?? null, text: null }
+  }
+
+  // Plugin events: pluginId may live in metadata (preferred) or
+  // target_id depending on the call site.
+  if (action.startsWith('plugin.')) {
+    const pluginId = readString(metadata, 'pluginId') ?? targetId
+    return { code: pluginId, text: null }
+  }
+
+  // User events: prefer the current display name (joined), fall back
+  // to the snapshot stored in metadata.email so a deleted user still
+  // renders something useful.
+  if (action.startsWith('user.') || action === 'password.change') {
+    if (context.targetUserLabel) return { code: null, text: context.targetUserLabel }
+    const email = readString(metadata, 'email')
+    if (email) return { code: null, text: email }
+    return { code: null, text: targetId ?? null }
+  }
+
+  // Role events: target_id is the role id. metadata.name carries
+  // the snapshot label; for role.assign the actual subject is the
+  // user being assigned to (handled separately by the widget verb).
+  if (action.startsWith('role.')) {
+    const name = readString(metadata, 'name')
+    if (name) return { code: null, text: name }
+    return { code: null, text: targetId ?? null }
+  }
+
+  // 'publish' — no per-row target; the verb alone reads "published the site".
+  return { code: null, text: null }
+}
+
 // ---------------------------------------------------------------------------
-// Top-level reader
+// Per-domain readers
+//
+// Each reader runs ONLY the queries its widget needs. They share the
+// helpers above (readStatusCounts, readPostsHistogram, …) so the SQL
+// is not duplicated; what's split is the entry point + the response
+// shape returned to the client.
 // ---------------------------------------------------------------------------
 
-async function readDashboardStats(db: DbClient): Promise<DashboardStats> {
+async function readPagesStats(db: DbClient): Promise<PagesStats> {
   const sevenDaysAgoIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+  const [counts, delta] = await Promise.all([
+    readStatusCounts(db, 'pages'),
+    readPublishedSinceCount(db, 'pages', sevenDaysAgoIso),
+  ])
+  return {
+    total: counts.total,
+    published: counts.published,
+    drafts: counts.drafts,
+    scheduled: counts.scheduled,
+    deltaPublishedThisWeek: delta,
+  }
+}
+
+async function readPostsStats(db: DbClient): Promise<PostsStats> {
   const twentyEightDaysAgoIso = new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString()
-
-  // Pages stats — table_id 'pages' is the system pages table.
-  const pagesCounts = await readStatusCounts(db, 'pages')
-  const pagesDelta = await readPublishedSinceCount(db, 'pages', sevenDaysAgoIso)
-
-  // Posts stats — every table with kind='postType'.
   const { rows: postTypeRows } = await db<{ id: string }>`
     select id
     from data_tables
@@ -479,14 +811,21 @@ async function readDashboardStats(db: DbClient): Promise<DashboardStats> {
       and deleted_at is null
   `
   const postTypeIds = postTypeRows.map((r) => r.id)
+
+  // Read per-table counts + the histogram in parallel — they are
+  // independent queries against the same rows.
+  const [countsArr, histogram] = await Promise.all([
+    Promise.all(postTypeIds.map((id) => readStatusCounts(db, id))),
+    readPostsHistogram(db, postTypeIds, twentyEightDaysAgoIso),
+  ])
+
   let postsTotal = 0
   let postsScheduled = 0
-  for (const id of postTypeIds) {
-    const c = await readStatusCounts(db, id)
+  for (const c of countsArr) {
     postsTotal += c.total
     postsScheduled += c.scheduled
   }
-  const histogram = await readPostsHistogram(db, postTypeIds, twentyEightDaysAgoIso)
+
   // Densify into [28] oldest-first.
   const daily28 = Array.from({ length: 28 }, (_, i) => {
     const d = new Date(Date.now() - (27 - i) * 24 * 60 * 60 * 1000)
@@ -494,19 +833,25 @@ async function readDashboardStats(db: DbClient): Promise<DashboardStats> {
     return histogram.get(key) ?? 0
   })
 
-  // Plugins stats — total + counts by state + the 8 most-recently-installed
-  // rows for the widget's body list.
-  const plugins = await readPluginsStats(db)
+  return {
+    total: postsTotal,
+    categories: postTypeIds.length,
+    scheduled: postsScheduled,
+    daily28,
+  }
+}
 
-  // Publish lineup — upcoming scheduled rows + recent publishes + drafts.
-  const publishLineup = await readPublishLineup(db)
-
-  // Media stats — total count + bytes, plus 16 latest image thumbs.
-  const { rows: mediaTotals } = await db<{ count: number | string; bytes: number | string | null }>`
-    select count(*) as count, coalesce(sum(size_bytes), 0) as bytes
-    from media_assets
-    where deleted_at is null
-  `
+async function readMediaStats(db: DbClient): Promise<MediaStats> {
+  // Two queries — totals + the latest thumbs — fire in parallel.
+  const [totalsResult, latestThumbs] = await Promise.all([
+    db<{ count: number | string; bytes: number | string | null }>`
+      select count(*) as count, coalesce(sum(size_bytes), 0) as bytes
+      from media_assets
+      where deleted_at is null
+    `,
+    readLatestImageThumbs(db, 16),
+  ])
+  const mediaTotals = totalsResult.rows
   const mediaCount = typeof mediaTotals[0]?.count === 'string'
     ? parseInt(mediaTotals[0].count, 10)
     : mediaTotals[0]?.count ?? 0
@@ -515,29 +860,10 @@ async function readDashboardStats(db: DbClient): Promise<DashboardStats> {
     : typeof mediaTotals[0].bytes === 'string'
       ? parseInt(mediaTotals[0].bytes, 10)
       : mediaTotals[0].bytes
-  const latestThumbs = await readLatestImageThumbs(db, 16)
-
   return {
-    pages: {
-      total: pagesCounts.total,
-      published: pagesCounts.published,
-      drafts: pagesCounts.drafts,
-      scheduled: pagesCounts.scheduled,
-      deltaPublishedThisWeek: pagesDelta,
-    },
-    posts: {
-      total: postsTotal,
-      categories: postTypeIds.length,
-      scheduled: postsScheduled,
-      daily28,
-    },
-    media: {
-      count: mediaCount,
-      totalBytes: mediaBytes,
-      latestThumbs,
-    },
-    plugins,
-    publishLineup,
+    count: mediaCount,
+    totalBytes: mediaBytes,
+    latestThumbs,
   }
 }
 
@@ -545,12 +871,31 @@ async function readDashboardStats(db: DbClient): Promise<DashboardStats> {
 // Route handler
 // ---------------------------------------------------------------------------
 
+type DashboardReader = (db: DbClient) => Promise<unknown>
+
+// `/dashboard/<segment>` → reader. The segment is the public slug, the
+// reader returns the JSON-serialisable response body. Keeps the route
+// dispatch a single Map lookup and the per-endpoint differences are
+// only the URL slug + the reader function.
+const DASHBOARD_READERS: Record<string, DashboardReader> = {
+  'pages': readPagesStats,
+  'posts': readPostsStats,
+  'media': readMediaStats,
+  'plugins': readPluginsStats,
+  'publish-lineup': readPublishLineup,
+  'activity': readRecentActivity,
+}
+
 export async function handleDashboardRoutes(
   req: Request,
   db: DbClient,
 ): Promise<Response | null> {
   const url = new URL(req.url)
-  if (url.pathname !== `${CMS_API_PREFIX}/dashboard/stats`) return null
+  const prefix = `${CMS_API_PREFIX}/dashboard/`
+  if (!url.pathname.startsWith(prefix)) return null
+  const segment = url.pathname.slice(prefix.length)
+  const reader = DASHBOARD_READERS[segment]
+  if (!reader) return null
   if (req.method !== 'GET') return methodNotAllowed()
 
   // Any authenticated admin user can read dashboard stats. The
@@ -560,6 +905,6 @@ export async function handleDashboardRoutes(
   const user = await requireAuthenticatedUser(req, db)
   if (user instanceof Response) return user
 
-  const stats = await readDashboardStats(db)
-  return jsonResponse(stats)
+  const body = await reader(db)
+  return jsonResponse(body)
 }

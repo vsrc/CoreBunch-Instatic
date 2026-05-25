@@ -101,22 +101,71 @@ function createMultiSortableTextPage(): {
 }
 
 function installCanvasRects(rects: Record<string, DOMRectInit>) {
-  const original = HTMLElement.prototype.getBoundingClientRect
-  HTMLElement.prototype.getBoundingClientRect = function getBoundingClientRect() {
-    const element = this as HTMLElement
+  // The canvas now renders each breakpoint frame inside an iframe, and each
+  // iframe has its OWN `HTMLElement` constructor (so a patch on the parent
+  // prototype doesn't reach elements inside the iframe). We patch both the
+  // parent prototype and any iframe content windows that exist now or are
+  // added later via a MutationObserver. Tests measure ints inside the iframe
+  // (`[data-node-id]` lives there) and the parent (`[data-canvas-test-root]`,
+  // `[data-breakpoint-id]` on the viewport wrapper).
+  const mockedReturn = (element: HTMLElement) => {
     if (element.dataset.canvasTestRoot === 'true') {
       return testRect({ x: 0, y: 0, width: 200, height: 200 })
     }
     if (element.dataset.breakpointId === 'desktop') {
       return testRect({ x: 0, y: 0, width: 400, height: 400 })
     }
-    const owner = element.closest('[data-node-id]') as HTMLElement | null
-    const nodeId = owner?.dataset.nodeId
+    if (element.tagName === 'IFRAME') {
+      // The iframe's own rect — parent coords. Use the same `400` square as
+      // the viewport wrapper so iframe-internal coords already line up with
+      // editor-doc coords (the production translation adds iframe.left/top
+      // which is 0,0 here).
+      return testRect({ x: 0, y: 0, width: 400, height: 400 })
+    }
+    // Resolve the owning node by walking up via `parentElement` rather than
+    // `.closest()`. `.closest()` works fine on plain elements, but happy-dom
+    // sometimes returns null when a node lives inside an iframe and the
+    // search would cross the document boundary. Hand-walking the chain is
+    // robust to that.
+    let owner: HTMLElement | null = element
+    while (owner && !owner.dataset?.nodeId) {
+      owner = owner.parentElement
+    }
+    const nodeId = owner?.dataset?.nodeId
     const rect = nodeId ? rects[nodeId] : null
     return testRect(rect ?? { x: 0, y: 0, width: 0, height: 0 })
   }
+  const restorers: Array<() => void> = []
+  const patchProto = (proto: { getBoundingClientRect: () => DOMRect }) => {
+    const original = proto.getBoundingClientRect
+    proto.getBoundingClientRect = function getBoundingClientRect(this: HTMLElement) {
+      return mockedReturn(this)
+    }
+    restorers.push(() => {
+      proto.getBoundingClientRect = original
+    })
+  }
+  patchProto(HTMLElement.prototype as unknown as { getBoundingClientRect: () => DOMRect })
+  // Patch the iframe documents that exist right now…
+  const patchExistingIframes = () => {
+    for (const iframe of Array.from(document.querySelectorAll<HTMLIFrameElement>('iframe'))) {
+      const win = iframe.contentWindow as unknown as { HTMLElement?: { prototype: { getBoundingClientRect: () => DOMRect } } } | null
+      const iframeProto = win?.HTMLElement?.prototype
+      // Skip if the iframe shares the parent prototype (same window) — already patched.
+      if (iframeProto && iframeProto !== (HTMLElement.prototype as unknown as object)) {
+        patchProto(iframeProto)
+      }
+    }
+  }
+  patchExistingIframes()
+  // …and any iframes created later (the canvas mounts iframes asynchronously
+  // on first commit so the patch above only catches them if it runs after
+  // render).
+  const observer = new MutationObserver(patchExistingIframes)
+  observer.observe(document.body, { childList: true, subtree: true })
+  restorers.push(() => observer.disconnect())
   return () => {
-    HTMLElement.prototype.getBoundingClientRect = original
+    for (const restore of restorers) restore()
   }
 }
 
@@ -221,11 +270,23 @@ describe('canvas selection toolbar', () => {
       )
 
       act(() => {
+        // Iframe content is mounted on the iframe's `load` event (microtask
+        // in happy-dom). One RAF tick may run before the iframe portal has
+        // populated, so flush a few in case the first observation is stale.
+        raf.flushOne()
+        raf.flushOne()
         raf.flushOne()
       })
 
+      const iframes = Array.from(document.querySelectorAll<HTMLIFrameElement>('iframe'))
+      const hasNode = iframes.some((i) => i.contentDocument?.querySelector('[data-node-id]') !== null)
+
       const toolbar = screen.getByRole('group', { name: 'Selection actions' })
       expect(toolbar.parentElement).toBe(document.body)
+      // Iframe-internal node detection is a precondition for accurate toolbar
+      // positioning. If the iframe portal hasn't mounted yet, raise a clear
+      // error instead of a confusing empty-CSS-var assertion.
+      expect(hasNode).toBe(true)
       expect(toolbar.style.getPropertyValue('--canvas-toolbar-x')).toBe('20px')
       expect(toolbar.style.getPropertyValue('--canvas-toolbar-y')).toBe('-20px')
       expect(screen.getByRole('button', { name: 'Drag selected layers' })).toBeTruthy()

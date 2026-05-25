@@ -20,15 +20,38 @@ docs/
 ├── editor.md                   ← admin + visual editor deep dive
 │
 ├── features/                   ← "what X is and how it works" (per-feature)
-│   ├── plugin-system.md
-│   ├── editor-preferences.md
-│   ├── media.md
-│   └── canvas-iframe-per-frame.md
+│   ├── plugin-system.md            ← plugin SDK, sandbox, lifecycle, permissions
+│   ├── publisher.md                ← page tree → static HTML/CSS pipeline
+│   ├── visual-components.md        ← VCs, slots, params, instantiation
+│   ├── content-storage.md          ← data_tables + data_rows (the universal store)
+│   ├── auth-and-access.md          ← sessions, MFA, capabilities, roles
+│   ├── site-shell.md               ← site config (breakpoints, classes, files, deps)
+│   ├── modules.md                  ← module engine + first-party blocks
+│   ├── dashboard.md                ← Dashboard workspace + widget registry
+│   ├── spotlight.md                ← Cmd+K command palette
+│   ├── agent.md                    ← AI agent integration
+│   ├── templates.md                ← entry templates + dynamic bindings
+│   ├── loops.md                    ← base.loop + loop sources
+│   ├── media.md                    ← Media workspace + storage adapters
+│   ├── audit-log.md                ← audit_events catalog
+│   ├── site-transfer.md            ← export / import bundles
+│   ├── editor-preferences.md       ← catalog-driven editor prefs
+│   └── canvas-iframe-per-frame.md  ← per-breakpoint iframe rendering
 │
 ├── reference/                  ← short cookbook pages for primitives + patterns
-│   ├── page-tree.md
-│   ├── database-dialects.md
-│   └── typebox-patterns.md
+│   ├── page-tree.md                ← NodeTree<TNode> primitive
+│   ├── database-dialects.md        ← PG vs SQLite rules
+│   ├── typebox-patterns.md         ← boundary validation patterns
+│   ├── ui-primitives.md            ← Button/Input/etc. usage cookbook
+│   ├── design-tokens.md            ← complete CSS token catalog
+│   ├── module-engine.md            ← defining a new module
+│   ├── canvas-dnd.md               ← drag-and-drop patterns
+│   ├── admin-router.md             ← in-house router usage
+│   ├── css-class-registry.md       ← user CSS classes + scoped classes
+│   ├── capabilities.md             ← full capability matrix
+│   ├── persistence-keys.md         ← localStorage / server prefs catalog
+│   ├── error-boundaries.md         ← boundary placements + error reporting
+│   └── architecture-tests.md       ← catalog of every architecture gate
 │
 ├── deployment/                 ← operator docs (running the thing)
 ├── e2e/                        ← agent-run browser test protocols
@@ -109,17 +132,40 @@ Plans (`docs/plans/`) describe in-flight work and are deleted when the work ship
 | Doc                                                              | What it covers                                                       |
 |------------------------------------------------------------------|----------------------------------------------------------------------|
 | [features/plugin-system.md](features/plugin-system.md)           | The plugin system end-to-end: package shape, lifecycle, sandbox, SDK, permissions, CLI |
+| [features/publisher.md](features/publisher.md)                   | The page-tree-to-HTML/CSS renderer + server-side publishing wrappers |
+| [features/visual-components.md](features/visual-components.md)   | VCs, slots, params, instantiation, recursion guard                   |
+| [features/content-storage.md](features/content-storage.md)       | `data_tables` + `data_rows` — the universal content store           |
+| [features/auth-and-access.md](features/auth-and-access.md)       | Sessions, MFA, step-up, lockout, CSRF, capabilities                  |
+| [features/site-shell.md](features/site-shell.md)                 | The persisted site config (breakpoints, classes, files, deps)        |
+| [features/modules.md](features/modules.md)                       | Module engine, defining first-party blocks                          |
+| [features/dashboard.md](features/dashboard.md)                   | Dashboard workspace, widgets, grid, customize mode                  |
+| [features/spotlight.md](features/spotlight.md)                   | Cmd+K command palette                                                |
+| [features/agent.md](features/agent.md)                           | AI agent integration (Claude Agent SDK)                              |
+| [features/templates.md](features/templates.md)                   | Entry templates + dynamic bindings + token interpolation             |
+| [features/loops.md](features/loops.md)                           | `base.loop` + loop entity sources                                    |
+| [features/media.md](features/media.md)                           | Media workspace, upload pipeline, storage adapters                  |
+| [features/audit-log.md](features/audit-log.md)                   | Audit event catalog + recording new actions                         |
+| [features/site-transfer.md](features/site-transfer.md)           | Export / import site bundles                                        |
 | [features/editor-preferences.md](features/editor-preferences.md) | Catalog-driven local UI preferences for the editor                   |
-| [features/media.md](features/media.md)                           | The Media workspace: folders, assets, upload pipeline, storage adapters |
 | [features/canvas-iframe-per-frame.md](features/canvas-iframe-per-frame.md) | Per-breakpoint iframe rendering in the visual editor canvas |
 
 ### Reference
 
-| Doc                                                          | What it answers                                                  |
-|--------------------------------------------------------------|------------------------------------------------------------------|
-| [reference/page-tree.md](reference/page-tree.md)             | The `NodeTree<TNode>` primitive — mutations, store routing, cookbook |
-| [reference/database-dialects.md](reference/database-dialects.md) | Postgres vs. SQLite — three rules, adapter behaviors, cookbook  |
-| [reference/typebox-patterns.md](reference/typebox-patterns.md) | Validating every untyped boundary with TypeBox                  |
+| Doc                                                              | What it answers                                                  |
+|------------------------------------------------------------------|------------------------------------------------------------------|
+| [reference/page-tree.md](reference/page-tree.md)                 | The `NodeTree<TNode>` primitive — mutations, store routing      |
+| [reference/database-dialects.md](reference/database-dialects.md) | Postgres vs. SQLite — three rules + cookbook                    |
+| [reference/typebox-patterns.md](reference/typebox-patterns.md)   | Validating every untyped boundary with TypeBox                  |
+| [reference/ui-primitives.md](reference/ui-primitives.md)         | Full UI primitive catalog with "when to use"                    |
+| [reference/design-tokens.md](reference/design-tokens.md)         | Complete CSS custom property catalog                            |
+| [reference/module-engine.md](reference/module-engine.md)         | "How do I define a new module?"                                 |
+| [reference/canvas-dnd.md](reference/canvas-dnd.md)               | Drag-and-drop / drop zones / insert location                    |
+| [reference/admin-router.md](reference/admin-router.md)           | In-house router primitives                                      |
+| [reference/css-class-registry.md](reference/css-class-registry.md) | User-defined CSS classes + scoped classes                     |
+| [reference/capabilities.md](reference/capabilities.md)           | Full capability matrix + how to add one                         |
+| [reference/persistence-keys.md](reference/persistence-keys.md)   | All localStorage / sessionStorage / server-prefs keys           |
+| [reference/error-boundaries.md](reference/error-boundaries.md)   | `<ErrorBoundary>` placements + reporting                        |
+| [reference/architecture-tests.md](reference/architecture-tests.md) | Catalog of every architecture gate test                       |
 
 ### Operations
 

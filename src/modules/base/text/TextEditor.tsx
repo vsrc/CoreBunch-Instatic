@@ -6,12 +6,13 @@
  * export non-component values — `normalizeTag` is duplicated in `index.ts`
  * for the publisher render path.
  *
- * Inline-edit mode (Client / copy-editor role): when `isInlineEditing` is
- * true, the rendered element becomes `contentEditable` and any keystroke
- * lands as a prop diff via `onCommitInlineEdit({ text })`. Enter commits and
- * exits; Escape reverts and exits; blur commits.
+ * Text is edited via the Properties panel only. The canvas-side inline
+ * (double-click contentEditable) editing was removed because the
+ * iframe-per-frame architecture makes focus/selection management
+ * unreliable across the cross-frame boundary; a clean replacement will be
+ * designed separately.
  */
-import React, { useCallback, useEffect, useEffectEvent, useRef } from 'react'
+import React from 'react'
 import type { ModuleComponentProps } from '@core/module-engine/types'
 
 type TextTag =
@@ -56,95 +57,8 @@ function normalizeTag(tag: unknown): TextTag {
 export const TextEditor: React.FC<ModuleComponentProps<TextProps>> = ({
   props,
   mcClassName,
-  isInlineEditing,
-  onCommitInlineEdit,
-  onCancelInlineEdit,
+  nodeWrapperProps,
 }) => {
   const Tag = normalizeTag(props.tag) as React.ElementType
-  const elementRef = useRef<HTMLElement | null>(null)
-  // Keep the original value around so Escape can restore it.
-  const originalRef = useRef<string>(props.text)
-
-  // useEffectEvent captures the latest `props.text` without itself becoming
-  // a dependency — the effect only re-runs on the edit-mode flip, and when
-  // it does, this reads the prop value at that exact moment.
-  const onEnterEditMode = useEffectEvent(() => {
-    originalRef.current = props.text
-    const el = elementRef.current
-    if (!el) return
-    el.focus()
-    const range = document.createRange()
-    range.selectNodeContents(el)
-    const sel = window.getSelection()
-    sel?.removeAllRanges()
-    sel?.addRange(range)
-  })
-
-  // Focus + select-all when entering edit mode, and snapshot the value for
-  // Escape-to-cancel. Cleared once the node leaves edit mode.
-  useEffect(() => {
-    if (!isInlineEditing) return
-    onEnterEditMode()
-  }, [isInlineEditing])
-
-  const commit = useCallback(() => {
-    const next = elementRef.current?.innerText ?? ''
-    if (next !== originalRef.current) {
-      onCommitInlineEdit?.({ text: next })
-    } else {
-      onCancelInlineEdit?.()
-    }
-  }, [onCommitInlineEdit, onCancelInlineEdit])
-
-  const cancel = useCallback(() => {
-    if (elementRef.current) elementRef.current.innerText = originalRef.current
-    onCancelInlineEdit?.()
-  }, [onCancelInlineEdit])
-
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLElement>) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault()
-        commit()
-      } else if (e.key === 'Escape') {
-        e.preventDefault()
-        cancel()
-      }
-      // Stop bubbling so the canvas keyboard shortcuts (Delete, Ctrl+D, …)
-      // don't fire while the user is typing inside the inline editor.
-      e.stopPropagation()
-    },
-    [commit, cancel],
-  )
-
-  if (isInlineEditing) {
-    return React.createElement(Tag, {
-      ref: elementRef,
-      className: mcClassName,
-      contentEditable: 'plaintext-only',
-      suppressContentEditableWarning: true,
-      onBlur: commit,
-      onKeyDown: handleKeyDown,
-      // Don't let canvas double-click re-trigger while editing.
-      onDoubleClick: (e: React.MouseEvent) => e.stopPropagation(),
-      // Don't let canvas single-click deselect / re-select.
-      onClick: (e: React.MouseEvent) => e.stopPropagation(),
-      'data-inline-editing': 'true',
-      // Render the initial value once; subsequent keystrokes are owned by the
-      // DOM (contentEditable) until commit / cancel. Using dangerouslySet… is
-      // safe here because `text` is a plain string prop — DOMPurify is only
-      // required for the `richtext` control type, which `base.text` is not.
-      dangerouslySetInnerHTML: { __html: escapeHtml(props.text) },
-    })
-  }
-
-  return React.createElement(Tag, { className: mcClassName }, props.text || 'Text')
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
+  return React.createElement(Tag, { ...nodeWrapperProps, className: mcClassName }, props.text || 'Text')
 }

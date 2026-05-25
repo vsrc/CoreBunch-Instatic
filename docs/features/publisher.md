@@ -1,0 +1,351 @@
+# Publisher
+
+The publisher — the page-tree-to-HTML/CSS renderer. Takes a `Page` (a `NodeTree<PageNode>`) plus a `SiteDocument` and emits a clean, standalone HTML document with a single per-page CSS bundle.
+
+The published output has **no framework runtime**, **no client-side hydration of layout**, and **no decorative markup** the browser doesn't need. Plugins can inject frontend assets at four anchor points (`head`, `head-end`, `body-start`, `body-end`), but the page structure itself is static.
+
+---
+
+## TL;DR
+
+- Entry point: `publishPage(page, ctx)` in `src/core/publisher/render.ts`. Returns the full HTML document string.
+- Recursion: `renderNode(nodeId, ctx)` in `renderNode.ts`. Bottom-up walk. Two specialized renderers hook in for `base.visual-component-ref` and `base.loop`.
+- Per-node flow: render children → resolve effective + dynamic props → `escapeProps` → call `module.render({props, html, children})` → collect deduped CSS → inject author class names.
+- CSS is deduped by `moduleId` via `CssCollector` (~60–80% size reduction on typical pages).
+- Module `render()` is a **pure function**: no DOM, no React, no side effects (Constraint #179).
+- Every node's props pass through `escapeProps` before `render()` (Constraint #211).
+- Server-side wrappers (`server/publish/publicRouter.ts` → `publicRenderer.ts` → `publishedHtmlPipeline.ts`) call `publishPage`, run plugin filters, and return the HTML in the visitor response. There is no static-to-disk step; the published artefact is the `PublishedPageSnapshot` (JSON) on `data_row_versions.snapshot_json`, and HTML is rendered fresh from it on each request.
+
+---
+
+## Where the code lives
+
+```text
+src/core/publisher/
+├── render.ts                       — publishPage (entry point + page-level orchestration)
+├── renderNode.ts                   — recursive node walker
+├── renderContext.ts                — RenderContext shape (everything the walker needs)
+├── renderVisualComponentRef.ts     — inline a Visual Component instance into the page
+├── renderLoop.ts                   — iterate a loop source, round-robin child variants
+├── escapeProps.ts                  — HTML-escape string props at the render boundary
+├── classInjection.ts               — inject author classIds into rendered HTML
+├── classCss.ts                     — compile user CSSClass → CSS
+├── cssCollector.ts                 — CssCollector + collectClassCSS + sanitizeModuleCSS
+├── reset.ts                        — PUBLISHER_RESET_CSS (cross-browser baseline)
+├── frameworkCss.ts                 — site framework CSS (spacing scale, typography)
+├── userStylesheets.ts              — site-level user stylesheets
+├── siteCssBundle.ts                — hash-named bundle composition (reset + framework + style)
+├── sizesResolver.ts                — `<img sizes>` auto-resolution from breakpoints
+└── utils.ts                        — escapeHtml, isSafeUrl
+
+server/publish/
+├── publicRenderer.ts               — renderPublishedSnapshot, renderPublishedDataRowTemplate
+├── publishedHtmlPipeline.ts        — post-process (sanitize + plugin filters + injections)
+├── siteCssBundle.ts                — server-side hashing + file emission
+├── frontendInjections.ts           — splice plugin <script>/<link>/<meta> into HTML
+├── mediaPresentation.ts            — <picture>/<srcset> materialization at publish time
+├── mediaPrefetch.ts, loopPrefetch.ts — pre-warm caches needed by the renderer
+├── republish.ts                    — bulk re-publish on site-level changes
+├── publishScheduler.ts             — scheduled publish jobs
+├── runtime/                        — per-site bun install workspace serving
+└── loopRuntime.ts                  — loop runtime asset
+```
+
+---
+
+## The `publishPage` flow
+
+```text
+publishPage(page, ctx)             ← src/core/publisher/render.ts
+    │
+    ├─→ resolve template-context frames (page / site / route / viewer)
+    ├─→ inject root node's classIds into <body> tag
+    ├─→ build <head>: title, description, favicon, font import, lang, importmap, runtime <script>s, CSP
+    ├─→ renderNode(rootNodeId, ctx)
+    │       │
+    │       ├─→ specialised renderer for `base.visual-component-ref`  → renderVisualComponentRef
+    │       ├─→ specialised renderer for `base.loop`                  → renderLoop
+    │       └─→ renderStandardNode for everything else (the bulk of the tree)
+    │
+    ├─→ collect deduped module CSS via CssCollector
+    ├─→ collect author class CSS via collectClassCSS
+    ├─→ assemble: reset CSS + framework CSS + module CSS + class CSS + user stylesheets
+    └─→ emit final HTML document
+```
+
+### `renderStandardNode` per-node flow
+
+```text
+For each node, bottom-up:
+
+  1. children = node.children.map(renderNode)            ← recurse first
+  2. resolvedProps  = resolveProps(node, breakpoint)     ← merge breakpoint overrides
+  3. dynamicProps   = resolveDynamicProps(...)           ← apply data bindings
+  4. safeProps      = escapeProps(dynamicProps, schema)  ← HTML-escape strings
+  5. attachResolvedMediaByKey(safeProps, def, ...)       ← attach <picture>/<srcset>
+  6. attachAutoSizes(safeProps, def, ...)                ← auto <img sizes>
+  7. { html, css } = def.render({ props: safeProps, children, html })  ← MODULE BOUNDARY
+  8. css = sanitizeModuleCSS(css)                        ← DOMPurify
+  9. cssCollector.add(moduleId, css)                     ← dedup by moduleId
+ 10. html = injectNodeClassIds(html, node, site)         ← splice classIds into root tag
+ 11. return html
+```
+
+The walker is recursive, but every step is local — there's no global state mutation, no cross-node coupling. Each node's output is a function of its node + its already-rendered children.
+
+---
+
+## Module render API
+
+A module's `render()` is the only thing the walker calls per node. It's a **pure** function:
+
+```ts
+type ModuleRender<Schema> = (input: {
+  props:    ResolvedProps<Schema>
+  children: string                       // joined rendered child HTML
+  html:     (strings: TemplateStringsArray, ...values: unknown[]) => string  // helper
+}) => { html: string; css?: string }
+```
+
+- **No DOM access**, **no React**, **no side effects**. The result is a string of HTML and an optional string of CSS.
+- The `html` helper is a tagged template that auto-escapes interpolated values. Use it for any prop you didn't get pre-escaped.
+- The returned `css` is collected and deduped — emitting the same CSS for every instance of a module is fine; it appears once in the page bundle.
+
+Constraints (gated by tests):
+
+- **Constraint #179** — render() is pure.
+- **Constraint #211** — `escapeProps` runs on every node before render(); modules can trust string props are HTML-safe.
+
+---
+
+## Specialised renderers
+
+### `base.visual-component-ref` — Visual Component instances
+
+When the walker hits a `base.visual-component-ref` node, it calls `renderVisualComponentRef`:
+
+1. Resolves the target Visual Component from the site's `components` table.
+2. Builds an inner `RenderContext` whose tree is the VC's `tree` and whose `instanceProps` are taken from the ref node's props.
+3. Walks the VC tree via `renderNode`, with prop bindings (`{paramId}`) substituted against the instance props.
+4. Pairs each `base.slot-instance` (in the consumer page tree, beneath the VC ref) with its matching `base.slot-outlet` (in the VC definition tree) by `slotName` and inlines the consumer-supplied content.
+
+See [docs/features/visual-components.md](visual-components.md) for the VC modeling details.
+
+### `base.loop` — loop sources
+
+When the walker hits a `base.loop` node, it calls `renderLoop`:
+
+1. Resolves the loop's entity source (a built-in source like `content.entries`, `site.pages`, `site.media`, or a plugin-registered source).
+2. Pulls items from the loop fetch result (pre-warmed by `loopPrefetch.ts` during publish).
+3. Walks the loop's child variants in round-robin, pushing each item onto the entry stack so child nodes' `dynamicBindings` resolve `currentEntry.fieldId` against that item.
+4. Concatenates the rendered variant HTML and returns it.
+
+See [docs/features/loops.md](loops.md) for sources, filters, and registration.
+
+---
+
+## CSS pipeline
+
+A published page ends up with exactly one CSS bundle, hashed for cache-busting:
+
+```text
+/_pb/css/style-<hash>.css = (
+    PUBLISHER_RESET_CSS                  ← reset.ts (cross-browser baseline)
+  + buildSiteFrameworkCss(site)          ← frameworkCss.ts (spacing scale, typography, ...)
+  + collectModuleCSS(via CssCollector)   ← deduped per-moduleId CSS
+  + collectClassCSS(site)                ← user-defined CSSClass entries
+  + collectUserStylesheetCss(site)       ← arbitrary user CSS
+)
+```
+
+### CSS dedup via `CssCollector`
+
+```ts
+const collector = new CssCollector()
+collector.add(moduleId, css)   // first call per moduleId is stored; subsequent calls are no-ops
+collector.flush()              // returns the deduped CSS string
+```
+
+This is what shrinks published CSS by ~60–80% on typical pages (Decision #308). Every `<button>` module instance emits the same CSS once.
+
+### CSS sanitization
+
+`sanitizeModuleCSS(css)` runs DOMPurify-style filtering at the module boundary — modules can't smuggle `@import` of arbitrary URLs, `expression()` IE leftovers, or `javascript:` URLs into the published bundle.
+
+### Hashed bundle filenames
+
+The server's `siteCssBundle.ts` and the client's `siteCssBundle.ts` together name each bundle file `<group>-<contentHash>.css`. The publisher emits `<link rel="stylesheet" href="/_pb/css/style-<hash>.css">` into the HTML. `Cache-Control: immutable` (1 year) is safe because the hash changes whenever the content does.
+
+Three bundles per site (each hashed independently):
+- `reset-<hash>.css` — `PUBLISHER_RESET_CSS`
+- `framework-<hash>.css` — `buildSiteFrameworkCss(site)`
+- `style-<hash>.css` — module CSS + class CSS + user stylesheets (page-specific)
+
+The exclusive namespace `/_pb/css/*` is served by `serveSiteCss` in the router — unknown paths under it 404 rather than falling through.
+
+---
+
+## `<head>` assembly
+
+The publisher emits `<head>` in this order:
+
+1. `<meta charset="utf-8">`
+2. `<meta name="viewport" content="width=device-width, initial-scale=1">`
+3. `<title>` from `page.title`
+4. `<meta name="description">` if present in page settings
+5. `<link rel="icon">` if a favicon is configured
+6. Font import `<link>` if site uses a non-system font
+7. `<script type="importmap">` mapping bare specifiers (e.g. `three`) to `/_pb/runtime/cache/<hash>/...` URLs
+8. Runtime asset `<script>` tags (`scriptTagsForRuntimeAssets`)
+9. `<link rel="stylesheet" href="/_pb/css/<bundle>-<hash>.css">` per bundle
+10. **`head` placement** plugin-injected tags (after the publisher's own head, before custom user head content)
+11. `<meta http-equiv="Content-Security-Policy" content="...">` — assembled based on what's actually in the page
+
+Plugins inject at four anchors. The order matters — see [docs/features/plugin-system.md](plugin-system.md) for the splicing rules.
+
+### CSP
+
+The CSP `<meta>` tag is built dynamically based on what the page contains:
+
+- Always: `default-src 'self'`, restricted script sources, restricted style sources
+- Add `worker-src 'self' blob:` if any module uses workers
+- Add `connect-src` entries from plugin `network.outbound` allowlists
+- Add font / image hosts derived from referenced URLs
+
+Editing the CSP manually is **not** safe — it's a derived value. Edit the source list and re-emit.
+
+---
+
+## Server-side wrappers
+
+`src/core/publisher/` is pure (no Bun, no Node, no fs). The server wraps it.
+
+| File                                            | Role                                                                |
+|-------------------------------------------------|---------------------------------------------------------------------|
+| `server/publish/publicRenderer.ts`              | `renderPublishedSnapshot`, `renderPublishedDataRowTemplate`. Calls `publishPage`. |
+| `server/publish/publishedHtmlPipeline.ts`       | Post-process: DOMPurify the final HTML, run plugin `publish.html` filter, splice in declarative tags from plugin manifests, inject runtime assets. |
+| `server/publish/siteCssBundle.ts`               | Hash the three CSS strings, write `uploads/css/...` files.          |
+| `server/publish/republish.ts`                   | Bulk re-publish on settings change (touches every page).            |
+| `server/publish/publishScheduler.ts`            | Scheduled publish jobs (cron-style).                                |
+| `server/publish/frontendInjections.ts`          | Compute plugin `<script>`/`<link>`/`<meta>` tags + CSP entries.     |
+| `server/publish/mediaPresentation.ts`           | At publish time, build `<picture>` / `<img srcset>` markup from `media_assets.variants_json`. |
+| `server/publish/mediaPrefetch.ts`               | Resolve all referenced media into a `Map<url, ResolvedMedia>` before render. |
+| `server/publish/loopPrefetch.ts`                | Fetch every loop source's items before render so the walker is purely synchronous. |
+| `server/publish/runtime/packageServer.ts`       | Serve per-site `bun install` workspace under `/_pb/runtime/cache/`. |
+| `server/publish/loopRuntime.ts`                 | The loop runtime asset (small JS shim used by certain loop variants).|
+
+### `publishedHtmlPipeline.ts` — the plugin filter point
+
+After `publishPage` returns, the server runs:
+
+```text
+publishPage(page, ctx) → rawHtml
+    │
+    ▼
+applyPublishedHtmlPipeline(rawHtml, ctx)
+    │
+    ├─→ DOMPurify-sanitize the entire document
+    ├─→ Emit `publish.before` hook (plugins can prepare state)
+    ├─→ Run `publish.html` filters in registration order (plugins transform the HTML string)
+    ├─→ Splice in declarative tags from plugin manifests' `frontend.assets[]`
+    ├─→ Emit `publish.after` hook
+    └─→ Return final HTML
+```
+
+Plugins shouldn't need to know about the publisher internals — they get the HTML string and return the transformed string.
+
+---
+
+## Publishing a single page
+
+```text
+POST /admin/api/cms/publish/site
+    │
+    ▼
+publishDraftSite (server/repositories/publish.ts)
+    │
+    ├─→ load draft site shell + all page-table rows + all VC rows
+    ├─→ build runtime scripts + runtime package importmap
+    ├─→ for each page: freeze into a PublishedPageSnapshot (JSON)
+    ├─→ insert into data_row_versions with snapshot_json = that snapshot
+    └─→ flip data_rows.status = 'published', set active_version_id
+
+— and on the visitor request side —
+
+GET /<slug>  OR  /<route-base>/<row-slug>
+    │
+    ▼
+tryServePublicRoute (server/router.ts)
+    │
+    └─→ server/publish/publicRouter.ts
+          │
+          ├─→ resolvePublicRoute(db, url) → page | row | redirect | not-found
+          └─→ renderPublicResolution
+                ├─→ publishPage(page, ctx) using snapshot bytes
+                ├─→ applyPublishedHtmlPipeline (plugin frontend injection
+                │   + publish.html filter + publish.before/after hooks)
+                └─→ HTTP 200 (HTML) / 301 (slug rename) / 404
+```
+
+The published artefact is the snapshot in `data_row_versions.snapshot_json`, not HTML on disk. Visitors hit `publicRouter.ts` and the renderer materialises HTML from the snapshot on every request. The seam for future static-to-disk caching is `renderPublicResolution`; the rest of the publisher is already deterministic and would slot in unchanged.
+
+---
+
+## Adding a new module renderer
+
+The publisher doesn't know about specific modules — it asks the registry. To add a new first-party module that renders correctly:
+
+1. Define the module via `defineModule(...)` (see [docs/features/modules.md](modules.md)).
+2. Implement `render({ props, children, html }) → { html, css? }` purely.
+3. Register the module in `src/core/module-engine/registry.ts`.
+
+That's it. The walker, escape, class injection, and CSS dedup all work automatically.
+
+### Adding a new specialised renderer (rare)
+
+The two existing specialised renderers (`renderVisualComponentRef`, `renderLoop`) hook in because they fundamentally **replace** the normal walk — VC ref inlines a different tree; loop iterates and round-robins. If you have a new module that needs to replace the walk:
+
+1. Write the renderer in `src/core/publisher/<your>Renderer.ts`.
+2. Take `renderNode` as a callback to keep the file graph acyclic.
+3. Hook into `renderNode.ts`'s dispatch on `moduleId`.
+
+This is rare and requires architectural review — most "new behavior" fits within the standard module render contract.
+
+---
+
+## Forbidden patterns
+
+| Pattern                                                       | Use instead                                                |
+|---------------------------------------------------------------|------------------------------------------------------------|
+| Mutating the page tree inside a module's `render()`           | Render is pure. Compute, don't mutate.                     |
+| Reading `document` / `window` inside `render()`               | The publisher runs server-side. There is no DOM.           |
+| Calling `await` inside `render()`                             | Render is synchronous. Pre-warm async data via prefetch (loop, media). |
+| Hardcoding `<link>` to a CSS file the publisher didn't emit   | Add a CSS string to the module's `render()` return — collected and deduped automatically. |
+| Bypassing `escapeProps` by reading `node.props` directly inside `render()` | Read from the `props` argument — it's already escaped. |
+| Hand-writing `<picture>` / `<img srcset>` in a module         | Set `props.<key>` to a media URL; `mediaPresentation.ts` materializes the markup. |
+| Adding `@import url(...)` to module CSS                       | DOMPurify-style filter strips it. Add it to the site's user stylesheets instead. |
+| Editing the CSP meta tag string manually                      | Edit the CSP source list — the tag is derived.             |
+
+---
+
+## Related
+
+- [docs/architecture.md](../architecture.md) — system overview
+- [docs/server.md](../server.md) — server-side publishing wrappers
+- [docs/features/visual-components.md](visual-components.md) — VC instances + slots
+- [docs/features/loops.md](loops.md) — loop sources + the round-robin walk
+- [docs/features/modules.md](modules.md) — defining a module
+- [docs/features/media.md](media.md) — media variants + presentation
+- [docs/features/plugin-system.md](plugin-system.md) — `publish.before/.html/.after` filters
+- Source-of-truth files:
+  - `src/core/publisher/render.ts` — `publishPage`
+  - `src/core/publisher/renderNode.ts` — the walker
+  - `src/core/publisher/renderContext.ts` — `RenderContext`
+  - `src/core/publisher/cssCollector.ts` — `CssCollector` + sanitization
+  - `src/core/publisher/escapeProps.ts` — Constraint #211 enforcement
+  - `server/publish/publishedHtmlPipeline.ts` — plugin filter point
+  - `server/publish/publicRenderer.ts` — server wrappers
+- Gate tests:
+  - `src/__tests__/architecture/dispatcher-html-pipeline.test.ts`
+  - `src/__tests__/architecture/publish-html-filter-context.test.ts`
+  - `src/__tests__/architecture/media-presentation-pipeline.test.ts`

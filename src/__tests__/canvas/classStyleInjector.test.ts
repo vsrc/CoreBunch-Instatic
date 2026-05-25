@@ -19,26 +19,31 @@ function makeClass(
 }
 
 describe('generateCanvasClassCSS', () => {
-  it('prepends the publisher reset scoped to the breakpoint frame so canvas matches published', () => {
+  it('prepends the unscoped publisher reset so the iframe cascade matches the published page', () => {
     const css = generateCanvasClassCSS({}, [])
 
-    // Reset rules are scoped under [data-breakpoint-id] so they only affect
-    // canvas content — editor chrome (panels, toolbars) keeps its own globals.
-    expect(css).toContain('[data-breakpoint-id]')
+    // Each canvas breakpoint frame is its own iframe — the reset lives inside
+    // the iframe document and never touches editor chrome. We emit the
+    // SAME unscoped reset the publisher ships, so the cascade is identical
+    // between canvas preview and live site.
     expect(css).toContain(':where(*, *::before, *::after) { box-sizing: border-box; }')
     expect(css).toContain(':where(*) { margin: 0; padding: 0; }')
     expect(css).toContain('font-family: system-ui')
+    // No `[data-breakpoint-id]` prefix on the reset itself — it's unscoped.
+    expect(css).not.toMatch(/\[data-breakpoint-id\][^{]*\{[^}]*box-sizing/)
   })
 
-  it('overrides the editor body color in the canvas viewport so unstyled text is readable', () => {
-    // The editor's globals.css sets body color to a near-white token for the
-    // dark editor chrome (`--editor-text: #ededed`). That color cascades into
-    // the canvas viewport (which has a white background) and would render
-    // unstyled headings invisibly white-on-white. The scoped canvas reset
-    // pins `color: #000` so canvas content reads the same black-on-white as
-    // the published page (where UA defaults give that color naturally).
+  it('uses :where()-style low-specificity body baseline so user CSS wins', () => {
+    // The published `<body>` rule is `:where(body) { line-height; font-family }`
+    // — specificity 0,0,0 so any user rule like `body { color: red }` wins.
+    // The canvas now mirrors that exactly (was previously a concrete
+    // `[data-breakpoint-id] { color: #000 }` rule which beat user CSS at
+    // specificity 0,1,0; not needed anymore because the iframe has its own
+    // body and the editor's globals.css can't cascade in).
     const css = generateCanvasClassCSS({}, [])
-    expect(css).toMatch(/\[data-breakpoint-id\][^{]*\{[^}]*color:\s*#000/)
+    expect(css).toContain(':where(body)')
+    // Body color isn't pinned — UA default applies until user CSS overrides.
+    expect(css).not.toMatch(/\[data-breakpoint-id\][^{]*\{[^}]*color:\s*#000/)
   })
 
   it('scopes breakpoint class styles to their canvas frame instead of viewport media queries', () => {

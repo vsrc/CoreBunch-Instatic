@@ -385,28 +385,43 @@ const BOOT_API_KICKOFF = `
 // "every navigation feels instant" UX win is worth it. If we ever care
 // about constrained-bandwidth users, this list can shrink to just the
 // most-likely-next pages.
-const POST_LOGIN_CHUNK_PREFIXES: readonly string[] = [
-  // Shell + state. `dnd-vendor` is also a modulepreload entry — we
-  // re-list it here defensively in case a future build splits it from
-  // the eager-paint set.
+// Critical post-login chunks — these are pulled in via `<link rel="modulepreload">`
+// (high priority) because they're on the dashboard's render-and-commit
+// critical path. The `await import(...)` in `main.tsx` blocks the React
+// mount until both load.
+//
+// Leaving them as low-priority `<link rel="prefetch">` would let the
+// browser deprioritize them behind other prefetch work — empirically
+// that added ~280 ms to the dashboard FCP because React's commit
+// scheduler waits for the chunks' module evaluation before painting.
+const POST_LOGIN_CRITICAL_PREFIXES: readonly string[] = [
   'AuthenticatedAdmin-',
-  'store-',
-  'dnd-vendor-',
-  'validation-vendor-',
-  // The 9 workspace pages — each is its own React.lazy chunk in
-  // AuthenticatedAdmin.tsx. Order matches frequency of use (dashboard is
-  // the default landing route). Prefetching all of them means that
-  // clicking any nav link from any workspace is instant; no Suspense
-  // loading screen flash.
-  'DashboardPage-',
+]
+
+// Other post-login chunks — workspace pages the user MIGHT navigate to
+// next, plus the heavy editor chunks. These use `<link rel="prefetch">`
+// (lowest priority) so they DON'T compete with the eager paint chunks
+// or the critical post-login chunks above. They download during browser
+// idle time after first paint.
+const POST_LOGIN_IDLE_PREFIXES: readonly string[] = [
+  // The other workspace pages — the active page is loaded eagerly by
+  // `main.tsx` based on URL path; the rest prefetch in idle time for
+  // instant nav. Order matches frequency of use.
   'SitePage-',
   'ContentPage-',
   'DataPage-',
+  'DashboardPage-',
   'MediaPage-',
   'PluginsPage-',
   'PluginPage-',
   'UsersPage-',
   'AccountPage-',
+  // Editor-store and dnd-kit chunks — needed by SitePage / canvas / dnd.
+  // Not on the dashboard's path, but the user often goes to the editor
+  // next, so prefetching here means the first nav into Site is fast.
+  'store-',
+  'dnd-vendor-',
+  'validation-vendor-',
   // Heavy editor chunks pulled in by SitePage's downstream lazy imports.
   // Prefetching now means the visual editor first-paint is sub-100 ms
   // after the click.
@@ -431,7 +446,17 @@ function buildPostLoginPrefetchHints(staticDir: string): string {
     return ''
   }
   const lines: string[] = []
-  for (const prefix of POST_LOGIN_CHUNK_PREFIXES) {
+  // Critical chunks first — modulepreload (high priority, fetched + parsed
+  // before idle work).
+  for (const prefix of POST_LOGIN_CRITICAL_PREFIXES) {
+    const match = entries.find((name) => name.startsWith(prefix) && name.endsWith('.js'))
+    if (!match) continue
+    lines.push(
+      `    <link rel="modulepreload" href="/assets/${match}" crossorigin>`,
+    )
+  }
+  // Idle chunks — prefetch (low priority, browser downloads only when idle).
+  for (const prefix of POST_LOGIN_IDLE_PREFIXES) {
     const match = entries.find((name) => name.startsWith(prefix) && name.endsWith('.js'))
     if (!match) continue
     lines.push(
@@ -451,6 +476,14 @@ function buildPostLoginPrefetchHints(staticDir: string): string {
 //   - Workspace page chunks prefetch in browser idle time, so clicking
 //     between Site / Content / Data / etc. in the nav is instant — no
 //     Suspense loading screen flash.
+//   - `window.__pbAuthed = 1` flag tells the client this is the
+//     authenticated path. The session cookie is `HttpOnly` so
+//     `document.cookie` can't see it; this flag lets `main.tsx` decide
+//     whether to `await import('./AuthenticatedAdmin')` BEFORE the first
+//     React mount (eliminates the post-Suspense concurrent re-render
+//     delay — see main.tsx for the full sequence).
+const AUTHED_FLAG_SCRIPT = `
+    <script>window.__pbAuthed = 1;</script>`
 function injectAuthenticatedHints(html: string, staticDir: string): string {
   const prefetchHints = buildPostLoginPrefetchHints(staticDir)
   // Use `</head>` as the anchor — it's guaranteed to be in the document
@@ -459,7 +492,7 @@ function injectAuthenticatedHints(html: string, staticDir: string): string {
   // `<style>` block and `</head>`.
   return html.replace(
     '</head>',
-    `${BOOT_API_KICKOFF}\n${prefetchHints}\n  </head>`,
+    `${AUTHED_FLAG_SCRIPT}\n${BOOT_API_KICKOFF}\n${prefetchHints}\n  </head>`,
   )
 }
 

@@ -190,21 +190,37 @@ Folder routes (`/admin/api/cms/media/folders/...`) are matched **before** asset 
 POST /admin/api/cms/media/upload
     │
     ▼
-mediaUpload.ts             ← validates upload, picks adapter
+mediaUpload.ts             ← validates upload (size + magic-byte MIME sniff)
     │
     ▼
-mediaUploadDispatch.ts     ← dispatches to the chosen adapter
+mediaUploadDispatch.ts     ← dispatches to the elected storage adapter
     │
     ▼
 mediaUploadExecutor.ts     ← executes write (local disk or plugin adapter)
     │
     ▼
-sharp (image)               ← extract width/height, dominant color, blurhash
-                            ← generate image variants (multiple sizes)
+mediaVariants.ts (host)    ← coordinates variant generation
+    │                       (delegate election runs host-side: when a
+    │                       Tier-3 delegate is elected, the worker skips
+    │                       the local ladder and we emit URL-template
+    │                       variants only)
+    ▼
+imageVariantWorker          ← Bun.Worker: sharp probe + blurhash + WebP
+  (server/handlers/cms/      ladder. Bytes cross the boundary as
+   imageVariantWorker.ts)    transferable ArrayBuffers. The main thread
+                             stays free for visitor traffic during the
+                             ~200–500 ms CPU spend per upload.
+    │
+    ▼
+mediaVariants.ts (host)    ← streams each returned variant through
+                             dispatchUpload(role: 'variant') so the
+                             elected adapter writes the bytes
     │
     ▼
 media_assets row created, variants_json populated
 ```
+
+The image-variant worker pool is sized by `IMAGE_VARIANT_WORKER_POOL_SIZE` (default 2, hard cap 8). Workers are spawned lazily on first use and reused for the life of the process; a crashed worker is dropped from the pool and a replacement spawns on the next submission.
 
 Defense in depth on the static path: `hardenUploadResponse` in `server/static.ts` adds `X-Content-Type-Options: nosniff` and `Content-Disposition: attachment` for non-inert MIME types so a stray non-allowlisted upload can't be top-level navigated and rendered as HTML on the admin origin.
 

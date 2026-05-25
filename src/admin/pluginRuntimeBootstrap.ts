@@ -16,117 +16,112 @@
  *      — small, hand-auditable, no rollup magic. They re-export from
  *      the global the host populated here.
  *
- * This module is imported once from `src/admin/main.tsx` BEFORE the
- * React tree mounts so any plugin import that happens during the first
- * editor render finds the runtime ready. Subsequent calls are no-ops
- * (idempotent — the global object is replaced wholesale on each call).
+ * Lazy-evaluated runtime
+ * ----------------------
+ * The runtime imports its heavy deps via DYNAMIC `import(...)`, not
+ * static. That keeps `@admin/plugin-host-ui`, `@admin/plugin-host-hooks`
+ * (whose imports include `useEditorStore` from the 109 KB editor store
+ * chunk), and `@core/plugin-sdk` OUT OF the AuthenticatedAdmin / dashboard
+ * critical path. The dashboard never needs the editor store, so it never
+ * has to wait for the store chunk to download + parse before painting.
+ *
+ * Callers (anything that's about to dynamically import a plugin module
+ * compiled against the `/runtime/*.js` shims) MUST `await ensurePluginRuntime()`
+ * before triggering the plugin import. The two callers today:
+ *
+ *   • `useInstalledEditorPlugins.ts` — wraps the `activateInstalledEditorPlugins`
+ *     call. Plugins activate via dynamic-import which is gated on the
+ *     runtime being ready.
+ *   • `PluginPageRenderer.tsx` — calls `loadPluginAdminAppComponent` to
+ *     render a plugin's admin app page. Gated on the runtime being ready.
+ *
+ * Subsequent calls are no-ops (idempotent — the install promise is cached).
  *
  * Safety: never expose host internals beyond what the plugin SDK
  * already documents. The shim files in `public/runtime/` form the
  * narrow contract — anything not re-exported there is private.
  */
-import * as React from 'react'
-import * as ReactJsxRuntime from 'react/jsx-runtime'
-import * as ReactJsxDevRuntime from 'react/jsx-dev-runtime'
-import * as ReactDOM from 'react-dom'
-
-// Host UI surface — the named React components plugins import via
-// `@pagebuilder/host-ui`.
-import {
-  Alert,
-  Bars,
-  Button,
-  Card,
-  Checkbox,
-  Code,
-  Delta,
-  EmptyState,
-  Heading,
-  Input,
-  RangeTabs,
-  SearchBar,
-  Select,
-  Separator,
-  Sparkline,
-  Stack,
-  StackedBar,
-  StatValue,
-  Switch,
-  Tab,
-  TabList,
-  TabPanel,
-  Tabs,
-  Text,
-  Textarea,
-  Widget,
-  WidgetList,
-  WidgetListRow,
-} from '@admin/plugin-host-ui'
-
-// Host hooks surface — useEditorStore, usePluginSettings, etc.
-import {
-  PluginContext,
-  useCanvasNodeRect,
-  useCanvasViewport,
-  useEditorCommand,
-  useEditorStore,
-  usePluginContext,
-  usePluginRoutes,
-  usePluginSettings,
-} from '@admin/plugin-host-hooks'
-
-// Plugin SDK builder helpers — the runtime functions plugins call.
-import {
-  PLUGIN_API_VERSION,
-  control,
-  createNamespace,
-  defineComponent,
-  defineModule,
-  definePack,
-  definePlugin,
-  definePluginAdminApp,
-  definePluginCanvasOverlay,
-  definePluginPanel,
-  escapeHtml,
-  h,
-  html,
-  permissions,
-  raw,
-  safeUrl,
-  vc,
-} from '@core/plugin-sdk'
+import type * as ReactNs from 'react'
+import type * as ReactJsxRuntimeNs from 'react/jsx-runtime'
+import type * as ReactJsxDevRuntimeNs from 'react/jsx-dev-runtime'
+import type * as ReactDOMNs from 'react-dom'
 
 declare global {
   var __pagebuilder: {
-    React: typeof React
-    ReactJsxRuntime: typeof ReactJsxRuntime
-    ReactJsxDevRuntime: typeof ReactJsxDevRuntime
-    ReactDOM: typeof ReactDOM
+    React: typeof ReactNs
+    ReactJsxRuntime: typeof ReactJsxRuntimeNs
+    ReactJsxDevRuntime: typeof ReactJsxDevRuntimeNs
+    ReactDOM: typeof ReactDOMNs
     hostUi: Record<string, unknown>
     hostHooks: Record<string, unknown>
     pluginSdk: Record<string, unknown>
   } | undefined
 }
 
-let installed = false
+// Memoised install promise. The first caller triggers the dynamic
+// imports; concurrent / subsequent callers receive the same resolved
+// promise (idempotent).
+let installPromise: Promise<void> | null = null
 
-export function installPluginRuntime(): void {
-  if (installed) {
-    // Defensive single-React check — if the runtime was already installed
-    // and the React module reference has somehow drifted, fail loudly. This
-    // catches the worst class of plugin bug (a plugin author accidentally
-    // bundled their own React) before it produces opaque hook crashes.
-    const existing = globalThis.__pagebuilder
-    if (existing && existing.React !== React) {
-      throw new Error(
-        '[@pagebuilder/runtime] Detected a second React instance during plugin runtime bootstrap. ' +
-        `Host React: ${React.version}; existing React: ${existing.React.version}. ` +
-        'Plugin authors must build with `pb-plugin build` so React is externalized.',
-      )
-    }
-    return
+/**
+ * Ensure `globalThis.__pagebuilder` is populated. Returns a promise that
+ * resolves once all the runtime deps (host UI, host hooks, plugin SDK)
+ * have been loaded and the global is set.
+ *
+ * Call this BEFORE any `import('plugin asset url')` call — the plugin
+ * module evaluates its `import * as React from 'react'` statements via
+ * the `/runtime/*.js` shims, which read `globalThis.__pagebuilder`.
+ *
+ * Cost on first call: downloads + parses `@admin/plugin-host-ui`,
+ * `@admin/plugin-host-hooks` (which pulls in the editor store chunk),
+ * and `@core/plugin-sdk`. On a warm cache this is near-instant.
+ *
+ * Cost on subsequent calls: a cached `Promise.resolve()`.
+ */
+export function ensurePluginRuntime(): Promise<void> {
+  if (installPromise !== null) return installPromise
+  installPromise = doInstall()
+  return installPromise
+}
+
+async function doInstall(): Promise<void> {
+  // Parallel dynamic imports — Vite emits these as separate chunks that
+  // aren't pulled into the AuthenticatedAdmin static dep graph.
+  //
+  // `react`, `react-dom`, and the JSX runtimes are in the eagerly-loaded
+  // react-vendor chunk already, so these resolve from the V8 module
+  // cache without a network hit. Listing them via dynamic import keeps
+  // the surface symmetric (all runtime members go through the same
+  // resolver) and lets the optimizer prove they aren't needed on the
+  // login screen.
+  const [
+    React,
+    ReactJsxRuntime,
+    ReactJsxDevRuntime,
+    ReactDOM,
+    hostUiMod,
+    hostHooksMod,
+    pluginSdkMod,
+  ] = await Promise.all([
+    import('react'),
+    import('react/jsx-runtime'),
+    import('react/jsx-dev-runtime'),
+    import('react-dom'),
+    import('@admin/plugin-host-ui'),
+    import('@admin/plugin-host-hooks'),
+    import('@core/plugin-sdk'),
+  ])
+
+  if (globalThis.__pagebuilder && globalThis.__pagebuilder.React !== React) {
+    // Defensive single-React check — see the previous installPluginRuntime
+    // implementation for rationale. Fail loudly if a plugin author
+    // accidentally bundled their own React.
+    throw new Error(
+      '[@pagebuilder/runtime] Detected a second React instance during plugin runtime bootstrap. ' +
+      `Host React: ${React.version}; existing React: ${globalThis.__pagebuilder.React.version}. ` +
+      'Plugin authors must build with `pb-plugin build` so React is externalized.',
+    )
   }
-  installed = true
 
   const runtime = {
     React,
@@ -134,63 +129,63 @@ export function installPluginRuntime(): void {
     ReactJsxDevRuntime,
     ReactDOM,
     hostUi: Object.freeze({
-      Alert,
-      Bars,
-      Button,
-      Card,
-      Checkbox,
-      Code,
-      Delta,
-      EmptyState,
-      Heading,
-      Input,
-      RangeTabs,
-      SearchBar,
-      Select,
-      Separator,
-      Sparkline,
-      Stack,
-      StackedBar,
-      StatValue,
-      Switch,
-      Tab,
-      TabList,
-      TabPanel,
-      Tabs,
-      Text,
-      Textarea,
-      Widget,
-      WidgetList,
-      WidgetListRow,
+      Alert: hostUiMod.Alert,
+      Bars: hostUiMod.Bars,
+      Button: hostUiMod.Button,
+      Card: hostUiMod.Card,
+      Checkbox: hostUiMod.Checkbox,
+      Code: hostUiMod.Code,
+      Delta: hostUiMod.Delta,
+      EmptyState: hostUiMod.EmptyState,
+      Heading: hostUiMod.Heading,
+      Input: hostUiMod.Input,
+      RangeTabs: hostUiMod.RangeTabs,
+      SearchBar: hostUiMod.SearchBar,
+      Select: hostUiMod.Select,
+      Separator: hostUiMod.Separator,
+      Sparkline: hostUiMod.Sparkline,
+      Stack: hostUiMod.Stack,
+      StackedBar: hostUiMod.StackedBar,
+      StatValue: hostUiMod.StatValue,
+      Switch: hostUiMod.Switch,
+      Tab: hostUiMod.Tab,
+      TabList: hostUiMod.TabList,
+      TabPanel: hostUiMod.TabPanel,
+      Tabs: hostUiMod.Tabs,
+      Text: hostUiMod.Text,
+      Textarea: hostUiMod.Textarea,
+      Widget: hostUiMod.Widget,
+      WidgetList: hostUiMod.WidgetList,
+      WidgetListRow: hostUiMod.WidgetListRow,
     }),
     hostHooks: Object.freeze({
-      PluginContext,
-      useEditorStore,
-      usePluginSettings,
-      usePluginContext,
-      usePluginRoutes,
-      useEditorCommand,
-      useCanvasNodeRect,
-      useCanvasViewport,
+      PluginContext: hostHooksMod.PluginContext,
+      useEditorStore: hostHooksMod.useEditorStore,
+      usePluginSettings: hostHooksMod.usePluginSettings,
+      usePluginContext: hostHooksMod.usePluginContext,
+      usePluginRoutes: hostHooksMod.usePluginRoutes,
+      useEditorCommand: hostHooksMod.useEditorCommand,
+      useCanvasNodeRect: hostHooksMod.useCanvasNodeRect,
+      useCanvasViewport: hostHooksMod.useCanvasViewport,
     }),
     pluginSdk: Object.freeze({
-      PLUGIN_API_VERSION,
-      definePluginPanel,
-      definePluginCanvasOverlay,
-      definePluginAdminApp,
-      definePlugin,
-      defineModule,
-      defineComponent,
-      definePack,
-      permissions,
-      control,
-      html,
-      raw,
-      escapeHtml,
-      safeUrl,
-      createNamespace,
-      h,
-      vc,
+      PLUGIN_API_VERSION: pluginSdkMod.PLUGIN_API_VERSION,
+      definePluginPanel: pluginSdkMod.definePluginPanel,
+      definePluginCanvasOverlay: pluginSdkMod.definePluginCanvasOverlay,
+      definePluginAdminApp: pluginSdkMod.definePluginAdminApp,
+      definePlugin: pluginSdkMod.definePlugin,
+      defineModule: pluginSdkMod.defineModule,
+      defineComponent: pluginSdkMod.defineComponent,
+      definePack: pluginSdkMod.definePack,
+      permissions: pluginSdkMod.permissions,
+      control: pluginSdkMod.control,
+      html: pluginSdkMod.html,
+      raw: pluginSdkMod.raw,
+      escapeHtml: pluginSdkMod.escapeHtml,
+      safeUrl: pluginSdkMod.safeUrl,
+      createNamespace: pluginSdkMod.createNamespace,
+      h: pluginSdkMod.h,
+      vc: pluginSdkMod.vc,
     }),
   }
 

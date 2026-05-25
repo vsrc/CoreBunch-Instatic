@@ -78,28 +78,58 @@ export interface ModuleComponentProps<
    */
   mcClassName?: string
   /**
-   * When true, the canvas has placed this node into inline-edit mode (a user
-   * with `site.content.edit` double-clicked it). The module's component
-   * should swap its primary content prop for a `contentEditable` element so
-   * the user can type directly on the canvas. Commit on blur / Enter, cancel
-   * on Escape, via `onCommitInlineEdit` / `onCancelInlineEdit`.
+   * Bag of editor attributes and event handlers the module MUST spread onto
+   * its root JSX element. The canvas wires selection, hover, double-click,
+   * context-menu, keyboard activation, and DOM-tree traversal through these
+   * — without them the node is invisible to the editor's interaction layer.
    *
-   * Modules that don't opt in simply ignore this prop — falling back to
-   * static rendering. Inline editing is opt-in per module type.
+   * This used to live on a wrapping `<div class="nodeWrapper">` element
+   * inserted by the canvas. That wrapper broke CSS combinators like
+   * `body > nav` and `:nth-child()` because the wrapper sat between every
+   * authored element pair. Moving the editor attributes onto the module's
+   * own root element eliminates the wrapper entirely, so the canvas DOM
+   * matches the published DOM exactly.
+   *
+   * `undefined` outside the editor (publisher, plugin sandbox preview, etc.)
+   * — modules should treat absence as "render plain published markup".
    */
-  isInlineEditing?: boolean
-  /**
-   * Commit the inline edit. Modules call this with the new prop bag —
-   * partial; only the keys that changed need to be present. The store
-   * action `updateNodeProps` is wired up by the canvas / NodeRenderer.
-   */
-  onCommitInlineEdit?: (partialProps: Record<string, unknown>) => void
-  /**
-   * Cancel the inline edit (Escape). The module's content should revert to
-   * the underlying prop value and exit edit mode. The canvas also clears
-   * `inlineEditingNodeId` so the next render is back to static.
-   */
-  onCancelInlineEdit?: () => void
+  nodeWrapperProps?: NodeWrapperProps
+}
+
+/**
+ * Editor attributes + event handlers a module spreads onto its root element
+ * so the canvas can drive selection / hover / context-menu / keyboard
+ * activation through the user's authored DOM directly (no wrapper div).
+ */
+export interface NodeWrapperProps {
+  'data-node-id': string
+  'data-module-id': string
+  tabIndex: 0
+  role: 'button'
+  'aria-pressed': boolean
+  'data-hovered'?: 'true'
+  onClickCapture?: (e: SyntheticMouseEvent) => void
+  onClick?: (e: SyntheticMouseEvent) => void
+  onDoubleClickCapture?: (e: SyntheticMouseEvent) => void
+  onDoubleClick?: (e: SyntheticMouseEvent) => void
+  onContextMenuCapture?: (e: SyntheticMouseEvent) => void
+  onContextMenu?: (e: SyntheticMouseEvent) => void
+  onKeyDown?: (e: SyntheticKeyboardEvent) => void
+  onMouseEnter?: () => void
+  onMouseLeave?: () => void
+}
+
+// Loose synthetic-event types so plugin module authors aren't forced to
+// import React types at the type level. The shapes match React's
+// SyntheticEvent surface for the methods modules actually need.
+type SyntheticMouseEvent = {
+  target: EventTarget | null
+  currentTarget: EventTarget | null
+  preventDefault: () => void
+  stopPropagation: () => void
+}
+type SyntheticKeyboardEvent = SyntheticMouseEvent & {
+  key: string
 }
 
 // ---------------------------------------------------------------------------
@@ -155,19 +185,6 @@ export interface ModuleDefinition<
    * All children go into a single default slot.
    */
   canHaveChildren: boolean
-
-  /**
-   * When true, the canvas allows the user to double-click the rendered node
-   * to enter inline-edit mode. The module's `component` is then re-rendered
-   * with `isInlineEditing: true` and is expected to swap its primary content
-   * prop (label / text / …) for a `contentEditable` element.
-   *
-   * Inline editing is gated on the caller's `site.content.edit` capability;
-   * structural edits (drag, add child, etc.) remain blocked. Modules that
-   * opt in MUST implement the `isInlineEditing` / `onCommitInlineEdit` /
-   * `onCancelInlineEdit` props in `ModuleComponentProps`.
-   */
-  inlineEditable?: boolean
 
   /**
    * Declarative property schema — maps prop key → PropertyControl.

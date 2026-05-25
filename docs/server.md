@@ -15,7 +15,7 @@ The server is a single `Bun.serve` process that boots the DB, runs migrations, a
 - **DB:** one `DbClient` interface (`server/db/client.ts`) — tagged-template callable returning `{ rows, rowCount }`. Two adapters: `postgres.ts` (via `Bun.sql`) and `sqlite.ts` (via `bun:sqlite`). Selected by `DATABASE_URL`.
 - **Repositories** (`server/repositories/`) hold all SQL. Handlers never write SQL directly.
 - **Plugins:** `server/plugins/runtime.ts` activates installed plugins at boot; per-plugin code runs in QuickJS-WASM sandboxes (`server/plugins/quickjsHost.ts`, `modulePackVm.ts`).
-- **Published pages and uploads** are served from disk by route handlers `tryServePublishedPage`, `tryServeUpload`, `tryServeStaticAsset`.
+- **Published pages and content rows** are served by `tryServePublicRoute`, which delegates resolution + render to `server/publish/publicRouter.ts` (live render from the JSON snapshot stored in `data_row_versions.snapshot_json`). Uploads + admin SPA assets are served from disk by `tryServeUpload` and `tryServeStaticAsset`.
 
 ---
 
@@ -73,8 +73,10 @@ const routes: readonly RouteHandler[] = [
   tryServeStaticAsset,             // /assets/* → dist/ (admin app)
   tryServeUpload,                  // /uploads/* → uploadsDir (with nosniff hardening)
   tryServeAdminApp,                // /admin/* → dist/index.html (SPA fallback)
-  tryServePublishedPage,           // /<slug> → uploads/published/...
-  tryServeContentRoute,            // /<route-base>/<row-slug> → published data row
+  tryServePublicRoute,             // /<slug> OR /<route-base>/<row-slug>
+                                   //   → server/publish/publicRouter.ts
+                                   //   resolves to page snapshot OR data row + template,
+                                   //   live-renders, runs publish.html pipeline
   trySetupRedirect,                // first-run redirect → /admin/setup
 ]
 ```
@@ -349,16 +351,23 @@ See [docs/reference/database-dialects.md](reference/database-dialects.md) for th
 
 ## Publishing pipeline
 
-The publisher converts an editor-mode page tree into static HTML on disk.
+Publishing is a two-step model: **freeze** at publish time, **render** on each request. Publishing freezes the current draft into a `PublishedPageSnapshot` (JSON) stored on `data_row_versions.snapshot_json`. Visitor requests run `publishPage()` against that snapshot to produce HTML — there is no static-to-disk step today.
 
 ```text
-src/core/publisher/                    ← renderer (page tree → HTML/CSS)
+src/core/publisher/                    ← `publishPage()` (page tree → HTML/CSS)
     │
-    ▼
-uploads/published/<slug>.html          ← static files
+    ├─ on publish:
+    │     publishDraftSite / publishDataRow
+    │     writes PublishedPageSnapshot → data_row_versions.snapshot_json
     │
-    ▼
-tryServePublishedPage (router)         ← serves them
+    └─ on request:
+          server/publish/publicRouter.ts
+              → resolvePublicRoute (page snapshot OR data row + template)
+              → renderPublicResolution
+                  → publishPage() rebuilds HTML from snapshot
+                  → applyPublishedHtmlPipeline (plugin frontend injection
+                    + publish.html filter + publish.before/after hooks)
+              → HTTP 200 / 301 / 404
 ```
 
 Server-side publishing helpers live in `server/publish/`:
@@ -366,7 +375,9 @@ Server-side publishing helpers live in `server/publish/`:
 | File                              | Role                                                                |
 |-----------------------------------|---------------------------------------------------------------------|
 | `publicRenderer.ts`               | `renderPublishedSnapshot`, `renderPublishedDataRowTemplate` — render a snapshot or a data-row page |
-| `publishedHtmlPipeline.ts`        | Post-processing applied to the rendered HTML before disk write       |
+| `publicRouter.ts`                 | Visitor URL → resolution (page / row / redirect / not-found) → Response. Single entry for every visitor HTML request. |
+| `publicRenderer.ts`               | Snapshot-aware wrappers around `publishPage` (page snapshot vs. data-row template) |
+| `publishedHtmlPipeline.ts`        | Post-processing applied to the rendered HTML before the response (plugin frontend injection + `publish.html` filter) |
 | `siteCssBundle.ts`                | Per-site reset / framework / style CSS bundles (hashed filenames)    |
 | `republish.ts`                    | Bulk re-publish (after a settings change touches all pages)          |
 | `publishScheduler.ts`             | Scheduled publish jobs                                               |

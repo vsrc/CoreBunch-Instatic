@@ -19,6 +19,7 @@ import React from 'react'
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { DndContext } from '@dnd-kit/core'
 import { useEditorStore } from '@site/store/store'
+import { queryCanvasElement } from './iframeCanvasQuery'
 import { CanvasRoot } from '@site/canvas/CanvasRoot'
 import { makeNode, makePage, makeSite } from '../fixtures'
 import type { PageNode } from '@core/page-tree'
@@ -143,7 +144,7 @@ describe('B3 — NodeRenderer lock-down: click routing for inlined VC body nodes
     setupAnnotatedPage()
     renderCanvas()
 
-    const vcBodyEl = document.querySelector('[data-node-id="vc-body"]')
+    const vcBodyEl = queryCanvasElement('[data-node-id="vc-body"]')
     expect(vcBodyEl).toBeTruthy()
 
     fireEvent.click(vcBodyEl!)
@@ -157,7 +158,7 @@ describe('B3 — NodeRenderer lock-down: click routing for inlined VC body nodes
     setupAnnotatedPage()
     renderCanvas()
 
-    const slotChildEl = document.querySelector('[data-node-id="slot-child"]')
+    const slotChildEl = queryCanvasElement('[data-node-id="slot-child"]')
     expect(slotChildEl).toBeTruthy()
 
     fireEvent.click(slotChildEl!)
@@ -171,7 +172,7 @@ describe('B3 — NodeRenderer lock-down: click routing for inlined VC body nodes
     setupAnnotatedPage()
     renderCanvas()
 
-    const ref1El = document.querySelector('[data-node-id="ref1"]')
+    const ref1El = queryCanvasElement('[data-node-id="ref1"]')
     expect(ref1El).toBeTruthy()
 
     fireEvent.click(ref1El!)
@@ -185,8 +186,8 @@ describe('B3 — NodeRenderer lock-down: click routing for inlined VC body nodes
     setupAnnotatedPage()
     renderCanvas()
 
-    const vcBodyEl = document.querySelector('[data-node-id="vc-body"]')
-    const ref1El = document.querySelector('[data-node-id="ref1"]')
+    const vcBodyEl = queryCanvasElement('[data-node-id="vc-body"]')
+    const ref1El = queryCanvasElement('[data-node-id="ref1"]')
     expect(vcBodyEl).toBeTruthy()
     expect(ref1El).toBeTruthy()
 
@@ -201,8 +202,8 @@ describe('B3 — NodeRenderer lock-down: click routing for inlined VC body nodes
     setupAnnotatedPage()
     renderCanvas()
 
-    const slotChildEl = document.querySelector('[data-node-id="slot-child"]')
-    const ref1El = document.querySelector('[data-node-id="ref1"]')
+    const slotChildEl = queryCanvasElement('[data-node-id="slot-child"]')
+    const ref1El = queryCanvasElement('[data-node-id="ref1"]')
     expect(slotChildEl).toBeTruthy()
     expect(ref1El).toBeTruthy()
 

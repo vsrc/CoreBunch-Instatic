@@ -1,13 +1,8 @@
 import { handleAgentRequest, handleAgentToolResult } from './handlers/agent'
 import { handleCmsRequest } from './handlers/cms'
 import type { DbClient } from './db/client'
-import { applyPublishedHtmlPipeline } from './publish/publishedHtmlPipeline'
-import {
-  getDataRowRedirectByRoute,
-  getPublishedDataRowByRoute,
-} from './repositories/data/publish'
-import { getLatestPublishedSiteSnapshot, getPublishedPageBySlug } from './repositories/publish'
-import { renderPublishedDataRowTemplate, renderPublishedSnapshot } from './publish/publicRenderer'
+import { renderPublicResolution, resolvePublicRoute } from './publish/publicRouter'
+import { getLatestPublishedSiteSnapshot } from './repositories/publish'
 import { getSetupStatus } from './repositories/setup'
 import { getPublishedRuntimeAsset } from './repositories/runtimeAsset'
 import { handleLoopRequest, isLoopRuntimeAssetPath, serveLoopRuntimeAsset } from './handlers/cms/loop'
@@ -66,8 +61,7 @@ const routes: readonly RouteHandler[] = [
   tryServeStaticAsset,
   tryServeUpload,
   tryServeAdminApp,
-  tryServePublishedPage,
-  tryServeContentRoute,
+  tryServePublicRoute,
   trySetupRedirect,
 ]
 
@@ -84,24 +78,6 @@ export async function handleServerRequest(
   }
 
   return jsonResponse({ error: 'Not found' }, { status: 404 })
-}
-
-// ---------------------------------------------------------------------------
-// Path helpers
-// ---------------------------------------------------------------------------
-
-function publicSlugFromPath(pathname: string): string {
-  const trimmed = pathname.replace(/^\/+|\/+$/g, '')
-  return trimmed === '' ? 'index' : trimmed
-}
-
-function contentRouteFromPath(pathname: string): { tableRouteBase: string; rowSlug: string } | null {
-  const parts = pathname.replace(/^\/+|\/+$/g, '').split('/').filter(Boolean)
-  if (parts.length < 2) return null
-  return {
-    tableRouteBase: `/${parts.slice(0, -1).map((part) => decodeURIComponent(part)).join('/')}`,
-    rowSlug: decodeURIComponent(parts[parts.length - 1]),
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -334,67 +310,20 @@ async function tryServeAdminApp(
 }
 
 /**
- * Render the explicit page snapshot stored under `pages/<slug>` if one
- * exists for this URL. Returns `null` when the slug doesn't resolve to a
- * published page — the dispatcher then falls through to the content-entry
- * lookup.
- */
-async function tryServePublishedPage(req: Request, runtime: ServerRuntime, url: URL, _pathname: string): Promise<Response | null> {
-  if (req.method !== 'GET') return null
-  const snapshot = await getPublishedPageBySlug(runtime.db, publicSlugFromPath(url.pathname))
-  if (!snapshot) return null
-  const rendered = await renderPublishedSnapshot(snapshot, { db: runtime.db, url })
-  const html = await applyPublishedHtmlPipeline(rendered, runtime.db)
-  return new Response(html, {
-    headers: { 'content-type': 'text/html; charset=utf-8' },
-  })
-}
-
-
-/**
- * Resolve a URL like `/posts/hello-world` against the data row registry.
- * - If the row exists at its current route, render it through the site
- *   template (or fall back to a 404 when no template matches).
- * - Otherwise consult the redirect table and 301 to the row's new home.
+ * Single entry for every visitor-facing HTML URL — stand-alone published
+ * pages (`/about`), content rows rendered through their postType's entry
+ * template (`/posts/hello-world`), and row-slug redirects.
  *
- * Returns `null` for paths that don't carry at least a `/table/slug`
- * shape; the dispatcher then continues to the setup-wizard redirect.
+ * Resolution + render live in `server/publish/publicRouter.ts`; this
+ * handler is just the dispatcher glue. The two predecessor handlers
+ * (`tryServePublishedPage` + `tryServeContentRoute`) ran the same
+ * underlying `publishPage` + `applyPublishedHtmlPipeline` machinery in
+ * parallel branches — they're now one resolver feeding one renderer.
  */
-async function tryServeContentRoute(req: Request, runtime: ServerRuntime, url: URL, _pathname: string): Promise<Response | null> {
+async function tryServePublicRoute(req: Request, runtime: ServerRuntime, url: URL, _pathname: string): Promise<Response | null> {
   if (req.method !== 'GET') return null
-  const route = contentRouteFromPath(url.pathname)
-  if (!route) return null
-
-  const { db } = runtime
-  const row = await getPublishedDataRowByRoute(db, route.tableRouteBase, route.rowSlug)
-  if (row) {
-    // Every postType table has a default entry template auto-seeded into
-    // the `pages` table on creation (and the boot backfill catches any
-    // pre-existing table that's missing one). So the renderer must
-    // always produce HTML here; a `null` return means a corrupt install
-    // — the site snapshot is missing or no template matches the row's
-    // table slug. We surface that as a 404 rather than inventing a
-    // half-styled fallback document.
-    const siteSnapshot = await getLatestPublishedSiteSnapshot(db)
-    const rendered = siteSnapshot
-      ? await renderPublishedDataRowTemplate(siteSnapshot, row, { db, url })
-      : null
-    if (!rendered) return null
-    const html = await applyPublishedHtmlPipeline(rendered, db)
-    return new Response(html, {
-      headers: { 'content-type': 'text/html; charset=utf-8' },
-    })
-  }
-
-  const redirect = await getDataRowRedirectByRoute(db, route.tableRouteBase, route.rowSlug)
-  if (redirect) {
-    return new Response(null, {
-      status: 301,
-      headers: { location: `${redirect.targetPath}${url.search}` },
-    })
-  }
-
-  return null
+  const resolution = await resolvePublicRoute(runtime.db, url)
+  return await renderPublicResolution(resolution, runtime.db, url)
 }
 
 /**

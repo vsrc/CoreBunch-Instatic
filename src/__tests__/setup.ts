@@ -114,6 +114,58 @@ for (const key of GLOBALS_TO_COPY) {
 // (AdminPageLayout, AdminCanvasLayout) construct one on mount via the
 // plugin event bridge. Provide a no-op stub so tests can render those
 // layouts without each test file needing its own polyfill.
+// happy-dom creates fresh `Window` objects for `<iframe>` elements without
+// copying the parent's built-in constructors. The canvas now renders each
+// breakpoint frame inside an iframe, and selectors run against
+// `iframe.contentDocument` from inside the page-tree React subtree. happy-dom
+// internally calls `new this.window.SyntaxError(...)` when a selector fails;
+// without our polyfill that fires `undefined is not a constructor` and
+// crashes the test before any assertion runs. We monkey-patch the iframe
+// contentDocument getter to lazily copy parent constructors onto each
+// iframe's window so test queries behave the same as the host.
+const IFRAME_GLOBAL_KEYS = [
+  'SyntaxError',
+  'TypeError',
+  'RangeError',
+  'DOMException',
+  'Node',
+  'Element',
+  'HTMLElement',
+  'Event',
+  'CustomEvent',
+  'KeyboardEvent',
+  'MouseEvent',
+  'getComputedStyle',
+] as const
+
+function polyfillIframeWindow(win: unknown): void {
+  if (!win || typeof win !== 'object') return
+  const target = win as Record<string, unknown>
+  for (const key of IFRAME_GLOBAL_KEYS) {
+    if (target[key] !== undefined) continue
+    const parentValue = (globalThis as Record<string, unknown>)[key]
+    if (parentValue !== undefined) target[key] = parentValue
+  }
+}
+
+{
+  const iframeProto = (happyWindow as unknown as { HTMLIFrameElement?: { prototype: object } })
+    .HTMLIFrameElement?.prototype
+  if (iframeProto) {
+    const originalDescriptor = Object.getOwnPropertyDescriptor(iframeProto, 'contentDocument')
+    if (originalDescriptor?.get) {
+      Object.defineProperty(iframeProto, 'contentDocument', {
+        configurable: true,
+        get(this: HTMLIFrameElement) {
+          const doc = originalDescriptor.get!.call(this)
+          if (doc) polyfillIframeWindow((doc as Document).defaultView)
+          return doc
+        },
+      })
+    }
+  }
+}
+
 if (typeof (globalThis as { EventSource?: unknown }).EventSource === 'undefined') {
   class StubEventSource {
     readonly url: string

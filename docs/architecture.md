@@ -8,12 +8,13 @@ Page Builder is a self-hosted CMS with a built-in visual page builder. One Bun p
 
 ## TL;DR
 
-- **One process**: `bun server/index.ts`. `Bun.serve` + a hand-written router (`server/router.ts`) routes every request to a CMS handler, a published page, an upload, or the SPA entrypoint.
+- **One process, two off-main-thread workers**: `bun server/index.ts`. `Bun.serve` + a hand-written router (`server/router.ts`) routes every request. Plugin server code runs in per-plugin `Bun.Worker`s wrapping a QuickJS-WASM sandbox; image-variant generation (`sharp` + BlurHash) runs in a separate `Bun.Worker` pool. Everything else — HTTP, the admin API, the streaming agent endpoint, the publisher — runs on the main thread.
 - **One database, two engines**: Postgres (via `Bun.sql`) or SQLite (`bun:sqlite`), selected by `DATABASE_URL`. Repositories are dialect-naive; migrations are split per dialect with identical IDs.
 - **One content model**: posts, pages, and visual components all live in `data_tables` + `data_rows`. No separate `pages` table. Page trees and VC trees both use the `NodeTree<TNode>` primitive.
 - **Two frontends, one bundle**: the admin app (`src/admin/`) shells the visual editor (`src/admin/pages/site/`). Both run in the same Vite-built SPA, mounted under `/admin/*`.
 - **Plugins run sandboxed**: server entrypoints and canvas module packs execute inside a QuickJS-WASM VM with no host access. They reach the CMS through the SDK at `src/core/plugin-sdk/`.
-- **Publishing is static**: the editor mutates a page tree in memory; on publish, `src/core/publisher/` renders that tree to static HTML/CSS and the server serves it from disk.
+- **One public-route surface**: every visitor request for HTML — stand-alone pages and content rows alike — flows through `server/publish/publicRouter.ts`. The publish step writes a `PublishedPageSnapshot` (JSON) to `data_row_versions.snapshot_json`; the renderer (`publishPage` in `src/core/publisher/`) materialises HTML from that snapshot on each request. Output is plain semantic HTML + a single CSS bundle per page, no client-side hydration of layout. (Static-to-disk caching is a future change; the seam to add it is `publicRouter.ts`.)
+- **Multi-instance HA on Postgres**: both schedulers (plugin tick + scheduled publish) use `pg_try_advisory_lock` for leader election, so running multiple containers behind a load balancer doesn't double-fire scheduled work. SQLite is single-instance by definition.
 - **Every untyped boundary uses TypeBox.** HTTP responses, request bodies, persisted JSON, plugin manifests, settings. `zod` is banned outside `server/handlers/agent/tools.ts`.
 
 ---
@@ -37,13 +38,25 @@ Page Builder is a self-hosted CMS with a built-in visual page builder. One Bun p
 │      ↓                                                      │
 │   server/db/client.ts      ← Postgres OR SQLite             │
 │                                                             │
-│   server/plugins/          ← QuickJS-WASM sandbox host      │
-│      └─ runs plugin server entrypoints + module packs       │
+│  ┌─── Bun.Worker pool ──────────────────────────────────┐   │
+│  │ image-variant worker (sharp + blurhash; CPU off the │   │
+│  │ main thread, see server/handlers/cms/imageVariant*) │   │
+│  └─────────────────────────────────────────────────────┘   │
+│  ┌─── Bun.Worker — one per active plugin ───────────────┐  │
+│  │ QuickJS-WASM sandbox (no Node/Bun ambient access);   │  │
+│  │ crash isolation; capability-gated SDK only           │  │
+│  │ (server/plugins/host/, server/plugins/quickjs/)      │  │
+│  └──────────────────────────────────────────────────────┘  │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-The same process serves visitors, admins, the API, plugin runtimes, and uploads. There is no separate worker, no message queue, no managed service surface. Scaling out means running another container backed by Postgres.
+The same process serves visitors, admins, the API, the streaming agent endpoint, and uploads. Two kinds of work that would otherwise block the main thread are pushed into `Bun.Worker`s:
+
+- **Plugin server entrypoints + canvas module packs** run inside a per-plugin `Bun.Worker` that hosts a QuickJS-WASM sandbox. The host process never imports plugin code. A crash in one plugin worker only affects that plugin; the host respawns it with a crash budget (`server/plugins/host/crashRecovery.ts`).
+- **Image-variant generation** (`sharp` resize + WebP encode + BlurHash) runs in a small pool of `Bun.Worker`s. A 4 MP JPEG is ~200–500 ms of CPU per upload; offloading it keeps visitor requests and the admin API responsive when an admin (or a future first-party feature) uploads images in bulk.
+
+There is no message queue, no managed service surface. Scaling out is a horizontal-Postgres play: both schedulers (plugin tick + scheduled-publish tick) use `pg_try_advisory_lock` for leader election so multiple instances behind a load balancer don't double-fire scheduled work. SQLite mode is single-instance by definition; the lock dance is a no-op there.
 
 ---
 
@@ -78,10 +91,12 @@ The repo is organized by responsibility, not by feature. Every file has one reas
 | Repositories                 | `server/repositories/*.ts`            | Database access; dialect-naive ANSI SQL only                         |
 | Database adapters            | `server/db/postgres.ts`, `sqlite.ts`  | Engine-specific `DbClient` implementation                            |
 | Migrations                   | `server/db/migrations-*.ts`           | Schema in both dialects, parity-gated                                |
-| Publisher                    | `src/core/publisher/*`                | Page tree → static HTML/CSS                                          |
+| Publisher                    | `src/core/publisher/*`                | Page tree → clean HTML/CSS (`publishPage`, deterministic, no host I/O) |
+| Public-route surface         | `server/publish/publicRouter.ts`      | Resolve URL → page snapshot or data row + template; render + return Response |
 | Plugin SDK                   | `src/core/plugin-sdk/*`               | Author-facing API + `pb-plugin` CLI                                  |
 | Plugin runtime (host)        | `src/core/plugins/*`                  | In-process plugin lifecycle: install/activate/uninstall              |
 | Plugin sandbox (worker)      | `server/plugins/*`                    | QuickJS-WASM execution of plugin server code + module packs          |
+| Image-variant worker         | `server/handlers/cms/imageVariant*`   | `Bun.Worker` pool running sharp + blurhash off the main thread       |
 | Page tree primitive          | `src/core/page-tree/*`                | `NodeTree<TNode>` + tree-agnostic mutations                          |
 | Visual components            | `src/core/visualComponents/*`         | VC tree shape, slot synchronization, recursion checks                |
 | Persistence (client-side)    | `src/core/persistence/*`              | HTTP envelopes, response schemas, site validation                    |
@@ -118,8 +133,12 @@ server/router.ts         ← match path
     │
     ├─→ /uploads/*          → server/static.ts (file disk)
     │
-    └─→ /*  (everything else) → published page (uploads/published/...)
-                                  or 404
+    └─→ /*  (everything else) → server/publish/publicRouter.ts
+                                  → page snapshot OR data row + template
+                                  → publishPage() (live render) → HTML
+                                  → applyPublishedHtmlPipeline (plugin
+                                    injection + publish.html filter)
+                                  → 301 redirect / 200 HTML / 404
 ```
 
 Handlers validate request bodies with TypeBox before doing work, talk to repositories for persistence, and return `{ error: string }` envelopes on failure. Validation helpers live in `server/http.ts`. Per-handler logging uses the prefix `console.error('[<module>]', err)`.
@@ -182,23 +201,38 @@ See [docs/reference/page-tree.md](reference/page-tree.md) for the type shape and
 ```text
 Editor state (Zustand store)
     │
-    │  user clicks Publish
+    │  user clicks Publish (or `publishDataRow` for posts/etc.)
     ▼
-src/core/publisher/                   ← renderer
+publishDraftSite / publishDataRow      ← server/repositories/publish.ts
     │
-    │  walks the page tree, resolves modules, expands VCs and slots,
-    │  emits clean HTML + a single CSS bundle per page
+    │  freezes the page tree + site shell into a `PublishedPageSnapshot`,
+    │  writes it to `data_row_versions.snapshot_json`, flips the row's
+    │  `status` to 'published'
     ▼
-uploads/published/<route>.html        ← written to disk
+data_row_versions.snapshot_json        ← canonical published artefact (JSON)
     │
     ▼
-server/static.ts                      ← serves on next request
+visitor request → server/publish/publicRouter.ts
+    │
+    ▼
+publishPage (src/core/publisher/)      ← renderer
+    │
+    │  walks the page tree from the snapshot, resolves modules, expands
+    │  VCs and slots, emits clean HTML + a single CSS bundle per page
+    ▼
+applyPublishedHtmlPipeline             ← plugin frontend-asset injection +
+                                         publish.before / publish.html /
+                                         publish.after hook side-effects
+    ▼
+HTTP response (HTML 200 / 301 / 404)
 ```
 
 Key properties:
 
+- **One published-route surface.** `server/publish/publicRouter.ts` is the single resolver + renderer for every visitor URL. Stand-alone pages (`/about`) and content rows rendered through a postType's entry template (`/posts/hello`) both flow through it. The earlier split between `tryServePublishedPage` and `tryServeContentRoute` collapsed into one path after the pages → `data_rows` migration finished — pages, posts, and components are all `data_rows` now, the only branch is "page (renders its own body) vs. row (renders through a matching entry template)".
+- **Live render, snapshot-backed.** A publish writes a `PublishedPageSnapshot` (JSON) to `data_row_versions.snapshot_json` and flips the row's status to `'published'`. Visitor requests re-run `publishPage()` against that snapshot. The renderer is deterministic and cheap (kB-scale CSS, no client-side hydration of layout); a future change can layer in static-to-disk or in-memory caching keyed by `(url, snapshotVersion)` without touching the rest of the pipeline. There is no `uploads/published/<route>.html` step today.
 - **Pure render, no client-side hydration of layout.** Published pages are HTML and CSS. Plugins can inject frontend assets (`server/publish/frontendInjections.ts`), but the page structure is static.
-- **Sanitization happens at the publisher boundary.** DOMPurify in `src/core/sanitize.ts` cleans rich-text and HTML strings before they hit disk.
+- **Sanitization happens at the publisher boundary.** DOMPurify in `src/core/sanitize.ts` cleans rich-text and HTML strings before they're frozen into a snapshot.
 - **Visual components are inlined.** Each VC instance is expanded with its slot fills materialized as locked child nodes in the consumer page tree. The publisher pairs each `base.slot-instance` with the matching `base.slot-outlet` by `slotName`.
 
 ---
@@ -349,6 +383,8 @@ bun run lint             # eslint with cache
 - [docs/reference/database-dialects.md](reference/database-dialects.md) — PG vs. SQLite rules
 - Source-of-truth files:
   - `server/router.ts` — request dispatch
+  - `server/publish/publicRouter.ts` — public-site URL → resolution → Response (single entry for visitor HTML)
+  - `server/handlers/cms/imageVariantWorkerHost.ts` — `Bun.Worker` pool for sharp + blurhash (keeps image processing off the main thread)
   - `server/db/client.ts` — database abstraction
   - `src/core/page-tree/treeSchema.ts` — `NodeTree` primitive
   - `src/admin/pages/site/store/siteSlice.ts` — `mutateActiveTree`

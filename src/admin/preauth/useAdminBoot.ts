@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { flushSync } from 'react-dom'
 import {
   getCmsPublicSite,
   getCmsSetupStatus,
@@ -99,8 +100,11 @@ export function useAdminBoot(): AdminBootResult {
         if (cancelled) return
 
         if (setupStatus.needsSetup) {
-          setPhase('setup')
-          setStatus('ready')
+          // flushSync — see comment on the editor-phase branch below.
+          flushSync(() => {
+            setPhase('setup')
+            setStatus('ready')
+          })
           // Drain the speculative /me request so we don't leak a pending
           // promise rejection.
           void currentUserPromise
@@ -109,19 +113,42 @@ export function useAdminBoot(): AdminBootResult {
 
         const currentUserResult = await currentUserPromise
         if (cancelled) return
+        // flushSync — by default React 19 schedules the state transition
+        // (loading → editor) under the concurrent scheduler, and the
+        // commit can sit in the work queue for 200–300 ms behind layout
+        // / paint / prefetch work before it actually renders. On our
+        // resource-timeline trace this gap was the bulk of the
+        // perceived "cold load" — DashboardPage's chunk loaded at
+        // ~60 ms, but its commit didn't paint until ~380 ms because the
+        // concurrent re-render was deferred.
+        //
+        // Forcing the boot-resolved transition synchronous means the
+        // moment the /me promise resolves, React paints the next frame
+        // with DashboardPage instead of stalling AppLoadingScreen for
+        // an extra 280 ms. Subsequent state transitions in the app
+        // (nav clicks, form submits, etc.) still flow through the
+        // concurrent scheduler — this only forces THE initial boot
+        // commit through.
         if (currentUserResult.ok) {
-          setCurrentUser(currentUserResult.user)
-          setPhase('editor')
+          flushSync(() => {
+            setCurrentUser(currentUserResult.user)
+            setPhase('editor')
+            setStatus('ready')
+          })
         } else {
-          setCurrentUser(null)
-          setPhase('login')
+          flushSync(() => {
+            setCurrentUser(null)
+            setPhase('login')
+            setStatus('ready')
+          })
         }
-        setStatus('ready')
       } catch (err) {
         if (cancelled) return
-        setInitialError(err instanceof Error ? err.message : 'CMS is unavailable')
-        setPhase('login')
-        setStatus('ready')
+        flushSync(() => {
+          setInitialError(err instanceof Error ? err.message : 'CMS is unavailable')
+          setPhase('login')
+          setStatus('ready')
+        })
       }
     }
 

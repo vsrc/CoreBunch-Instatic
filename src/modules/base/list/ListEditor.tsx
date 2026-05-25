@@ -22,12 +22,12 @@ function parseItems(raw: string): string[] {
     .filter((s) => s.length > 0)
 }
 
-export const ListEditor: React.FC<ModuleComponentProps<ListProps>> = ({ props, mcClassName }) => {
+export const ListEditor: React.FC<ModuleComponentProps<ListProps>> = ({ props, mcClassName, nodeWrapperProps }) => {
   const items = parseItems(props.items || '')
   const Tag = props.listType === 'ordered' ? 'ol' : 'ul'
   return React.createElement(
     Tag,
-    { className: mcClassName },
+    { ...nodeWrapperProps, className: mcClassName },
     items.length > 0
       ? items.map((item, i) => React.createElement('li', { key: i }, item))
       : React.createElement('li', { className: styles.placeholder }, 'List item 1'),

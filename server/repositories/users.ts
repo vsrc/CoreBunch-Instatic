@@ -78,8 +78,12 @@ function dateString(value: Date | string | null | undefined): string | null {
  * hashes; we use SHA-256 because Node/Bun ship it natively and it's the modern
  * default. The hash is recomputed on every read — there's no value in caching
  * it (cheap to derive, always tracks `email` mutations).
+ *
+ * Exported because the dashboard activity feed builds compact actor records
+ * straight from a joined `users` row and needs the same hash the rest of the
+ * `users` repository hands back.
  */
-function computeGravatarHash(email: string): string {
+export function computeGravatarHash(email: string): string {
   return createHash('sha256').update(normalizeEmail(email)).digest('hex')
 }
 

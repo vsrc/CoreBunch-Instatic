@@ -27,6 +27,7 @@ import { renderNode, type RenderContext, type ResolvedLoopRenderData } from '@co
 import { jsonResponse } from '../../http'
 import { getLatestPublishedSiteSnapshot, getPublishedPageBySlug } from '../../repositories/publish'
 import { collectLoopNodes, readLoopProps } from '../../publish/loopPrefetch'
+import { publicSlugFromPath } from '../../publish/publicRouter'
 import { LOOP_RUNTIME_JS } from '../../publish/loopRuntime'
 
 const LOOP_RUNTIME_PATH = '/_pb/assets/loop-runtime.js'
@@ -49,11 +50,6 @@ export function serveLoopRuntimeAsset(): Response {
 
 export interface LoopHandlerContext {
   db: DbClient
-}
-
-function publicSlugFromPath(pathname: string): string {
-  const trimmed = pathname.replace(/^\/+|\/+$/g, '')
-  return trimmed === '' ? 'index' : trimmed
 }
 
 export async function handleLoopRequest(

@@ -102,10 +102,13 @@ describe('canvas template preview bindings', () => {
 
     renderCanvas()
 
+    // Canvas page tree renders inside per-breakpoint iframes; `screen` only
+    // sees the parent document. Pull the iframe document directly.
     await waitFor(() => {
-      expect(screen.getAllByText('Example Post Title').length).toBeGreaterThan(0)
+      const text = combinedCanvasText()
+      expect(text).toContain('Example Post Title')
     })
-    expect(screen.queryByText('Static fallback')).toBeNull()
+    expect(combinedCanvasText()).not.toContain('Static fallback')
   })
 
   it('renders no image when featured media binding resolves to null in preview', async () => {
@@ -142,8 +145,23 @@ describe('canvas template preview bindings', () => {
     renderCanvas()
 
     await waitFor(() => {
-      expect(screen.queryByAltText('Template image')).toBeNull()
-      expect(screen.getAllByText('No image selected').length).toBeGreaterThan(0)
+      // No image element with the placeholder alt text should be rendered.
+      const altMatch = canvasFrameDocs().some((doc) =>
+        doc.querySelector('img[alt="Template image"]') !== null,
+      )
+      expect(altMatch).toBe(false)
+      expect(combinedCanvasText()).toContain('No image selected')
     })
   })
 })
+
+function canvasFrameDocs(): Document[] {
+  const iframes = Array.from(document.querySelectorAll<HTMLIFrameElement>('iframe')).filter(
+    (i) => i.title.startsWith('Canvas frame for '),
+  )
+  return iframes.map((i) => i.contentDocument).filter((d): d is Document => d !== null)
+}
+
+function combinedCanvasText(): string {
+  return canvasFrameDocs().map((doc) => doc.body.textContent ?? '').join(' ')
+}

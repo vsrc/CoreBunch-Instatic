@@ -75,16 +75,26 @@ interface BreakpointSelectionOverlayProps {
    */
   breakpointId: string
   /**
-   * Ref to the viewport `<div>` the overlay sits inside. Bounding rects are
-   * computed relative to this element so the ring follows pan/zoom without
-   * extra math.
+   * Ref to the outer viewport `<div>` (which contains the iframe). Used for
+   * zoom recovery (`offsetWidth` vs `getBoundingClientRect().width`), the
+   * toolbar's canvas-root container, and reorder-drag drop-candidate
+   * measurement against the wrapping layout box.
    */
   viewportRef: React.RefObject<HTMLElement | null>
+  /**
+   * The iframe element that hosts this breakpoint's page tree. The overlay
+   * queries `iframeElement.contentDocument` for `[data-node-id]` targets,
+   * gets their inside-iframe rects, then translates to editor-document
+   * coordinates using the iframe's own client rect. `null` until the iframe
+   * mounts.
+   */
+  iframeElement: HTMLIFrameElement | null
 }
 
 export function BreakpointSelectionOverlay({
   breakpointId,
   viewportRef,
+  iframeElement,
 }: BreakpointSelectionOverlayProps) {
   // Multi-select: render one ring per selected node. `useShallow` keeps the
   // subscription stable when the array reference changes but its contents
@@ -138,6 +148,7 @@ export function BreakpointSelectionOverlay({
     activeBreakpointId === breakpointId
   const reorderDrag = useCanvasReorderDrag({
     viewportRef,
+    iframeElement,
     selectedNodeIds,
     enabled: showToolbar,
     panBy: viewportActions?.panBy,
@@ -163,15 +174,25 @@ export function BreakpointSelectionOverlay({
   // re-arms when the *identity* of what's being tracked changes — captured
   // by selectionKey (a serialized form of selectedNodeIds) plus hover and
   // toolbar visibility flags.
-  const tickOnce = useEffectEvent((viewport: HTMLElement) => {
+  //
+  // Bridge inputs:
+  //  - `viewport` is the outer `<div>` (parent doc). Toolbar positioning,
+  //    zoom recovery, and clipping all live in parent-doc coordinates, so
+  //    that wrapper stays as the positioning context.
+  //  - `iframe` is the breakpoint's iframe element. `[data-node-id]` lookups
+  //    happen inside `iframe.contentDocument`, then `positionRing` adds
+  //    `iframeRect - viewportRect` to translate from iframe-document
+  //    coordinates into viewport-local (and zoom-unscaled) pixels.
+  const tickOnce = useEffectEvent((viewport: HTMLElement, iframe: HTMLIFrameElement | null) => {
     for (const id of selectedNodeIds) {
-      positionRing(ringRefs.current.get(id) ?? null, id, viewport)
+      positionRing(ringRefs.current.get(id) ?? null, id, viewport, iframe)
     }
-    positionRing(hoverRef.current, showHover ? hoveredNodeId : null, viewport)
+    positionRing(hoverRef.current, showHover ? hoveredNodeId : null, viewport, iframe)
     positionToolbar(
       toolbarRef.current,
       showToolbar ? selectedNodeIds : [],
       viewport,
+      iframe,
       viewportActions?.canvasRootRef.current ?? null,
     )
   })
@@ -185,7 +206,7 @@ export function BreakpointSelectionOverlay({
 
     const tick = () => {
       if (cancelled) return
-      tickOnce(viewport)
+      tickOnce(viewport, iframeElement)
       frame = requestAnimationFrame(tick)
     }
     frame = requestAnimationFrame(tick)
@@ -194,7 +215,7 @@ export function BreakpointSelectionOverlay({
       cancelled = true
       cancelAnimationFrame(frame)
     }
-  }, [selectionKey, hoveredNodeId, showHover, showToolbar, viewportRef])
+  }, [selectionKey, hoveredNodeId, showHover, showToolbar, viewportRef, iframeElement])
 
   // Prefer the canvas root as the portal target so the toolbar sits inside
   // the canvas's stacking + clipping context (below sidebars / dialogs /
@@ -325,6 +346,7 @@ function positionRing(
   ring: HTMLDivElement | null,
   nodeId: string | null,
   viewport: HTMLElement,
+  iframe: HTMLIFrameElement | null,
 ): void {
   if (!ring) return
 
@@ -333,49 +355,79 @@ function positionRing(
     return
   }
 
-  // The wrapper is `display: contents` so its own getBoundingClientRect
-  // returns a zero-sized rect. Read the rect from the actual rendered child
-  // element instead — modules render single-root HTML, so firstElementChild
-  // is the right target. Search inside the viewport so a duplicate node-id
-  // in another breakpoint frame can't be picked up by accident.
-  const wrapper = viewport.querySelector<HTMLElement>(
+  // `[data-node-id]` elements live inside the iframe's document now. Query
+  // there. The wrapper is still `display: contents` so its own rect is
+  // zero-sized — read the rect from `firstElementChild`, which is the
+  // module's actual rendered root (the `<a>` / `<h1>` / `<div>` / …).
+  const iframeDoc = iframe?.contentDocument
+  if (!iframeDoc) {
+    ring.style.display = 'none'
+    return
+  }
+  const wrapper = iframeDoc.querySelector<HTMLElement>(
     `[data-node-id="${escapeAttribute(nodeId)}"]`,
   )
   const target = wrapper?.firstElementChild ?? wrapper
 
-  if (!target || !(target instanceof Element)) {
+  // Use a duck-type check (`getBoundingClientRect` is callable) rather than
+  // `instanceof Element` — the iframe document has its OWN Element
+  // constructor, and `target instanceof Element` (where `Element` resolves
+  // to the parent window's class) returns false for any node inside the
+  // iframe. That false-negative is what was hiding every selection ring
+  // until this comment landed.
+  if (!target || typeof (target as { getBoundingClientRect?: unknown }).getBoundingClientRect !== 'function') {
     ring.style.display = 'none'
     return
   }
 
-  const rect = target.getBoundingClientRect()
-  if (rect.width === 0 && rect.height === 0) {
-    // Element is in the DOM but not laid out (display: none ancestor, etc.) —
-    // hide the ring rather than draw a zero-sized box at (0,0).
+  // `getBoundingClientRect()` inside an iframe returns coordinates relative
+  // to the IFRAME's viewport — and crucially, those coordinates DO NOT
+  // reflect the canvas zoom (the iframe document is its own viewport, never
+  // transformed). The iframe ELEMENT in the parent doc, however, IS scaled
+  // by the canvas transform layer. So a naïve `iframeRect.left +
+  // elementRectInIframe.left` would mix unscaled px (the inner rect) with
+  // scaled px (the iframe's outer rect), and the ring would diverge from
+  // the element the moment the canvas zoom is anything other than 1.
+  //
+  // Recover the canvas zoom from the iframe element itself
+  // (clientRect.width / offsetWidth — same trick the legacy in-document
+  // path used on `viewport`). Multiply the inner rect by that scale before
+  // adding the iframe's outer offset, so the result is consistently in
+  // editor-document (post-transform) coordinates.
+  const elementRectInIframe = target.getBoundingClientRect()
+  if (elementRectInIframe.width === 0 && elementRectInIframe.height === 0) {
     ring.style.display = 'none'
     return
+  }
+  const iframeRect = iframe.getBoundingClientRect()
+  const iframeScale = iframe.offsetWidth > 0 ? iframeRect.width / iframe.offsetWidth : 1
+  const editorDocRect = {
+    left: iframeRect.left + elementRectInIframe.left * iframeScale,
+    top: iframeRect.top + elementRectInIframe.top * iframeScale,
+    width: elementRectInIframe.width * iframeScale,
+    height: elementRectInIframe.height * iframeScale,
   }
 
   const viewportRect = viewport.getBoundingClientRect()
 
-  // Recover the canvas zoom factor: the viewport's CSS layout width
-  // (offsetWidth) is the breakpoint width in unscaled pixels, while
-  // getBoundingClientRect().width is that same width times the parent's
-  // `scale(zoom)`. Their ratio is the effective scale. Fallback to 1 when the
-  // viewport has no layout (offsetWidth === 0), which can happen transiently
-  // during mount.
+  // Recover the canvas zoom factor — same logic as before. The viewport's
+  // CSS layout width is the breakpoint width in unscaled px, and its
+  // post-transform client width is that times the canvas zoom. The
+  // viewport and iframe share the same transform parent, so `iframeScale`
+  // and this `scale` are equal in practice; we still compute both
+  // independently so a future refactor that decouples them doesn't
+  // silently break ring positioning.
   const scale = viewport.offsetWidth > 0 ? viewportRect.width / viewport.offsetWidth : 1
 
-  // Viewport-local, unscaled coordinates — what the ring's CSS pixels need to
-  // be in, since the ring is itself a descendant of the scaled transform layer.
-  const x = (rect.left - viewportRect.left) / scale
-  const y = (rect.top - viewportRect.top) / scale
-  const width = rect.width / scale
-  const height = rect.height / scale
+  // Viewport-local, unscaled coordinates — the ring is itself a descendant
+  // of the scaled transform layer, so we strip the scale back out here.
+  const x = (editorDocRect.left - viewportRect.left) / scale
+  const y = (editorDocRect.top - viewportRect.top) / scale
+  const width = editorDocRect.width / scale
+  const height = editorDocRect.height / scale
 
-  // transform/width/height instead of top/left/width/height so the browser
-  // can promote the ring to its own compositing layer (smooth follow without
-  // layout thrash on the rest of the canvas).
+  // transform/width/height so the browser can promote the ring to its own
+  // compositing layer.
   ring.style.display = ''
   ring.style.transform = `translate(${x}px, ${y}px)`
   ring.style.width = `${width}px`
@@ -386,6 +438,7 @@ function positionToolbar(
   toolbar: HTMLDivElement | null,
   nodeIds: readonly string[],
   viewport: HTMLElement,
+  iframe: HTMLIFrameElement | null,
   canvasRoot: HTMLElement | null,
 ): void {
   if (!toolbar || nodeIds.length === 0) {
@@ -393,7 +446,10 @@ function positionToolbar(
     return
   }
 
-  const rect = measureCanvasNodeClientUnionRect(viewport, nodeIds)
+  // Pass the iframe through so the helper queries the right document AND
+  // translates each measured rect from iframe-internal coords into editor
+  // coords. Without this the toolbar would anchor to (0,0) of the editor.
+  const rect = measureCanvasNodeClientUnionRect(viewport, nodeIds, iframe)
   if (!rect) {
     toolbar.style.display = 'none'
     return

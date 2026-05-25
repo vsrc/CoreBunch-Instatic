@@ -36,6 +36,7 @@ export const VisualComponentRefEditor: React.FC<ModuleComponentProps<VisualCompo
   props,
   nodeId,
   mcClassName,
+  nodeWrapperProps,
 }) => {
   const componentId = typeof props.componentId === 'string' ? props.componentId : ''
   const propOverrides =
@@ -74,6 +75,7 @@ export const VisualComponentRefEditor: React.FC<ModuleComponentProps<VisualCompo
   if (!vc) {
     return (
       <CanvasModulePlaceholder
+        {...nodeWrapperProps}
         className={mcClassName}
         variant="inline"
         icon={<BracesIcon size={12} color="currentColor" />}
@@ -108,6 +110,7 @@ export const VisualComponentRefEditor: React.FC<ModuleComponentProps<VisualCompo
       rootNodeId={rootNodeId}
       classes={classes}
       rootMcClassName={mcClassName}
+      rootNodeWrapperProps={nodeWrapperProps}
     />
   )
 }

@@ -64,6 +64,13 @@ export interface WidgetProps {
    * the `DashboardWidgetRendererProps` and pass it straight through.
    */
   editing: boolean
+  /**
+   * True while the widget is fetching its initial data. Renders
+   * `aria-busy="true"` on the section so assistive tech announces the
+   * loading state, and lets the widget body render `<Skeleton>` shapes
+   * without each widget repeating the ARIA wiring.
+   */
+  loading?: boolean
   children?: ReactNode
 }
 
@@ -82,6 +89,7 @@ export function Widget({
   span,
   action,
   editing,
+  loading = false,
   children,
 }: WidgetProps) {
   const style: CSSProperties = {
@@ -94,6 +102,7 @@ export function Widget({
       style={style}
       data-widget={widgetId}
       data-span={span}
+      aria-busy={loading || undefined}
     >
       <header className={styles.head}>
         <div className={styles.title}>

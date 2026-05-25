@@ -1,5 +1,5 @@
 import { bagToCSS } from '@core/publisher/classCss'
-import { scopedPublisherResetCss } from '@core/publisher/reset'
+import { PUBLISHER_RESET_CSS } from '@core/publisher/reset'
 import { generateFrameworkRootCss } from '@core/framework/generate'
 import { generateFontsCss } from '@core/fonts/css'
 import { cssClassSelector } from '@core/page-tree/classNames'
@@ -23,13 +23,15 @@ export function generateCanvasClassCSS(
 ): string {
   const blocks: string[] = []
 
-  // Publisher reset, scoped to the breakpoint frame viewports. Mirrors what
-  // `publishPage()` injects into the published HTML so the design canvas and
-  // the iframe preview / front end agree on the box model, default font, list
-  // bullets, body margin, etc. The scope `[data-breakpoint-id]` matches the
-  // viewport `<div>` in BreakpointFrame; editor chrome (toolbars, panels) is
-  // outside that scope and continues to use the editor's own globals.css.
-  blocks.push(scopedPublisherResetCss('[data-breakpoint-id]'))
+  // Publisher reset, identical to what `publishPage()` ships. Each canvas
+  // breakpoint frame is its own iframe with its own `<body>`, so we use the
+  // unscoped reset (low-specificity `:where(body) { ... }` rules) rather
+  // than the legacy `[data-breakpoint-id]`-scoped variant. The unscoped reset
+  // matches the published cascade exactly — user CSS like
+  // `body { color: var(--color-fg) }` wins over the reset's `:where(body)`
+  // baseline, the way it does on the live site. Editor chrome lives outside
+  // the iframe so the reset can't leak into the toolbars / panels.
+  blocks.push(PUBLISHER_RESET_CSS)
 
   // Fonts go first (after the reset) so `@font-face` declarations exist before
   // any rule that references the family — browsers tolerate the reverse order,

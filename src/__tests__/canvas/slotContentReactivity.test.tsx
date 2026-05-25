@@ -12,7 +12,7 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import React from 'react'
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { DndContext } from '@dnd-kit/core'
 import { useEditorStore } from '@site/store/store'
 import { CanvasRoot } from '@site/canvas/CanvasRoot'
@@ -122,8 +122,10 @@ describe('slot content reactivity in the canvas', () => {
       </DndContext>,
     )
 
-    // The initial text must appear somewhere in the rendered canvas.
-    expect(await screen.findAllByText('Initial text')).not.toHaveLength(0)
+    // Canvas page tree now lives inside per-breakpoint iframes — `screen`
+    // (rooted at document.body) can't see it. Poll the iframe documents
+    // directly until the canvas content shows what we expect.
+    await waitFor(() => expect(combinedCanvasText()).toContain('Initial text'))
 
     // Mutate the text node.
     act(() => {
@@ -131,9 +133,18 @@ describe('slot content reactivity in the canvas', () => {
     })
 
     // The canvas must update to show the new text.
-    expect(await screen.findAllByText('Edited text')).not.toHaveLength(0)
+    await waitFor(() => expect(combinedCanvasText()).toContain('Edited text'))
 
     // The old text must be gone from the canvas.
-    expect(screen.queryByText('Initial text')).toBeNull()
+    expect(combinedCanvasText()).not.toContain('Initial text')
   })
 })
+
+function combinedCanvasText(): string {
+  const iframes = Array.from(document.querySelectorAll<HTMLIFrameElement>('iframe')).filter(
+    (i) => i.title.startsWith('Canvas frame for '),
+  )
+  return iframes
+    .map((i) => i.contentDocument?.body.textContent ?? '')
+    .join(' ')
+}

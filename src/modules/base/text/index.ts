@@ -57,7 +57,6 @@ export const TextModule: ModuleDefinition<TextProps> = {
   icon: TextStartTIcon,
   trusted: true,
   canHaveChildren: false,
-  inlineEditable: true,
 
   schema: {
     text: { type: 'textarea', label: 'Text', rows: 4, placeholder: 'Enter text...' },
