@@ -20,7 +20,6 @@ import { Button } from '@ui/components/Button'
 import { Dialog } from '@ui/components/Dialog'
 import { EmptyState } from '@ui/components/EmptyState'
 import { SearchBar } from '@ui/components/SearchBar'
-import { Separator } from '@ui/components/Separator'
 import { BracesIcon } from 'pixel-art-icons/icons/braces'
 import { SkeletonBlock } from '@ui/components/Skeleton'
 import { ImageSolidIcon } from 'pixel-art-icons/icons/image-solid'
@@ -205,6 +204,9 @@ export function BindingPickerDialog({
   }, [open, loopTableId])
 
   // Reset state and apply auto-scope when dialog opens / meta loads.
+  // Picks the most specific source available so the right pane is never
+  // blank: a scoped table → that table; a loop scope → the loop entry;
+  // otherwise the first System source (`page`).
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!open) return
@@ -213,18 +215,24 @@ export function BindingPickerDialog({
     setPendingBinding(null)
     if (scopedTable) {
       setSelectedTableKey(`table:${scopedTable.id}`)
+    } else if (hasLoopScope) {
+      setSelectedTableKey(LOOP_SCOPE_KEY)
     } else {
-      setSelectedTableKey(null)
+      setSelectedTableKey(systemKey(SYSTEM_SOURCES[0]!.id))
     }
-  }, [open, scopedTable])
+  }, [open, scopedTable, hasLoopScope])
 
   // When meta finishes loading and we have an auto-scope, select it.
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!meta || !open) return
-    if (hasLoopScope) return
-    if (scopedTable && !selectedTableKey) {
+    if (selectedTableKey) return
+    if (scopedTable) {
       setSelectedTableKey(`table:${scopedTable.id}`)
+    } else if (hasLoopScope) {
+      setSelectedTableKey(LOOP_SCOPE_KEY)
+    } else {
+      setSelectedTableKey(systemKey(SYSTEM_SOURCES[0]!.id))
     }
   }, [meta, open, hasLoopScope, scopedTable, selectedTableKey])
 
@@ -634,13 +642,15 @@ export function BindingPickerDialog({
 
   // ─── Left pane content ─────────────────────────────────────────────────
   //
-  // Post-type / data-table groups are intentionally NOT shown here. The
-  // picker is auto-scoped (left pane hidden entirely) when `currentEntry`
-  // has a real scope (template page or in-loop with a CMS table source).
-  // Reaching this code path means no such scope exists, so a binding to
-  // `{ source: 'currentEntry', field }` against any table would silently
-  // resolve to empty. Authors who want table fields are pointed toward
-  // the loop / template flow via the hint at the bottom.
+  // Post-type / data-table groups are intentionally NOT listed here. The
+  // picker is auto-scoped (left pane hidden) when `currentEntry` has a
+  // real scope (template page or in-loop with a CMS table source). With
+  // no such scope, a `{ source: 'currentEntry', field }` binding against
+  // any table would silently resolve to empty — so only the sources that
+  // actually resolve here are System (page / site / route) and the
+  // current loop's synthetic fields when present. A small footer note
+  // points authors at the loop / template flow when tables exist in the
+  // system but aren't reachable.
   function renderLeftPane() {
     const q = tableSearch.trim().toLowerCase()
     const visibleSystemSources: SystemSource[] = q
@@ -664,82 +674,65 @@ export function BindingPickerDialog({
               source declared synthetic fields. Lets authors bind to the
               iteration item directly. */}
           {hasLoopScope && (
-            <>
-              <Button
-                variant="ghost"
-                size="sm"
-                fullWidth
-                align="start"
-                pressed={selectedTableKey === LOOP_SCOPE_KEY}
-                onClick={() => handleTableSelect(LOOP_SCOPE_KEY)}
-                type="button"
-              >
-                <span className={styles.fieldRowInner}>
-                  <span className={styles.tableRowIcon}>
-                    <BracesIcon size={12} aria-hidden="true" />
-                  </span>
-                  <span>{sourceLabel ?? 'Current loop'}</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              fullWidth
+              align="start"
+              pressed={selectedTableKey === LOOP_SCOPE_KEY}
+              onClick={() => handleTableSelect(LOOP_SCOPE_KEY)}
+              type="button"
+            >
+              <span className={styles.fieldRowInner}>
+                <span className={styles.tableRowIcon}>
+                  <BracesIcon size={12} aria-hidden="true" />
                 </span>
-              </Button>
-              {hasSystem && <Separator />}
-            </>
+                <span>{sourceLabel ?? 'Current loop'}</span>
+              </span>
+            </Button>
           )}
 
-          {/* System sources group — Page / Site / Route. Always available
-              since the publisher seeds these frames on every render; no
-              DB lookup required to enumerate. */}
-          {hasSystem && (
-            <>
-              <p className={styles.groupLabel}>System</p>
-              {visibleSystemSources.map((source) => (
-                <Button
-                  key={source.id}
-                  variant="ghost"
-                  size="sm"
-                  fullWidth
-                  align="start"
-                  pressed={selectedTableKey === systemKey(source.id)}
-                  onClick={() => handleTableSelect(systemKey(source.id))}
-                  type="button"
-                  tooltip={source.description}
-                >
-                  <span className={styles.fieldRowInner}>
-                    <span className={styles.tableRowIcon}>
-                      <BracesIcon size={12} aria-hidden="true" />
-                    </span>
-                    <span>{source.label}</span>
-                  </span>
-                </Button>
-              ))}
-            </>
-          )}
+          {/* System sources — Page / Site / Route. Always available since
+              the publisher seeds these frames on every render. */}
+          {hasSystem && visibleSystemSources.map((source) => (
+            <Button
+              key={source.id}
+              variant="ghost"
+              size="sm"
+              fullWidth
+              align="start"
+              pressed={selectedTableKey === systemKey(source.id)}
+              onClick={() => handleTableSelect(systemKey(source.id))}
+              type="button"
+              tooltip={source.description}
+            >
+              <span className={styles.fieldRowInner}>
+                <span className={styles.tableRowIcon}>
+                  <BracesIcon size={12} aria-hidden="true" />
+                </span>
+                <span>{source.label}</span>
+              </span>
+            </Button>
+          ))}
 
-          {/* Hint when tables exist in the system but aren't surfaced
-              because the current node has no entry scope. Points the
-              author toward the loop / template that would make those
-              fields available. */}
-          {tablesExist && !tableSearch && (
-            <EmptyState
-              variant="card"
-              title="Bind to row fields by adding a loop"
-              description="Wrap this section in a Loop module, or open a postType template page, to reference fields from your tables (posts, products, etc.)."
-            />
-          )}
-
-          {/* No results in search */}
+          {/* No results in search — the only legitimate empty state here. */}
           {noResults && (
-            <EmptyState variant="card" title={`No sources match "${tableSearch}"`} />
-          )}
-
-          {/* No tables at all — author hasn't created any data tables yet. */}
-          {!hasLoopScope && !tablesExist && !tableSearch && !metaLoading && (
-            <EmptyState
-              variant="card"
-              title="No tables yet"
-              description="Create a table in /data first."
-            />
+            <p className={styles.subtleHint}>
+              No sources match &ldquo;{tableSearch}&rdquo;.
+            </p>
           )}
         </div>
+
+        {/* Subtle footer hint pointing at the loop / template workflow
+            when there are tables but the current node can't bind to
+            them. Lives outside the scrolling list so it doesn't
+            compete with the source rows above. */}
+        {tablesExist && !tableSearch && (
+          <p className={styles.subtleHint}>
+            Wrap in a Loop or open a postType template to bind to row
+            fields.
+          </p>
+        )}
       </div>
     )
   }

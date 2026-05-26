@@ -180,10 +180,10 @@ describe('DynamicBindingControl picker', () => {
     expect(screen.queryByText('Data tables')).toBeNull()
     expect(screen.queryByRole('button', { name: /^Posts$/i })).toBeNull()
     expect(screen.queryByRole('button', { name: /^Products$/i })).toBeNull()
-    // The hint should be visible so authors know how to make table
-    // fields available.
+    // The subtle footer hint should be visible so authors know how to
+    // make table fields available.
     await waitFor(() => {
-      expect(screen.getByText(/Bind to row fields by adding a loop/i)).toBeDefined()
+      expect(screen.getByText(/Wrap in a Loop or open a postType template/i)).toBeDefined()
     })
   })
 

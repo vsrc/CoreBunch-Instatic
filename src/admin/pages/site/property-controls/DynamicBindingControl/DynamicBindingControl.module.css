@@ -190,6 +190,23 @@
     user-select: none;
 }
 
+/*
+ * Subtle inline hint — used at the bottom of the left pane to suggest the
+ * loop / template workflow when tables exist in the system but the current
+ * authoring scope can't bind to them. Deliberately plain (no card chrome)
+ * so it reads as guidance rather than UI noise.
+ */
+.subtleHint {
+    padding: 10px 12px;
+    margin: 0;
+    border-top: 1px solid var(--editor-border);
+    font-size: 11px;
+    line-height: 1.45;
+    color: var(--editor-text-muted);
+    flex-shrink: 0;
+    user-select: none;
+}
+
 .tableRowIcon {
     display: inline-flex;
     align-items: center;
