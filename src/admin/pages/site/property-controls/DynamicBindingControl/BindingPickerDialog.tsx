@@ -19,7 +19,6 @@ import { useEditorStore, selectActivePage } from '@site/store/store'
 import { Button } from '@ui/components/Button'
 import { Dialog } from '@ui/components/Dialog'
 import { EmptyState } from '@ui/components/EmptyState'
-import { SearchBar } from '@ui/components/SearchBar'
 import { BracesIcon } from 'pixel-art-icons/icons/braces'
 import { SkeletonBlock } from '@ui/components/Skeleton'
 import { ImageSolidIcon } from 'pixel-art-icons/icons/image-solid'
@@ -167,7 +166,6 @@ export function BindingPickerDialog({
 
   // ─── Picker state ──────────────────────────────────────────────────────
   const [selectedTableKey, setSelectedTableKey] = useState<string | null>(null)
-  const [fieldSearch, setFieldSearch] = useState('')
   const [pendingBinding, setPendingBinding] = useState<DynamicPropBinding | null>(null)
   // Hovered field id — drives the live preview pane on the right so users
   // can "scrub" through fields and see what each one actually contains
@@ -209,7 +207,6 @@ export function BindingPickerDialog({
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!open) return
-    setFieldSearch('')
     setPendingBinding(null)
     if (scopedTable) {
       setSelectedTableKey(`table:${scopedTable.id}`)
@@ -300,23 +297,12 @@ export function BindingPickerDialog({
     POST_TYPE_ONLY_LOOP_FIELDS,
   ])
 
-  // Apply the search filter to each group (dropping empty groups so the
-  // section header doesn't render against zero rows).
-  const filteredRightPaneGroups = useMemo(() => {
-    if (!rightPaneGroups) return null
-    const q = fieldSearch.trim().toLowerCase()
-    if (!q) return rightPaneGroups
-    return rightPaneGroups
-      .map((g) => ({
-        ...g,
-        entries: g.entries.filter((entry) => {
-          const label = entry.field.label.toLowerCase()
-          const id = entry.field.id.toLowerCase()
-          return label.includes(q) || id.includes(q)
-        }),
-      }))
-      .filter((g) => g.entries.length > 0)
-  }, [rightPaneGroups, fieldSearch])
+  // The right pane no longer has a search input — every bindable scope
+  // surfaces a small enough list (System has ≤7 fields per source,
+  // postType templates rarely cross a dozen, loop sources are typically
+  // 5–10) that searching adds more chrome than value. The field list
+  // scrolls within the dialog when it overflows.
+  const filteredRightPaneGroups = rightPaneGroups
 
   const allFieldsIncompatible = useMemo(() => {
     if (!rightPaneGroups || rightPaneGroups.length === 0) return false
@@ -353,7 +339,6 @@ export function BindingPickerDialog({
   // ─── Handlers ──────────────────────────────────────────────────────────
   function handleTableSelect(key: string) {
     setSelectedTableKey(key)
-    setFieldSearch('')
     setPendingBinding(null)
   }
 
@@ -591,52 +576,36 @@ export function BindingPickerDialog({
         </div>
       )
     }
-    const noMatches = filteredRightPaneGroups.length === 0 && fieldSearch
     // Section headers add visual noise when there's only one group AND no
     // separation to convey (e.g. a single table's fields, no loop overlay).
     // Render them only when there are at least two groups to distinguish.
     const showSectionHeaders = (rightPaneGroups?.length ?? 0) > 1
 
     return (
-      <>
-        <div className={styles.fieldSearchHeader}>
-          <SearchBar
-            value={fieldSearch}
-            onValueChange={setFieldSearch}
-            placeholder="Search fields…"
-            aria-label="Search fields"
-          />
-        </div>
-        <div className={styles.fieldList}>
-          {allFieldsIncompatible && (
-            <p className={styles.incompatibleHint}>
-              No fields in this table are compatible with this control.
-            </p>
-          )}
-          {noMatches ? (
-            <EmptyState
-              variant="card"
-              title={`No fields match "${fieldSearch}"`}
-            />
-          ) : totalRightPaneFieldCount === 0 ? (
-            <EmptyState variant="card" title="No fields available" />
-          ) : (
-            filteredRightPaneGroups.map((group) => (
-              <div key={group.label} className={styles.fieldGroup}>
-                {showSectionHeaders && (
-                  <div className={styles.fieldGroupHeader}>
-                    <span className={styles.fieldGroupHeaderText}>{group.label}</span>
-                    <span className={styles.fieldGroupHeaderCount}>
-                      {group.entries.length}
-                    </span>
-                  </div>
-                )}
-                {group.entries.map(renderFieldRow)}
-              </div>
-            ))
-          )}
-        </div>
-      </>
+      <div className={styles.fieldList}>
+        {allFieldsIncompatible && (
+          <p className={styles.incompatibleHint}>
+            No fields in this table are compatible with this control.
+          </p>
+        )}
+        {totalRightPaneFieldCount === 0 ? (
+          <EmptyState variant="card" title="No fields available" />
+        ) : (
+          filteredRightPaneGroups.map((group) => (
+            <div key={group.label} className={styles.fieldGroup}>
+              {showSectionHeaders && (
+                <div className={styles.fieldGroupHeader}>
+                  <span className={styles.fieldGroupHeaderText}>{group.label}</span>
+                  <span className={styles.fieldGroupHeaderCount}>
+                    {group.entries.length}
+                  </span>
+                </div>
+              )}
+              {group.entries.map(renderFieldRow)}
+            </div>
+          ))
+        )}
+      </div>
     )
   }
 

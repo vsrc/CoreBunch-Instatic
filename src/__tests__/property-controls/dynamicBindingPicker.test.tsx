@@ -203,21 +203,6 @@ describe('DynamicBindingControl picker', () => {
     expect(screen.getByText('SEO title')).toBeDefined()
   })
 
-  it('filters the field list using the field search bar (auto-scoped)', async () => {
-    loadTemplatePageInStore('posts')
-    renderBinding()
-    fireEvent.click(screen.getByRole('button', { name: /bind text/i }))
-    await waitFor(() => expect(screen.getByRole('dialog')).toBeDefined())
-    await waitFor(() => expect(screen.getByText('Title')).toBeDefined())
-
-    const searchBar = screen.getByRole('searchbox', { name: /search fields/i })
-    fireEvent.change(searchBar, { target: { value: 'seo' } })
-    await waitFor(() => {
-      expect(screen.queryByText('Title')).toBeNull()
-      expect(screen.getByText('SEO title')).toBeDefined()
-    })
-  })
-
   it('disables media fields when control type is text (auto-scoped)', async () => {
     loadTemplatePageInStore('posts')
     renderBinding()

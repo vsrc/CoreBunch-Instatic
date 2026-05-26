@@ -90,7 +90,11 @@
 
 /*
  * Override Dialog's `overflow-y: auto` so the two panes can each scroll
- * independently rather than the whole body scrolling as one unit.
+ * independently rather than the whole body scrolling as one unit. The
+ * fixed `min-height` keeps the dialog from reflowing when the user
+ * switches between sources whose field lists differ in count — small
+ * lists (Site, 2 fields) sit inside the same envelope as larger ones
+ * (Posts template, 12+ fields), and overflow scrolls within `.fieldList`.
  */
 .dialogBody {
     overflow: hidden;
@@ -98,7 +102,7 @@
     display: flex;
     flex-direction: column;
     gap: 0;
-    min-height: 0;
+    min-height: 420px;
 }
 
 /* ── Auto-scope chip ─────────────────────────────────────────────────────── */
@@ -280,19 +284,6 @@
     color: var(--editor-text-muted);
     background: var(--editor-surface-2);
     border-radius: var(--editor-radius-sm);
-}
-
-/*
- * The right-pane search bar keeps its native pill design (per
- * `docs/design.md` — inputs are bordered + pill-radius). It sits inside
- * a small inset wrapper so it floats above the field list instead of
- * fighting it for the pane's top edge.
- */
-.fieldSearchHeader {
-    flex-shrink: 0;
-    padding: 10px 12px 8px;
-    border-bottom: 1px solid var(--editor-border);
-    background: var(--editor-surface-2);
 }
 
 /* ── Field row internals ─────────────────────────────────────────────────── */
