@@ -58,6 +58,11 @@ export function ContentPage() {
   // `BindingPickerPopover` placeholder below). Slash-menu / notch actions
   // insert a placeholder token directly until the popover is wired up to
   // the body editor's caret.
+  // Canvas display mode: 'write' is the bare editor surface, 'live' is
+  // the entry rendered inside its template (real site styles, inline
+  // editing). Switching is purely client-side — the body markdown is the
+  // source of truth, so both modes show the same content.
+  const [contentMode, setContentMode] = useState<'write' | 'live'>('write')
   const slugId = useId()
   const seoTitleId = useId()
   const seoDescriptionId = useId()
@@ -481,6 +486,8 @@ export function ContentPage() {
             canCreateEntry={canCreateEntries}
             focusTitleSignal={focusTitleSignal}
             focusBodySignal={focusBodySignal}
+            contentMode={contentMode}
+            onContentModeChange={setContentMode}
             onTitleChange={draft.setTitle}
             onTitleEnter={() => setFocusBodySignal((n) => n + 1)}
             onBodyChange={draft.setBody}

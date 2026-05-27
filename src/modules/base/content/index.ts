@@ -38,9 +38,14 @@ export const ContentModule: ModuleDefinition<ContentProps> = {
 
   render: (props) => {
     const html = typeof props.html === 'string' ? props.html : ''
-    if (!html) return { html: '' }
+    // The `data-pb-content-region` marker is what the Content
+    // workspace's Live mode looks for inside the rendered iframe so
+    // it can mount a Tiptap editor against the real entry body. It is
+    // emitted unconditionally (even when the body is empty) so that
+    // an empty draft still gives the editor a node to attach to.
+    if (!html) return { html: '<article data-pb-content-region></article>' }
     return {
-      html: `<article>${html}</article>`,
+      html: `<article data-pb-content-region>${html}</article>`,
     }
   },
 }

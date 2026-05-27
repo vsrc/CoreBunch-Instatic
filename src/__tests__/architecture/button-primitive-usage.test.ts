@@ -101,6 +101,9 @@ const ALLOWLIST = new Set([
   // (icon + label, aria-selected, no border, mode-specific active state).
   // Button's token-driven sizing would distort the segmented-toggle look.
   'admin/pages/site/canvas/CanvasModeToggle.tsx',
+  // Content workspace's Write / Live mode switch — mirrors the canvas
+  // mode toggle's segmented pill pattern and shares the same constraints.
+  'admin/pages/content/components/ContentModeToggle/ContentModeToggle.tsx',
 
   // ── §8.7 Full-width row disclosure / listbox option custom layouts ──────
   // ColorTokenCard row toggle is a full-width structured row (title + meta,

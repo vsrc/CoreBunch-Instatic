@@ -41,6 +41,13 @@ interface BodyFloatingMenuProps {
    * current selection via the imperative ref it already owns.
    */
   onPickMedia: () => void
+  /**
+   * When set, the editor lives inside this iframe and the gutter "+"
+   * button needs to render in the host document with viewport-fixed
+   * positioning offset by the iframe's bounding rect. Leaving this
+   * undefined keeps the default in-host (Write mode) behaviour.
+   */
+  iframeEl?: HTMLIFrameElement | null
 }
 
 interface QuickInsertContext {
@@ -202,11 +209,17 @@ function deleteCurrentBlock(editor: Editor): boolean {
 }
 
 interface ButtonPosition {
-  /** Pixel y-offset from the editor wrapper's top. */
+  /** Pixel y-offset (wrapper-relative in Write mode, viewport-relative in Live mode). */
   top: number
+  /**
+   * Pixel x-offset in viewport coords. Only set in iframe (Live) mode —
+   * in Write mode the gutter button uses a fixed `left: -36px` from CSS
+   * and only the `top` is JS-driven.
+   */
+  left?: number
 }
 
-export function BodyFloatingMenu({ editor, onPickMedia }: BodyFloatingMenuProps) {
+export function BodyFloatingMenu({ editor, onPickMedia, iframeEl }: BodyFloatingMenuProps) {
   // The button's vertical position. `null` means "don't render" — the
   // selection isn't on an empty top-level paragraph, or the editor is
   // blurred and we don't want a sticky affordance.
@@ -227,7 +240,7 @@ export function BodyFloatingMenu({ editor, onPickMedia }: BodyFloatingMenuProps)
         setPosition(null)
         return
       }
-      const next = computeGutterPosition(editor)
+      const next = computeGutterPosition(editor, iframeEl ?? null)
       setPosition(next)
     }
 
@@ -239,13 +252,30 @@ export function BodyFloatingMenu({ editor, onPickMedia }: BodyFloatingMenuProps)
     // schedule a microtask refresh so the first render lands correctly.
     queueMicrotask(refresh)
 
+    // In iframe (Live) mode the gutter button uses viewport-fixed
+    // positioning, so any scroll inside the iframe or in the host page
+    // moves the visual anchor under the cursor. Subscribe to scroll +
+    // resize on both ends so the button tracks.
+    const iframeWindow = iframeEl?.contentWindow ?? null
+    const hostHandler = () => refresh()
+    if (iframeEl) {
+      iframeWindow?.addEventListener('scroll', hostHandler, { passive: true })
+      window.addEventListener('scroll', hostHandler, { passive: true })
+      window.addEventListener('resize', hostHandler)
+    }
+
     return () => {
       editor.off('selectionUpdate', refresh)
       editor.off('focus', refresh)
       editor.off('blur', refresh)
       editor.off('update', refresh)
+      if (iframeEl) {
+        iframeWindow?.removeEventListener('scroll', hostHandler)
+        window.removeEventListener('scroll', hostHandler)
+        window.removeEventListener('resize', hostHandler)
+      }
     }
-  }, [editor])
+  }, [editor, iframeEl])
 
   // The button hides when the selection is no longer on an empty
   // paragraph (or the editor is blurred). The MENU, however, stays
@@ -266,7 +296,17 @@ export function BodyFloatingMenu({ editor, onPickMedia }: BodyFloatingMenuProps)
           aria-label="Block options"
           data-testid="content-floating-menu"
           className={styles.gutterButton}
-          style={{ top: position.top }}
+          // In Write mode the button uses the CSS-defined absolute
+          // positioning (left: -36px relative to the editor wrapper)
+          // and we only override `top`. In Live mode the button is
+          // rendered in the host but anchored to coordinates inside
+          // the iframe — switch to viewport-fixed positioning and
+          // supply both axes.
+          style={
+            position.left !== undefined
+              ? { position: 'fixed', top: position.top, left: position.left }
+              : { top: position.top }
+          }
           onMouseDown={(event) => event.preventDefault()}
           onClick={(event) => {
             // Snapshot the editor's current selection BEFORE the menu opens.
@@ -359,7 +399,10 @@ const ALLOWED_BLOCK_TYPES: ReadonlySet<string> = new Set([
   'codeBlock',
 ])
 
-function computeGutterPosition(editor: Editor): ButtonPosition | null {
+function computeGutterPosition(
+  editor: Editor,
+  iframeEl: HTMLIFrameElement | null,
+): ButtonPosition | null {
   if (!editor.isFocused) return null
   const state = editor.state
   const selection = state.selection
@@ -397,9 +440,34 @@ function computeGutterPosition(editor: Editor): ButtonPosition | null {
   // the block's opening tag, i.e. the first valid position inside it.
   const firstInlinePos = Math.min(blockPos + 1, state.doc.content.size)
   const firstCoords = view.coordsAtPos(firstInlinePos)
+  const buttonHeight = 24
+  const buttonWidth = 24
+  const gutterOffset = 12 // space between block's left edge and the button
+
+  if (iframeEl) {
+    // Live mode: render with viewport-fixed positioning. `firstCoords`
+    // are iframe-viewport coords; translate to host viewport by adding
+    // the iframe's bounding rect. Use the block's left edge as the
+    // anchor (`coordsAtPos` returns the caret line, which for an empty
+    // block is the same column as the text would start at).
+    const iframeRect = iframeEl.getBoundingClientRect()
+    const lineMid = (firstCoords.top + firstCoords.bottom) / 2
+    const top = Math.round(lineMid + iframeRect.top - buttonHeight / 2)
+    // Clamp `left` so the gutter button can never drift past the
+    // iframe's own left edge — otherwise a block flush against the
+    // iframe's left margin would push the "+" under the host's
+    // content sidebar. We keep an 8px breathing room from the iframe
+    // edge, matching the bubble-menu boundary padding.
+    const desiredLeft = firstCoords.left + iframeRect.left - buttonWidth - gutterOffset
+    const minLeft = iframeRect.left + 8
+    const left = Math.round(Math.max(desiredLeft, minLeft))
+    return { top, left }
+  }
+
+  // Write mode: position relative to the editor wrapper. The CSS owns
+  // the horizontal offset (`left: -36px`) so only `top` is JS-driven.
   const wrapperRect = wrapper.getBoundingClientRect()
   const lineMid = (firstCoords.top + firstCoords.bottom) / 2
-  const buttonHeight = 24
   const top = Math.round(lineMid - wrapperRect.top - buttonHeight / 2)
   return { top }
 }

@@ -21,11 +21,12 @@
  * shapes — sharing a parent BubbleMenu would force one of them to win).
  */
 
-import { useState, type FormEvent } from 'react'
+import { useMemo, useState, type FormEvent } from 'react'
 import { NodeSelection } from '@tiptap/pm/state'
 import type { Editor } from '@tiptap/core'
 import { useEditorState } from '@tiptap/react'
 import { BubbleMenu } from '@tiptap/react/menus'
+import type { VirtualElement } from '@floating-ui/dom'
 import { Button } from '@ui/components/Button'
 import { Input } from '@ui/components/Input'
 import { ImagesSolidIcon } from 'pixel-art-icons/icons/images-solid'
@@ -41,6 +42,12 @@ export interface MediaNodeToolbarProps {
    * "Replace" action just needs to open the picker.
    */
   onPickMedia: () => void
+  /**
+   * When set, the editor lives inside this iframe and the toolbar
+   * needs to render in the host document but position over the
+   * iframe's contents. See `BodyBubbleMenu` for the same pattern.
+   */
+  iframeEl?: HTMLIFrameElement | null
 }
 
 interface MediaSelectionState {
@@ -52,7 +59,51 @@ interface MediaSelectionState {
   src: string
 }
 
-export function MediaNodeToolbar({ editor, onPickMedia }: MediaNodeToolbarProps) {
+export function MediaNodeToolbar({ editor, onPickMedia, iframeEl }: MediaNodeToolbarProps) {
+  // Iframe-aware overrides for the underlying BubbleMenu plugin — see
+  // `BodyBubbleMenu` for the same pattern. The reference rect is the
+  // selected media node's DOM rect (not selection coords) so the
+  // toolbar lines up against the asset, not the caret.
+  const iframeOverrides = useMemo(() => {
+    if (!iframeEl) return undefined
+    return {
+      appendTo: () => document.body,
+      options: {
+        strategy: 'fixed' as const,
+        // Same boundary clipping as `BodyBubbleMenu` — keep the
+        // toolbar inside the iframe's visible region so it never
+        // drifts behind the host's content sidebar.
+        shift: { boundary: iframeEl, padding: 8 },
+        flip: { boundary: iframeEl, padding: 8 },
+      },
+      getReferencedVirtualElement: (): VirtualElement | null => {
+        if (editor.isDestroyed) return null
+        const sel = editor.state.selection
+        if (!(sel instanceof NodeSelection)) return null
+        const dom = editor.view.nodeDOM(sel.from) as HTMLElement | null
+        if (!dom || typeof dom.getBoundingClientRect !== 'function') return null
+        const nodeRect = dom.getBoundingClientRect()
+        const iframeRect = iframeEl.getBoundingClientRect()
+        const left = nodeRect.left + iframeRect.left
+        const top = nodeRect.top + iframeRect.top
+        const right = nodeRect.right + iframeRect.left
+        const bottom = nodeRect.bottom + iframeRect.top
+        return {
+          getBoundingClientRect: () => ({
+            x: left,
+            y: top,
+            width: right - left,
+            height: bottom - top,
+            top,
+            left,
+            bottom,
+            right,
+          }),
+        }
+      },
+    }
+  }, [editor, iframeEl])
+
   // Editing state for the alt-text inline editor. Keyed by `src` so a
   // user switching to a different media node naturally invalidates a
   // stale open editor — no useEffect cleanup, no set-state-in-effect
@@ -79,6 +130,7 @@ export function MediaNodeToolbar({ editor, onPickMedia }: MediaNodeToolbarProps)
         if (!(selection instanceof NodeSelection)) return false
         return selection.node.type.name === 'media'
       }}
+      {...(iframeOverrides ?? {})}
     >
       <div className={styles.bar} data-testid="content-media-toolbar">
         {!showAltEditor ? (

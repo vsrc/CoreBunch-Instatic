@@ -478,8 +478,10 @@ describe('VC inlining — richtext prop sanitization', () => {
     })
     const site = makeSite({ visualComponents: [vcContent], pages: [page] })
     const { html } = publishPage(page, site, registry)
-    // The <article> wrapper from base.content must be intact
-    expect(html).toContain('<article>')
+    // The <article> wrapper from base.content must be intact (the
+    // `data-pb-content-region` attribute is the marker the content
+    // editor's Live mode uses to mount its inline Tiptap instance).
+    expect(html).toContain('<article data-pb-content-region>')
     expect(html).not.toContain('<script>')
   })
 })

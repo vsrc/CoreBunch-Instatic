@@ -380,6 +380,50 @@ export async function previewCmsDataLoopItems(
 }
 
 // ---------------------------------------------------------------------------
+// Live-mode preview — renders an entry through the real publish pipeline
+// using the draft cells from the editor's in-memory state. The response
+// is the full HTML document (sandboxed in an iframe on the client side)
+// rather than JSON, so we side-step the envelope helper.
+// ---------------------------------------------------------------------------
+
+export interface PreviewCmsDataRowOptions {
+  /** Draft cells to merge over the row's persisted state. */
+  cells?: Record<string, unknown>
+  /** Abort signal so the caller can cancel a stale request. */
+  signal?: AbortSignal
+  fetchImpl?: FetchLike
+  basePath?: string
+}
+
+export async function previewCmsDataRow(
+  rowId: string,
+  options: PreviewCmsDataRowOptions = {},
+): Promise<string> {
+  const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis)
+  const basePath = options.basePath ?? '/admin/api/cms'
+  const res = await fetchImpl(`${basePath}/data/rows/${encodeURIComponent(rowId)}/preview`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ cells: options.cells ?? {} }),
+    signal: options.signal,
+  })
+  if (!res.ok) {
+    // The preview endpoint emits the standard `{ error }` JSON envelope
+    // on failure; try to surface the message, fall back to status text.
+    let message = `CMS data row preview failed with ${res.status}`
+    try {
+      const json = (await res.json()) as { error?: string }
+      if (json && typeof json.error === 'string') message = json.error
+    } catch {
+      /* response body wasn't JSON — keep the default message */
+    }
+    throw new Error(message)
+  }
+  return await res.text()
+}
+
+// ---------------------------------------------------------------------------
 // Authors
 // ---------------------------------------------------------------------------
 

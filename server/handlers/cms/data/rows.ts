@@ -54,6 +54,7 @@ import {
   requireDataEditor,
   requireDataPublisher,
 } from './access'
+import { handleRowPreview } from './preview'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -354,6 +355,7 @@ const ROW_SCHEDULE_PATTERN = /^\/admin\/api\/cms\/data\/rows\/([^/]+)\/schedule$
 const ROW_STATUS_PATTERN = /^\/admin\/api\/cms\/data\/rows\/([^/]+)\/status$/
 const ROW_AUTHOR_PATTERN = /^\/admin\/api\/cms\/data\/rows\/([^/]+)\/author$/
 const ROW_TABLE_PATTERN = /^\/admin\/api\/cms\/data\/rows\/([^/]+)\/table$/
+const ROW_PREVIEW_PATTERN = /^\/admin\/api\/cms\/data\/rows\/([^/]+)\/preview$/
 const ROW_ITEM_PATTERN = /^\/admin\/api\/cms\/data\/rows\/([^/]+)$/
 
 // ---------------------------------------------------------------------------
@@ -397,6 +399,11 @@ export async function handleDataRowRoutes(
   const tableMatch = pathname.match(ROW_TABLE_PATTERN)
   if (tableMatch) {
     return handleRowTable(req, db, decodeURIComponent(tableMatch[1]))
+  }
+
+  const previewMatch = pathname.match(ROW_PREVIEW_PATTERN)
+  if (previewMatch) {
+    return handleRowPreview(req, db, decodeURIComponent(previewMatch[1]))
   }
 
   const itemMatch = pathname.match(ROW_ITEM_PATTERN)

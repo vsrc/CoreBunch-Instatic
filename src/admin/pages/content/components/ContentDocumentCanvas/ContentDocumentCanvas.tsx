@@ -10,6 +10,8 @@ import type { DataTable, DataRow } from '@core/data/schemas'
 import { CanvasNotch, type CanvasNotchAction } from '@site/canvas/CanvasNotch'
 import canvasStyles from '../../../site/canvas/CanvasRoot.module.css'
 import { TiptapBodyEditor, type TiptapBodyEditorHandle } from '@content/TiptapBodyEditor'
+import { ContentModeToggle, type ContentMode } from '../ContentModeToggle/ContentModeToggle'
+import { LiveCanvas } from '../LiveCanvas/LiveCanvas'
 import styles from '../../ContentPage.module.css'
 
 interface ContentDocumentCanvasProps {
@@ -32,6 +34,13 @@ interface ContentDocumentCanvasProps {
    * of its document (e.g. when Enter was pressed in the title field).
    */
   focusBodySignal: number
+  /**
+   * Display mode for the canvas — `'write'` is the bare Tiptap surface,
+   * `'live'` renders the entry inside its real template via an iframe
+   * with inline editing wired up to the same body markdown.
+   */
+  contentMode: ContentMode
+  onContentModeChange: (mode: ContentMode) => void
   onTitleChange: (value: string) => void
   onTitleEnter: () => void
   onBodyChange: (markdown: string) => void
@@ -53,6 +62,8 @@ export const ContentDocumentCanvas = forwardRef<TiptapBodyEditorHandle, ContentD
       canCreateEntry,
       focusTitleSignal,
       focusBodySignal,
+      contentMode,
+      onContentModeChange,
       onTitleChange,
       onTitleEnter,
       onBodyChange,
@@ -98,7 +109,13 @@ export const ContentDocumentCanvas = forwardRef<TiptapBodyEditorHandle, ContentD
         data-testid="content-canvas-root"
         className={cn(canvasStyles.canvas, styles.contentCanvas)}
       >
-        {showInsertNotch && (
+        {selectedEntry && bodyEnabled && (
+          <ContentModeToggle mode={contentMode} onChange={onContentModeChange} />
+        )}
+
+        {/* The insertion notch is meaningful only in Write mode — Live
+            mode has its own block affordances inside the iframe. */}
+        {showInsertNotch && contentMode === 'write' && (
           <CanvasNotch actions={notchActions} showHistoryControls={false} />
         )}
 
@@ -106,36 +123,50 @@ export const ContentDocumentCanvas = forwardRef<TiptapBodyEditorHandle, ContentD
           {loading ? (
             <ContentCanvasLoading />
           ) : selectedEntry ? (
-            <article className={styles.document}>
-              <Textarea
-                ref={titleFieldRef}
-                value={title}
-                rows={1}
-                resize="none"
-                placeholder="Untitled"
-                aria-label="Title"
-                onChange={(event) => {
-                  resizeTitleField(event.currentTarget)
-                  onTitleChange(event.target.value)
-                }}
-                onKeyDown={handleTitleKeyDown}
-                disabled={!editorEnabled}
-                className={styles.titleInput}
-                fieldSize="md"
-                emphasis="strong"
+            contentMode === 'live' && bodyEnabled ? (
+              <LiveCanvas
+                entry={selectedEntry}
+                collection={selectedCollection}
+                title={title}
+                body={body}
+                readOnly={!editorEnabled}
+                editorRef={ref as Ref<TiptapBodyEditorHandle>}
+                onBodyChange={onBodyChange}
+                onPickMedia={onPickMedia}
+                onInsertDataToken={onInsertDataToken}
               />
-              {bodyEnabled && (
-                <TiptapBodyEditor
-                  markdown={body}
-                  readOnly={!editorEnabled}
-                  focusSignal={focusBodySignal}
-                  editorRef={ref as Ref<TiptapBodyEditorHandle>}
-                  onChange={onBodyChange}
-                  onPickMedia={onPickMedia}
-                  onInsertDataToken={onInsertDataToken}
+            ) : (
+              <article className={styles.document}>
+                <Textarea
+                  ref={titleFieldRef}
+                  value={title}
+                  rows={1}
+                  resize="none"
+                  placeholder="Untitled"
+                  aria-label="Title"
+                  onChange={(event) => {
+                    resizeTitleField(event.currentTarget)
+                    onTitleChange(event.target.value)
+                  }}
+                  onKeyDown={handleTitleKeyDown}
+                  disabled={!editorEnabled}
+                  className={styles.titleInput}
+                  fieldSize="md"
+                  emphasis="strong"
                 />
-              )}
-            </article>
+                {bodyEnabled && (
+                  <TiptapBodyEditor
+                    markdown={body}
+                    readOnly={!editorEnabled}
+                    focusSignal={focusBodySignal}
+                    editorRef={ref as Ref<TiptapBodyEditorHandle>}
+                    onChange={onBodyChange}
+                    onPickMedia={onPickMedia}
+                    onInsertDataToken={onInsertDataToken}
+                  />
+                )}
+              </article>
+            )
           ) : (
             <div className={styles.emptyState}>
               <h2>Create the first {singularLabel}</h2>
