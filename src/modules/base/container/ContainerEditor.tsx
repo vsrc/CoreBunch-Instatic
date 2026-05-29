@@ -14,6 +14,13 @@
  * authored it, and `data-canvas-empty-container` stays on the outer
  * element so the canvas selection logic keeps treating the slot as a
  * pickable affordance.
+ *
+ * Void elements (`<br>`, `<hr>`, `<input>`, etc.) must never receive
+ * children — not even the empty-container placeholder — because React
+ * throws "X is a void element tag and must neither have 'children' nor use
+ * 'dangerouslySetInnerHTML'" regardless of whether the child count is zero.
+ * When the resolved tag is a void element, the element is rendered with no
+ * children at all.
  */
 import React from 'react'
 import type { ModuleComponentProps } from '@core/module-engine/types'
@@ -26,6 +33,28 @@ interface ContainerProps extends Record<string, unknown> {
   customTag: string
 }
 
+/**
+ * The full set of void HTML elements. React refuses to render children
+ * inside any of these tags, so ContainerEditor must skip the children
+ * (and the empty-container placeholder) when the resolved tag is void.
+ */
+const VOID_HTML_TAGS = new Set([
+  'area',
+  'base',
+  'br',
+  'col',
+  'embed',
+  'hr',
+  'img',
+  'input',
+  'link',
+  'meta',
+  'param',
+  'source',
+  'track',
+  'wbr',
+])
+
 export const ContainerEditor: React.FC<ModuleComponentProps<ContainerProps>> = ({
   props,
   children,
@@ -33,6 +62,17 @@ export const ContainerEditor: React.FC<ModuleComponentProps<ContainerProps>> = (
   nodeWrapperProps,
 }) => {
   const Tag = resolveHtmlTag(props.tag, props.customTag)
+
+  // Void elements cannot have children. Render the element alone so React
+  // does not throw. No empty-container placeholder is shown for void tags —
+  // a self-closing element is its own affordance.
+  if (VOID_HTML_TAGS.has(Tag)) {
+    return React.createElement(Tag, {
+      ...nodeWrapperProps,
+      className: mcClassName,
+    })
+  }
+
   const isEmpty = React.Children.count(children) === 0
 
   return React.createElement(
