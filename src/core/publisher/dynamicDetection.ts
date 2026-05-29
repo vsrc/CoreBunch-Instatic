@@ -135,16 +135,19 @@ function checkInlineTokens(node: AnalysisNode): string | null {
 }
 
 /**
- * Rule 3: `base.loop` with a `requestDependent: true` source.
+ * Rule 3: `base.loop` whose source is request-dependent or per-visitor.
  * Returns reason or null. An unregistered/empty sourceId stays static.
+ * `perVisitor` implies request-dependent (it also renders at request time —
+ * just uncached); both route the loop node to a Layer C hole.
  */
 function checkLoopSource(node: AnalysisNode): string | null {
   if (node.moduleId !== 'base.loop') return null
   const sourceId = typeof node.props.sourceId === 'string' ? node.props.sourceId : ''
   if (!sourceId) return null
   const loopSource = loopSourceRegistry.get(sourceId)
-  if (loopSource?.requestDependent === true) {
-    return `node "${node.id}": loop source "${sourceId}" is request-dependent`
+  if (loopSource?.requestDependent === true || loopSource?.perVisitor === true) {
+    const reason = loopSource?.perVisitor === true ? 'per-visitor' : 'request-dependent'
+    return `node "${node.id}": loop source "${sourceId}" is ${reason}`
   }
   return null
 }

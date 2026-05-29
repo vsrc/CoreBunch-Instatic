@@ -5,7 +5,7 @@
 import { Type } from '@sinclair/typebox'
 import { PropertySchemaSchema } from '@core/module-engine/propertySchema'
 
-export const LoopSourceFieldSchema = Type.Object(
+const LoopSourceFieldSchema = Type.Object(
   {
     id: Type.String({ minLength: 1 }),
     label: Type.String({ minLength: 1 }),
@@ -34,6 +34,11 @@ export const LoopSourceDescriptorSchema = Type.Object(
       { additionalProperties: false },
     )),
     fields: Type.Array(LoopSourceFieldSchema),
+    // Layer C dynamic-island flags. `requestDependent` marks the source's
+    // output as request-time (becomes a cached hole); `perVisitor` marks it
+    // uncacheable + cookie-aware. Optional — built-in sources leave both unset.
+    requestDependent: Type.Optional(Type.Boolean()),
+    perVisitor: Type.Optional(Type.Boolean()),
   },
   { additionalProperties: false },
 )

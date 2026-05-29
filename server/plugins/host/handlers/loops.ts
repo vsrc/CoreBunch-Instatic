@@ -11,6 +11,7 @@
  */
 
 import { loopSourceRegistry } from '@core/loops/registry'
+import type { SourceFetchContext } from '@core/loops/types'
 import type { LoopSourceRegisterApiCall } from '../../protocol/apiCallSchema'
 import type { DbClient } from '../../../db/client'
 import { assertHostPluginPermission } from '../registry'
@@ -33,7 +34,22 @@ export async function handleLoopsRegisterSource(
   const fullSource = {
     ...descriptor,
     fetch: async (ctx: unknown) => {
-      return await runLoopFetchInWorker(msg.pluginId, descriptor.id, ctx)
+      // The full SourceFetchContext carries `db` (a function) and the entire
+      // `site` document — neither survives `postMessage` structured-clone to
+      // the worker. Send only the serializable subset the plugin fetch needs;
+      // plugins reach the DB via `api.cms.storage` and the network via
+      // `api.net.fetch`, not a raw DB handle.
+      const c = ctx as SourceFetchContext
+      const wireCtx = {
+        filters: c.filters,
+        orderBy: c.orderBy,
+        direction: c.direction,
+        limit: c.limit,
+        offset: c.offset,
+        request: c.request,
+        site: { id: c.site?.id, name: c.site?.name },
+      }
+      return await runLoopFetchInWorker(msg.pluginId, descriptor.id, wireCtx)
     },
     preview: () => {
       return []

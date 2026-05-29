@@ -5,24 +5,40 @@
  * IntersectionObserver to lazily fetch rendered fragments for `<pb-hole>`
  * elements in published pages.
  *
- * The fragment endpoint (`/_pb/hole/<nodeId>`) renders a single node subtree
- * from the latest published snapshot and returns it as HTML. Responses are
- * cached by Layer B with version-aware keys — most popular holes render once
- * per publish per (nodeId, queryString) burst via single-flight.
+ * The fragment endpoint (`/_pb/hole/<nodeId>?v=<version>&u=<page-url>`) renders
+ * a single node subtree from the latest published snapshot AT REQUEST TIME and
+ * returns it as HTML. The originating page URL (`u`) seeds the route frame so
+ * `route.query.*` bindings resolve, drives per-loop pagination, and is fed to
+ * request-dependent loop sources via `ctx.request`.
+ *
+ * Two cache tiers (see `LoopEntitySource.requestDependent` / `perVisitor`):
+ *   - SHARED hole — cached by Layer B keyed on `(nodeId, page-query, version)`.
+ *     The source's `fetch()` runs once per publish-version per distinct query.
+ *   - PER-VISITOR hole — bypasses Layer B, reads request cookies, re-renders on
+ *     every page load, and responds with `Cache-Control: no-store`.
  *
  * Version-awareness: the hole runtime stamps `data-pb-version` on each
- * placeholder from the published HTML. The fragment endpoint compares the
- * `?v=` param to the current `publishVersion`; a mismatch returns a lightweight
- * stale fragment without caching so the next page load picks up the new version.
+ * placeholder. The endpoint compares `?v=` to the current `publishVersion`; a
+ * mismatch returns a lightweight stale sentinel so the next page load picks up
+ * the new version.
  *
  * Inside the hole endpoint the RenderContext has no `dynamicNodeIds` — the node
  * subtree is rendered fully (it is already the request-time dynamic part).
+ *
+ * Known v1 limitation: a hole that sits inside a per-entry content-template
+ * page does not yet resolve `currentEntry.*` (no entry id is forwarded). Holes
+ * are intended for `route.query`, live external data, and per-visitor content.
  */
 
 import type { DbClient } from '../../db/client'
+import type { Page, PageNode, SiteDocument } from '@core/page-tree'
+import type { SourceRequestContext } from '@core/loops/types'
 import { registry } from '@core/module-engine/registry'
+import { loopSourceRegistry } from '@core/loops/registry'
 import { renderNode, type RenderContext } from '@core/publisher/render'
+import { buildPageFrame, buildRouteFrame, buildSiteFrame } from '@core/templates/contextFrames'
 import { getLatestPublishedSiteSnapshot } from '../../repositories/publish'
+import { prefetchLoopData } from '../../publish/loopPrefetch'
 import { getOrRender, getPublishVersion } from '../../publish/renderCache'
 import { HOLE_RUNTIME_JS } from '../../publish/holeRuntime'
 
@@ -49,18 +65,139 @@ export interface HoleHandlerContext {
   db: DbClient
 }
 
+// ---------------------------------------------------------------------------
+// Versioned snapshot cache + nodeId → page index
+//
+// The published snapshot (the entire SiteDocument) changes only on publish.
+// Loading + JSON-parsing it on every hole request — then linearly scanning all
+// pages for the node — was the per-fragment cost flagged in the architecture
+// review. Instead we memoise the snapshot for the current publish version and
+// build a `nodeId → page` index once, so request-time lookup is O(1) and warm
+// requests do zero DB I/O. Lazy invalidation: a version change (set by
+// `bumpPublishVersion`) misses the cache and reloads. No explicit eviction
+// hook needed — `getPublishVersion()` is the single source of truth.
+// ---------------------------------------------------------------------------
+
+interface SnapshotCacheEntry {
+  version: number
+  site: SiteDocument
+  nodeIndex: Map<string, Page>
+}
+
+let snapshotCache: SnapshotCacheEntry | null = null
+let snapshotInFlight: Promise<SnapshotCacheEntry | null> | null = null
+
+async function loadSnapshotForVersion(
+  db: DbClient,
+  version: number,
+): Promise<SnapshotCacheEntry | null> {
+  if (snapshotCache && snapshotCache.version === version) return snapshotCache
+  // Single-flight: concurrent cold requests at the same version share one load.
+  if (snapshotInFlight) return snapshotInFlight
+
+  snapshotInFlight = (async () => {
+    try {
+      const snapshot = await getLatestPublishedSiteSnapshot(db)
+      if (!snapshot) return null
+      const nodeIndex = new Map<string, Page>()
+      for (const page of snapshot.site.pages) {
+        for (const nodeId of Object.keys(page.nodes)) {
+          // First page wins on the (extremely unlikely) duplicate node id.
+          if (!nodeIndex.has(nodeId)) nodeIndex.set(nodeId, page)
+        }
+      }
+      const entry: SnapshotCacheEntry = { version, site: snapshot.site, nodeIndex }
+      snapshotCache = entry
+      return entry
+    } finally {
+      snapshotInFlight = null
+    }
+  })()
+  return snapshotInFlight
+}
+
+/** Reset the snapshot cache. Tests only. */
+export function resetHoleSnapshotCacheForTests(): void {
+  snapshotCache = null
+  snapshotInFlight = null
+}
+
+// ---------------------------------------------------------------------------
+// Request helpers
+// ---------------------------------------------------------------------------
+
+/** Parse a `Cookie` header into a flat map. Returns `{}` when absent. */
+function parseCookies(header: string | null): Record<string, string> {
+  if (!header) return {}
+  const out: Record<string, string> = {}
+  for (const part of header.split(';')) {
+    const eq = part.indexOf('=')
+    if (eq < 0) continue
+    const name = part.slice(0, eq).trim()
+    if (!name) continue
+    out[name] = decodeURIComponent(part.slice(eq + 1).trim())
+  }
+  return out
+}
+
+/** Sorted, stable serialisation of a query string for cache keys. */
+function normalizeQuery(params: URLSearchParams): string {
+  const entries = [...params.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+  return new URLSearchParams(entries).toString()
+}
+
+/**
+ * Whether a hole must be rendered per visitor (bypass cache, read cookies).
+ * Only `perVisitor` loop sources qualify — a module `render()` cannot read
+ * cookies, so module holes are always shared-cacheable.
+ */
+function isPerVisitorHole(node: PageNode): boolean {
+  if (node.moduleId !== 'base.loop') return false
+  const sourceId = typeof node.props.sourceId === 'string' ? node.props.sourceId : ''
+  if (!sourceId) return false
+  return loopSourceRegistry.get(sourceId)?.perVisitor === true
+}
+
+/**
+ * Render one node subtree at request time. Builds the same named frames the
+ * full-page publisher builds (route/page/site) plus pre-fetched loop data for
+ * loops INSIDE this subtree, then renders fully (no `<pb-hole>` recursion).
+ */
+async function renderHoleFragment(
+  nodeId: string,
+  page: Page,
+  site: SiteDocument,
+  db: DbClient,
+  pageUrl: URL,
+  request: SourceRequestContext,
+): Promise<string> {
+  const route = buildRouteFrame(pageUrl.toString())
+  const loopData = await prefetchLoopData(page, site, db, pageUrl, {
+    request,
+    rootNodeId: nodeId,
+  })
+  const renderCtx: RenderContext = {
+    page,
+    site,
+    registry,
+    breakpointId: undefined,
+    cssMap: new Map(),
+    loopData,
+    templateContext: {
+      entryStack: [],
+      page: buildPageFrame(page),
+      site: buildSiteFrame(site),
+      route,
+    },
+    // No dynamicNodeIds: inside a hole endpoint we render the full subtree.
+  }
+  return renderNode(nodeId, renderCtx)
+}
+
 /**
  * Render a single dynamic node subtree for Layer C hole hydration.
  *
- * GET `/_pb/hole/<nodeId>?v=<publishVersion>` → HTML fragment.
- *
- * Version guard: if the `?v=` param doesn't match the current publish version,
- * a lightweight stale sentinel is returned without caching. The next page load
- * will include a fresh placeholder stamped with the new version.
- *
- * Caching: version-matched responses are stored in the Layer B LRU cache with
- * key `(/_pb/hole/<nodeId>, ?v=<version>)`. Single-flight ensures the factory
- * runs exactly once per concurrent burst.
+ * GET `/_pb/hole/<nodeId>?v=<publishVersion>&u=<page-url>` → HTML fragment.
  */
 export async function handleHoleRequest(
   req: Request,
@@ -74,7 +211,6 @@ export async function handleHoleRequest(
     })
   }
 
-  // /_pb/hole/<encoded-nodeId>
   const nodeId = decodeURIComponent(url.pathname.slice(HOLE_PATH_PREFIX.length))
   if (!nodeId) {
     return new Response('Missing node id', {
@@ -97,54 +233,73 @@ export async function handleHoleRequest(
     })
   }
 
-  // Load the latest published snapshot. We search ALL pages because a hole can
-  // live in any page (regular page or content-template page).
-  const snapshot = await getLatestPublishedSiteSnapshot(ctx.db)
-  if (!snapshot) {
+  // Load (memoised) snapshot for this version and find the node's page in O(1).
+  const snap = await loadSnapshotForVersion(ctx.db, currentVersion)
+  if (!snap) {
     return new Response('Site not published', {
       status: 404,
       headers: { 'content-type': 'text/plain; charset=utf-8' },
     })
   }
-
-  let containingPage = null
-  for (const page of snapshot.site.pages) {
-    if (page.nodes[nodeId]) {
-      containingPage = page
-      break
-    }
-  }
-
-  if (!containingPage) {
+  const foundPage = snap.nodeIndex.get(nodeId)
+  if (!foundPage) {
     return new Response('Node not found', {
       status: 404,
       headers: { 'content-type': 'text/plain; charset=utf-8' },
     })
   }
+  const node = foundPage.nodes[nodeId]!
 
-  const foundPage = containingPage
+  // Reconstruct the originating page URL forwarded by the runtime (`u`). Falls
+  // back to the page's own permalink when absent (older runtime / direct hit).
+  const pageUrlRaw = url.searchParams.get('u') ?? buildPageFrame(foundPage).permalink
+  let pageUrl: URL
+  try {
+    pageUrl = new URL(pageUrlRaw, url.origin)
+  } catch {
+    pageUrl = new URL(buildPageFrame(foundPage).permalink, url.origin)
+  }
 
-  // Cache via Layer B. The query string includes ?v=<version> so each publish
-  // generation gets its own cache slot — stale entries are never served.
+  const perVisitor = isPerVisitorHole(node)
+  const route = buildRouteFrame(pageUrl.toString())
+  // Parsed query params of the originating page request — handed to a
+  // request-dependent loop source's `fetch()` via `ctx.request.query`.
+  const query: Record<string, string> = Object.fromEntries(pageUrl.searchParams)
+
+  // Per-visitor hole: bypass Layer B entirely, expose cookies, never cache.
+  if (perVisitor) {
+    const request: SourceRequestContext = {
+      query,
+      path: route.path,
+      slug: route.slug,
+      cookies: parseCookies(req.headers.get('cookie')),
+    }
+    const html = await renderHoleFragment(nodeId, foundPage, snap.site, ctx.db, pageUrl, request)
+    return new Response(html, {
+      status: 200,
+      headers: {
+        'content-type': 'text/html; charset=utf-8',
+        'cache-control': 'no-store',
+      },
+    })
+  }
+
+  // Shared hole: cache via Layer B keyed on the normalized PAGE query so
+  // distinct queries get distinct slots while identical queries single-flight.
+  // Cookies are intentionally NOT exposed (they would fragment the cache).
+  const request: SourceRequestContext = {
+    query,
+    path: route.path,
+    slug: route.slug,
+    cookies: {},
+  }
   const cached = await getOrRender(
-    { urlPath: `${HOLE_PATH_PREFIX}${nodeId}`, queryString: url.search },
+    {
+      urlPath: `${HOLE_PATH_PREFIX}${nodeId}`,
+      queryString: `v=${currentVersion}&${normalizeQuery(pageUrl.searchParams)}`,
+    },
     async () => {
-      // Render the node subtree with no dynamicNodeIds — inside the hole
-      // endpoint we render fully (the node is already the dynamic boundary).
-      // Per-request bindings come from `route.query.*` and from plugin-
-      // registered request-dependent loop sources or `dynamic: true`
-      // modules.
-      const renderCtx: RenderContext = {
-        page: foundPage,
-        site: snapshot.site,
-        registry,
-        breakpointId: undefined,
-        cssMap: new Map(),
-        templateContext: { entryStack: [] },
-        // No dynamicNodeIds: inside a hole endpoint, we render the full subtree.
-        // No holeNodeIds: not needed — this is a fragment render, not a page render.
-      }
-      const html = renderNode(nodeId, renderCtx)
+      const html = await renderHoleFragment(nodeId, foundPage, snap.site, ctx.db, pageUrl, request)
       return {
         body: html,
         headers: { 'content-type': 'text/html; charset=utf-8' },

@@ -146,6 +146,8 @@ globalThis.__buildApi = function buildApi() {
       filterSchema: source.filterSchema || {},
       orderByOptions: source.orderByOptions || [],
       fields: source.fields || [],
+      requestDependent: source.requestDependent === true ? true : undefined,
+      perVisitor: source.perVisitor === true ? true : undefined,
     };
     return call('cms.loops.registerSource', [descriptor]);
   }

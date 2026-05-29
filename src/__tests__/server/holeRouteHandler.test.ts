@@ -18,6 +18,7 @@ import type { DbClient, DbResult } from '../../../server/db'
 import {
   handleHoleRequest,
   isHoleRuntimeAssetPath,
+  resetHoleSnapshotCacheForTests,
   serveHoleRuntimeAsset,
 } from '../../../server/handlers/cms/hole'
 import {
@@ -117,6 +118,7 @@ function makeFakeDb(snapshot: ReturnType<typeof makeSnapshot> | null): DbClient 
 
 beforeEach(() => {
   resetForTests()
+  resetHoleSnapshotCacheForTests()
 
   // Register test-specific module IDs using registerOrReplace so these tests
   // never conflict with base module registrations in other test files.

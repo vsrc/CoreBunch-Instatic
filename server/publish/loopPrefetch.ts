@@ -16,6 +16,7 @@ import type {
   LoopFetchResult,
   LoopItem,
   SourceFetchContext,
+  SourceRequestContext,
 } from '@core/loops/types'
 import { loopSourceRegistry } from '@core/loops/registry'
 import { firstImagePathFromMarkdown } from '@core/markdown/renderMarkdown'
@@ -106,8 +107,13 @@ export function publishedDataRowToLoopItem(row: PublishedDataRow): LoopItem {
 /**
  * Recursively collect all `base.loop` nodes reachable from `rootNodeId`.
  * Walks via `node.children` (flat-map traversal — same as the publisher).
+ *
+ * `rootNodeId` defaults to the page root. The Layer C hole endpoint passes
+ * the hole's own node id so only loops INSIDE the rendered subtree are
+ * fetched — never loops elsewhere on the page (which would hit external
+ * APIs needlessly and aren't part of the fragment).
  */
-export function collectLoopNodes(page: Page): PageNode[] {
+export function collectLoopNodes(page: Page, rootNodeId: string = page.rootNodeId): PageNode[] {
   const result: PageNode[] = []
   const visit = (nodeId: string): void => {
     const node = page.nodes[nodeId]
@@ -115,7 +121,7 @@ export function collectLoopNodes(page: Page): PageNode[] {
     if (node.moduleId === 'base.loop') result.push(node)
     for (const childId of node.children) visit(childId)
   }
-  visit(page.rootNodeId)
+  visit(rootNodeId)
   return result
 }
 
@@ -184,7 +190,7 @@ function readPageNumber(url: URL | undefined, loopNodeId: string): number {
 async function resolveOneLoop(
   node: PageNode,
   source: LoopEntitySource,
-  ctx: { db: DbClient; site: SiteDocument; url?: URL },
+  ctx: { db: DbClient; site: SiteDocument; url?: URL; request?: SourceRequestContext },
 ): Promise<ResolvedLoopData> {
   const props = readLoopProps(node)
   const pageNumber = props.pagination === 'infinite' ? readPageNumber(ctx.url, node.id) : 1
@@ -204,6 +210,9 @@ async function resolveOneLoop(
     direction: props.direction,
     limit,
     offset,
+    // Request context — present only when rendering inside a Layer C hole.
+    // Built-in publish-time sources ignore it.
+    request: ctx.request,
   }
 
   try {
@@ -235,8 +244,14 @@ export async function prefetchLoopData(
   site: SiteDocument,
   db: DbClient,
   url?: URL,
+  options?: {
+    /** Per-request context for request-dependent sources (Layer C holes). */
+    request?: SourceRequestContext
+    /** Limit the walk to a subtree (the hole node id). Defaults to page root. */
+    rootNodeId?: string
+  },
 ): Promise<LoopDataMap> {
-  const nodes = collectLoopNodes(page)
+  const nodes = collectLoopNodes(page, options?.rootNodeId)
   if (nodes.length === 0) return new Map()
 
   const entries: Array<[string, ResolvedLoopData]> = await Promise.all(
@@ -249,7 +264,12 @@ export async function prefetchLoopData(
           { items: [], totalItems: 0, pageNumber: 1, hasMore: false },
         ] as [string, ResolvedLoopData]
       }
-      const data = await resolveOneLoop(node, source, { db, site, url })
+      const data = await resolveOneLoop(node, source, {
+        db,
+        site,
+        url,
+        request: options?.request,
+      })
       return [node.id, data] as [string, ResolvedLoopData]
     }),
   )

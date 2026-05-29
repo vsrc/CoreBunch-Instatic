@@ -262,48 +262,45 @@ api.cms.loops.registerSource({
   fields: [/* LoopSourceField[] */],
   filterSchema: { /* PropertySchema */ },
   orderByOptions: [/* allowed sort keys */],
-  fetch: async (ctx) => ({ items: [/* LoopItem[] */] }),
-  // Optional. Default false. Set true when the source returns data that
-  // varies per visitor request (live API, time-of-day data, per-user
-  // results). Marking a loop source as request-dependent makes the
-  // publisher treat any `base.loop` using it as a Layer C "hole" — the
-  // page emits a placeholder + a tiny client runtime fetches the rendered
-  // loop fragment lazily via /_pb/hole/<nodeId>. Sources backed by CMS
-  // data (`cms.storage.collection(...).list()`) should stay false so the
-  // loop bakes into the static disk artefact at publish time.
-  requestDependent: false,
+  fetch: async (ctx) => ({ items: [/* LoopItem[] */], totalItems: 0 }),
+
+  // Optional. Default false. Marks the source request-dependent: any
+  // `base.loop` using it becomes a Layer C "hole" — the page bakes a
+  // placeholder and a tiny client runtime fetches the rendered loop
+  // fragment lazily via /_pb/hole/<nodeId>. SHARED tier: the fragment is
+  // cached per (nodeId, page-query, publishVersion), so `fetch()` runs at
+  // most once per publish per distinct query. Use for live external APIs.
+  requestDependent: true,
+
+  // Optional. Default false. Implies requestDependent. PER-VISITOR tier:
+  // the hole BYPASSES the cache (Cache-Control: no-store), runs `fetch()`
+  // on every page load, and `ctx.request.cookies` is populated. Use for
+  // cookie / randomised / wall-clock content. Use sparingly — every
+  // per-visitor hole is an uncached request-time render.
+  perVisitor: false,
 })
 ```
 
-Loop sources back the `base.loop` module. Plugin fetch handlers run inside the sandbox — use `api.cms.storage.*` or permitted `fetch(...)` to source items.
+Loop sources back the `base.loop` module. Plugin fetch handlers run inside the sandbox worker — use `api.cms.storage.*` or a permitted `fetch(...)` to source items. Sources backed by CMS data should leave both flags unset so the loop bakes into the static disk artefact at publish time.
 
-### Module packs (canvas modules) — dynamic + placeholder
+**Request context.** When a source is request-dependent, its `fetch(ctx)` receives the originating page request on `ctx.request`:
 
-Modules registered via `entrypoints.modules` (canvas module packs) can opt their render into the per-request lifecycle:
-
-```js
-defineModule({
-  id: 'acme.live-clock',
-  category: 'widgets',
-  // ...
-  render: ({ props }) => `<time>${new Date().toISOString()}</time>`,
-
-  // Optional. Default false. Set true when the module's render output
-  // varies per visitor request — `Date.now()` examples, live API reads,
-  // per-visitor data. The publisher emits a <pb-hole> placeholder
-  // instead of running `render` at publish time; the actual render fires
-  // inside /_pb/hole/<nodeId> at request time (with the result cached
-  // per (nodeId, publishVersion) in Layer B's LRU).
-  dynamic: true,
-
-  // Optional. Static HTML baked into the placeholder at publish time so
-  // visitors see a meaningful skeleton/fallback while the hole loads.
-  // Sanitized through DOMPurify. Omit for an empty placeholder.
-  staticPlaceholder: ({ /* props */ }) => `<time>Loading…</time>`,
-})
+```ts
+ctx.request: {
+  query: Record<string, string>   // parsed page query string (?q=shoes → { q: 'shoes' })
+  path: string                    // originating page path (e.g. '/search')
+  slug: string | null
+  cookies: Record<string, string> // populated ONLY for perVisitor sources
+}
 ```
 
-The placeholder uses `display: contents` so it doesn't introduce a wrapper box. The hole runtime is injected ONLY on pages that have at least one `<pb-hole>`; fully-static pages ship zero JS from the publisher. See [docs/features/publisher.md](publisher.md) for the full pipeline.
+At publish time (built-in, non-dynamic loops) `ctx.request` is `undefined` and the source must be deterministic. `ctx.db` and the full `site` are NOT sent to the worker — reach data via `api.cms.storage.*` or a gated `fetch(...)`.
+
+### How a hole hydrates
+
+When a `base.loop` is bound to a `requestDependent` / `perVisitor` source, the publisher does NOT bake it. It emits a `<pb-hole>` placeholder (`display: contents`, so it adds no wrapper box) and injects a tiny runtime once per page (`/_pb/hole-runtime.js?v=<publishVersion>` — versioned so a CMS update busts the cache). The runtime fetches each fragment from `/_pb/hole/<nodeId>?v=<version>&u=<page-url>` — lazily via `IntersectionObserver` when the placeholder has visible skeleton content, eagerly on load otherwise — then swaps it in. It forwards the visitor's page path + query, and cookies ride along for `perVisitor` holes. Fully-static pages ship zero JS from the publisher.
+
+See [docs/features/publisher.md](publisher.md) for the full three-layer pipeline.
 
 ### Settings — declared in `plugin.json`
 

@@ -107,6 +107,36 @@ export interface SourceFetchContext {
   /** Hard cap from the loop instance; sources may further clamp. */
   limit: number
   offset: number
+  /**
+   * Originating page request context — only populated when the loop is
+   * rendered at request time inside a Layer C hole (i.e. the source is
+   * `requestDependent` / `perVisitor`). At publish time this is `undefined`
+   * and the source must produce publish-time-deterministic output.
+   *
+   * `cookies` is populated ONLY for `perVisitor` sources (uncacheable holes);
+   * for plain `requestDependent` (shared-cache) sources it is an empty object,
+   * because cookies would fragment the Layer B cache per visitor.
+   */
+  request?: SourceRequestContext
+}
+
+/**
+ * Per-request data delivered to a request-dependent loop source's `fetch()`.
+ * Mirrors the publisher's route frame plus parsed cookies, derived from the
+ * originating page URL forwarded by the hole runtime.
+ */
+export interface SourceRequestContext {
+  /** Parsed query params of the originating page request (e.g. `?q=shoes`). */
+  query: Record<string, string>
+  /** Path of the originating page (`/search`), NOT the `/_pb/hole/…` path. */
+  path: string
+  /** Trailing path segment, mirrors `RouteFrame.slug`. */
+  slug: string | null
+  /**
+   * Parsed request cookies. Populated ONLY for `perVisitor` sources; empty
+   * for shared-cache `requestDependent` sources.
+   */
+  cookies: Record<string, string>
 }
 
 /**
@@ -151,10 +181,26 @@ export interface LoopEntitySource {
    * Built-in sources (`content.entries`, `site.pages`, `site.media`) all
    * leave this unset — they pull from the CMS database at publish time and
    * bake the result into the static HTML. Plugin sources that hit live
-   * external APIs or that depend on per-visitor state should set this to
-   * `true`.
+   * external APIs should set this to `true`.
+   *
+   * A `requestDependent` (but not `perVisitor`) hole is rendered at request
+   * time and then CACHED by Layer B keyed on `(nodeId, query, publishVersion)`,
+   * so the source's `fetch()` runs once per publish-version per distinct query
+   * — not once per visitor. Its `fetch()` receives `ctx.request.query` but an
+   * empty `ctx.request.cookies` (cookies would fragment the shared cache).
    */
   requestDependent?: boolean
+  /**
+   * Whether this source's output varies per individual visitor (cookies,
+   * randomisation, wall-clock). Implies `requestDependent` for the purpose
+   * of dynamic classification.
+   *
+   * A `perVisitor` hole BYPASSES the Layer B cache: its `fetch()` runs on
+   * EVERY page load and receives the full request context including
+   * `ctx.request.cookies`. The response is sent with `Cache-Control: no-store`.
+   * Use sparingly — every per-visitor hole is an uncached request-time render.
+   */
+  perVisitor?: boolean
   /**
    * Property controls rendered in the loop's Properties Panel after the
    * source has been picked. Empty schema = no source-specific filters.
