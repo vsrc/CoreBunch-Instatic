@@ -52,6 +52,8 @@ function planWith(
           },
         ]
       : [],
+    fonts: [],
+    conditions: [],
     assets: [],
     conflicts: { pages: [], rules: [] },
     warnings: [],
@@ -152,6 +154,8 @@ describe('applyAssetRewrites — CSS styles', () => {
           },
         },
       ],
+      fonts: [],
+      conditions: [],
       assets: [],
       conflicts: { pages: [], rules: [] },
       warnings: [],
@@ -175,6 +179,51 @@ describe('applyAssetRewrites — CSS styles', () => {
     // Both occurrences should be rewritten
     expect(bg).not.toContain('images/hero.png')
     expect(bg).toContain('/media/abc123.png')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Inline background (fragment.nodeStyles) rewrites
+// ---------------------------------------------------------------------------
+
+describe('applyAssetRewrites — inline background nodeStyles', () => {
+  it('rewrites a normalised url() inside fragment.nodeStyles to the media URL', () => {
+    const plan: ImportPlan = {
+      pages: [
+        {
+          source: 'index.html',
+          title: 'Home',
+          slug: 'index',
+          linkedCssPaths: [],
+          nodeFragment: {
+            rootIds: ['n1'],
+            nodes: {
+              n1: {
+                id: 'n1',
+                moduleId: 'base.container',
+                props: {},
+                breakpointOverrides: {},
+                children: [],
+                classIds: [],
+              },
+            },
+            nodeStyles: { n1: { backgroundImage: `url('images/hero.png')` } },
+          },
+        },
+      ],
+      styleRules: [],
+      fonts: [],
+      conditions: [],
+      assets: [],
+      conflicts: { pages: [], rules: [] },
+      warnings: [],
+      droppedJs: [],
+      droppedAtRules: [],
+      unusedCss: [],
+    }
+    const result = applyAssetRewrites(plan, REWRITE_MAP)
+    const bag = result.pages[0].nodeFragment.nodeStyles!['n1']
+    expect(bag.backgroundImage).toBe(`url('/media/abc123.png')`)
   })
 })
 

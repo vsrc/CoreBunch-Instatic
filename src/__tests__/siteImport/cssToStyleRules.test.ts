@@ -179,17 +179,18 @@ describe('cssToStyleRules — dropped @-rules', () => {
     expect(warnings[0].kind).toBe('dropped-at-rule')
   })
 
-  it('@font-face → no rule, dropped-at-rule warning, but font url IS captured as assetRef', () => {
-    const { rules, warnings, assetRefs } = cssToStyleRules(
+  it('@font-face → captured as a font (no rule, no dropped warning), url captured as assetRef', () => {
+    const { rules, warnings, assetRefs, fontFaces } = cssToStyleRules(
       "@font-face { font-family: 'Foo'; src: url('foo.woff') }",
     )
+    // @font-face is no longer a StyleRule, but it's NOT dropped either — it's
+    // captured into fontFaces so applyImport can assemble a custom FontEntry.
     expect(rules).toHaveLength(0)
-    expect(warnings).toHaveLength(1)
-    expect(warnings[0].kind).toBe('dropped-at-rule')
-    // The @font-face rule itself can't be modelled as a StyleRule, but we
-    // still want the font binary uploaded so the user keeps the asset and
-    // can re-wire it manually. The assetRef carries the file path; the
-    // asset planner picks it up via the orphan-ref branch in normalizeRules.
+    expect(warnings.some((w) => w.kind === 'dropped-at-rule')).toBe(false)
+    expect(fontFaces).toHaveLength(1)
+    expect(fontFaces[0].family).toBe('Foo')
+    expect(fontFaces[0].srcUrls).toContain('foo.woff')
+    // The url is still captured as an assetRef so the binary uploads.
     expect(assetRefs).toHaveLength(1)
     expect(assetRefs[0].rawUrl).toBe('foo.woff')
   })

@@ -67,6 +67,25 @@ function makeFragment(classNames: string[] = []): ImportFragment {
   }
 }
 
+/** Fragment with one node carrying an inline background image in `nodeStyles`. */
+function makeBgFragment(bgUrl: string): ImportFragment {
+  const nodeId = 'frag-bg-1'
+  return {
+    nodes: {
+      [nodeId]: {
+        id: nodeId,
+        moduleId: 'base.container',
+        props: { tag: 'section' },
+        breakpointOverrides: {},
+        children: [],
+        classIds: [],
+      },
+    },
+    rootIds: [nodeId],
+    nodeStyles: { [nodeId]: { backgroundImage: `url('${bgUrl}')` } },
+  }
+}
+
 // ---------------------------------------------------------------------------
 // 1. Basic happy path
 // ---------------------------------------------------------------------------
@@ -291,6 +310,48 @@ describe('mutateAllPagesAndSite — name→id linking', () => {
     expect(Object.keys(site!.styleRules).length).toBe(ruleCountBefore)
     expect(fragNode.classIds).toContain(existingId)
     expect(fragNode.classIds).toHaveLength(1)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 3b. Inline background → node-scoped module-style class
+// ---------------------------------------------------------------------------
+
+describe('inline background materialisation', () => {
+  it('addPage attaches a node-scoped module-style class carrying the background', () => {
+    useEditorStore.getState().createSite('Test')
+
+    let newPageId = ''
+    useEditorStore.getState().mutateAllPagesAndSite((_site, helpers) => {
+      newPageId = helpers.addPage({
+        title: 'Bg', slug: 'bg', nodeFragment: makeBgFragment('/uploads/media/hero.png'),
+      })
+      return true
+    })
+
+    const { site } = useEditorStore.getState()
+    const page = site!.pages.find((p) => p.id === newPageId)!
+    const node = page.nodes['frag-bg-1']!
+
+    // The node gained exactly one class id pointing at a node-scoped rule.
+    expect(node.classIds).toHaveLength(1)
+    const rule = site!.styleRules[node.classIds[0]!]!
+    expect(rule.scope).toEqual({ type: 'node', nodeId: 'frag-bg-1', role: 'module-style' })
+    expect((rule.styles as Record<string, string>).backgroundImage).toBe(`url('/uploads/media/hero.png')`)
+  })
+
+  it('insertImportedNodes attaches the node-scoped background class too', () => {
+    const site = useEditorStore.getState().createSite('Test')
+    const rootId = site.pages[0]!.rootNodeId
+
+    useEditorStore.getState().insertImportedNodes(rootId, makeBgFragment('/uploads/media/x.png'))
+
+    const { site: updated } = useEditorStore.getState()
+    const node = updated!.pages[0]!.nodes['frag-bg-1']!
+    expect(node.classIds).toHaveLength(1)
+    const rule = updated!.styleRules[node.classIds[0]!]!
+    expect(rule.scope?.type).toBe('node')
+    expect((rule.styles as Record<string, string>).backgroundImage).toBe(`url('/uploads/media/x.png')`)
   })
 })
 

@@ -51,7 +51,7 @@ export function applyAssetRewrites(
       nodeFragment: rewriteFragment(p.nodeFragment, rewriteMap),
     })),
     styleRules: plan.styleRules.map((r) => rewriteRule(r, rewriteMap)),
-    fonts: plan.fonts.map((f) => rewriteFontFamily(f, rewriteMap)),
+    fonts: (plan.fonts ?? []).map((f) => rewriteFontFamily(f, rewriteMap)),
   }
 }
 
@@ -89,7 +89,21 @@ function rewriteFragment(
     rewrittenNodes[id] = { ...node, props: newProps }
   }
 
-  return { nodes: rewrittenNodes, rootIds: fragment.rootIds }
+  // Inline background `url('key')` values carried in `nodeStyles` rewrite to
+  // their uploaded media URL just like CSS-rule background values.
+  let rewrittenNodeStyles: ImportFragment['nodeStyles']
+  if (fragment.nodeStyles) {
+    rewrittenNodeStyles = {}
+    for (const [id, bag] of Object.entries(fragment.nodeStyles)) {
+      rewrittenNodeStyles[id] = rewriteStylesBag(bag, rewriteMap) as Record<string, string>
+    }
+  }
+
+  return {
+    nodes: rewrittenNodes,
+    rootIds: fragment.rootIds,
+    ...(rewrittenNodeStyles ? { nodeStyles: rewrittenNodeStyles } : {}),
+  }
 }
 
 function rewriteProps(

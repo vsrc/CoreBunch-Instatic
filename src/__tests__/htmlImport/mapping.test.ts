@@ -692,6 +692,52 @@ describe('stripUnsafe — inline style="" attributes', () => {
 })
 
 // ---------------------------------------------------------------------------
+// Inline background-image harvesting (the one inline-CSS exception)
+// ---------------------------------------------------------------------------
+
+describe('inline background images → fragment.nodeStyles', () => {
+  it('captures background-image longhand for the matching node', () => {
+    const result = importHtml(`<div style="background-image: url('img/bg.png'); padding: 20px">Hi</div>`)
+    const id = result.rootIds[0]!
+    expect(result.nodeStyles?.[id]?.backgroundImage).toContain('img/bg.png')
+    // The non-background inline declaration (padding) is NOT captured.
+    expect(result.nodeStyles?.[id]).not.toHaveProperty('padding')
+    // And the raw inline style attribute is still reported as stripped.
+    expect(result.stripped.inlineStyles).toBe(1)
+  })
+
+  it('captures the url() and companions from a background shorthand', () => {
+    const result = importHtml(
+      `<section style="background: url(hero.jpg) no-repeat center / cover">x</section>`,
+    )
+    const bag = result.nodeStyles?.[result.rootIds[0]!]
+    expect(bag?.backgroundImage).toContain('hero.jpg')
+    expect(bag?.backgroundRepeat).toBe('no-repeat')
+  })
+
+  it('does NOT capture a colour-only background (no url image)', () => {
+    const result = importHtml(`<div style="background: #fff; color: red">x</div>`)
+    expect(result.nodeStyles).toBeUndefined()
+  })
+
+  it('omits nodeStyles entirely when no element has an inline background image', () => {
+    const result = importHtml('<div><p>Plain</p></div>')
+    expect(result.nodeStyles).toBeUndefined()
+  })
+
+  it('keys each captured background by its own node id', () => {
+    const result = importHtml(
+      `<div style="background-image:url(a.png)"></div><div style="background-image:url(b.png)"></div>`,
+    )
+    const bags = Object.values(result.nodeStyles ?? {})
+    expect(bags).toHaveLength(2)
+    const urls = bags.map((b) => b.backgroundImage).join(' ')
+    expect(urls).toContain('a.png')
+    expect(urls).toContain('b.png')
+  })
+})
+
+// ---------------------------------------------------------------------------
 // 10. Class preservation: el.classList → node.classIds verbatim
 // ---------------------------------------------------------------------------
 

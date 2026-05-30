@@ -36,6 +36,7 @@ import type { ImportRule } from './rules'
 import { parseHtml } from './parseHtml'
 import { stripUnsafe } from './stripUnsafe'
 import type { StripReport } from './stripUnsafe'
+import { harvestInlineBackgrounds } from './inlineStyle'
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -50,6 +51,14 @@ export interface ImportFragment {
   nodes: Record<string, PageNode>
   /** IDs of the document-order top-level nodes (doc.body element children). */
   rootIds: string[]
+  /**
+   * Per-node inline background styles, keyed by node id. Captured from each
+   * element's `style="background-image: url(…)"` (the only inline CSS the
+   * importer keeps — see `inlineStyle.ts`). Materialised downstream into a
+   * node-scoped "module-style" StyleRule attached via `classIds`. Absent when
+   * no element carried an inline background image.
+   */
+  nodeStyles?: Record<string, Record<string, string>>
 }
 
 /** The result returned by the convenience entry point importHtml(). */
@@ -66,6 +75,19 @@ export interface ImportResult extends ImportFragment {
 // global (it runs in the browser bundle and under the happy-dom test polyfill).
 const ELEMENT_NODE = 1
 const TEXT_NODE = 3
+
+/**
+ * Mutable accumulator threaded through the recursive walk.
+ *
+ * - `nodes` / `nodeStyles` are written as elements are mapped.
+ * - `backgrounds` is the read-only harvest of inline background styles keyed by
+ *   the source element (see `harvestInlineBackgrounds`), looked up per element.
+ */
+interface WalkContext {
+  nodes: Record<string, PageNode>
+  nodeStyles: Record<string, Record<string, string>>
+  backgrounds: Map<Element, Record<string, string>>
+}
 
 /**
  * Find the first rule whose selector matches `el`. Always returns a rule
@@ -95,10 +117,10 @@ function normalizeText(raw: string): string {
  * it flows naturally inside its parent (and within mixed content alongside
  * sibling elements). Returns the new node's id after registering it in `nodes`.
  */
-function createTextNode(text: string, nodes: Record<string, PageNode>): string {
+function createTextNode(text: string, ctx: WalkContext): string {
   const def = registry.getOrThrow('base.text')
   const node = createNode('base.text', { ...def.defaults, text, tag: 'span' })
-  nodes[node.id] = node
+  ctx.nodes[node.id] = node
   return node.id
 }
 
@@ -112,14 +134,14 @@ function createTextNode(text: string, nodes: Record<string, PageNode>): string {
  * Mutually recursive with processElement (function declarations are hoisted,
  * so definition order doesn't matter).
  */
-function mapChildNodes(parent: Element, nodes: Record<string, PageNode>): string[] {
+function mapChildNodes(parent: Element, ctx: WalkContext): string[] {
   const childIds: string[] = []
   for (const child of Array.from(parent.childNodes)) {
     if (child.nodeType === ELEMENT_NODE) {
-      childIds.push(processElement(child as Element, nodes))
+      childIds.push(processElement(child as Element, ctx))
     } else if (child.nodeType === TEXT_NODE) {
       const text = normalizeText(child.textContent ?? '')
-      if (text) childIds.push(createTextNode(text, nodes))
+      if (text) childIds.push(createTextNode(text, ctx))
     }
   }
   return childIds
@@ -132,7 +154,7 @@ function mapChildNodes(parent: Element, nodes: Record<string, PageNode>): string
  *
  * Returns the id of the node produced for `el`.
  */
-function processElement(el: Element, nodes: Record<string, PageNode>): string {
+function processElement(el: Element, ctx: WalkContext): string {
   const rule = matchRule(el)
   const { moduleId, props: ruleProps } = rule.map(el)
 
@@ -147,15 +169,21 @@ function processElement(el: Element, nodes: Record<string, PageNode>): string {
   // auto-creates bare classes for unknown names) when the fragment is inserted.
   node.classIds = Array.from(el.classList)
 
+  // Capture the element's inline background image (harvested before stripUnsafe
+  // removed the `style` attribute). Materialised into a node-scoped class when
+  // the fragment enters the live tree — see `importLinking.ts`.
+  const bg = ctx.backgrounds.get(el)
+  if (bg) ctx.nodeStyles[node.id] = bg
+
   if (rule.recurse) {
     // Walk childNodes (not just children) so direct text is preserved in
     // document order. Without this, `<div class="num">98%</div>` and
     // `<li>Buy milk</li>` import as empty containers because their text
     // content isn't an element.
-    node.children = mapChildNodes(el, nodes)
+    node.children = mapChildNodes(el, ctx)
   }
 
-  nodes[node.id] = node
+  ctx.nodes[node.id] = node
   return node.id
 }
 
@@ -172,29 +200,41 @@ function processElement(el: Element, nodes: Record<string, PageNode>): string {
  * Expects that `doc` has already been through `stripUnsafe()` — call
  * `importHtml()` to run both steps together.
  */
-export function walkAndMap(doc: Document): ImportFragment {
-  const nodes: Record<string, PageNode> = {}
+export function walkAndMap(
+  doc: Document,
+  backgrounds: Map<Element, Record<string, string>> = new Map(),
+): ImportFragment {
+  const ctx: WalkContext = { nodes: {}, nodeStyles: {}, backgrounds }
 
-  if (!doc.body) return { nodes, rootIds: [] }
+  if (!doc.body) return { nodes: ctx.nodes, rootIds: [] }
 
-  const rootIds = mapChildNodes(doc.body, nodes)
+  const rootIds = mapChildNodes(doc.body, ctx)
 
-  return { nodes, rootIds }
+  return {
+    nodes: ctx.nodes,
+    rootIds,
+    ...(Object.keys(ctx.nodeStyles).length > 0 ? { nodeStyles: ctx.nodeStyles } : {}),
+  }
 }
 
 /**
  * The single entry point for both consumers: parse → strip → walk.
  *
  * 1. parseHtml  — DOMParser.parseFromString (global, browser or test polyfill)
- * 2. stripUnsafe — removes <script>, <style>, inline event handlers, style=""
- * 3. walkAndMap  — maps every element to a PageNode via HTML_TO_MODULE_RULES
+ * 2. harvestInlineBackgrounds — capture each element's inline background image
+ *    BEFORE step 3 removes the `style` attribute
+ * 3. stripUnsafe — removes <script>, <style>, inline event handlers, style=""
+ * 4. walkAndMap  — maps every element to a PageNode via HTML_TO_MODULE_RULES,
+ *    attaching the harvested background to its node via `nodeStyles`
  *
  * Returns an ImportResult that merges the fragment with the StripReport so
  * callers can surface a "Stripped: N scripts, M handlers" toast.
  */
 export function importHtml(source: string): ImportResult {
   const doc = parseHtml(source)
+  // Harvest inline background images before stripUnsafe drops `style` attrs.
+  const backgrounds = harvestInlineBackgrounds(doc)
   const stripped = stripUnsafe(doc)
-  const { nodes, rootIds } = walkAndMap(doc)
-  return { nodes, rootIds, stripped }
+  const fragment = walkAndMap(doc, backgrounds)
+  return { ...fragment, stripped }
 }

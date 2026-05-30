@@ -76,6 +76,10 @@ function makeMockAdapter(opts?: {
         overwriteStyleRule(ruleId, rule) {
           ops.push({ type: 'overwriteStyleRule', args: { ruleId, rule }, id: ruleId })
         },
+        addFonts(fonts) {
+          ops.push({ type: 'addFonts', args: { fonts }, id: '' })
+          return fonts.map((f) => ({ id: nextId(), family: f.family }))
+        },
       }
       recipe(tx)
     },

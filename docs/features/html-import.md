@@ -24,6 +24,7 @@ src/core/htmlImport/
 ├── index.ts           — public barrel; all exports below go through here
 ├── parseHtml.ts       — DOMParser.parseFromString wrapper (browser-only; tests polyfill via happy-dom)
 ├── stripUnsafe.ts     — removes <script>, <style>, on* attrs, style= attrs; returns StripReport
+├── inlineStyle.ts     — harvests the background-image subset of inline style="" before it is stripped
 ├── rules.ts           — HTML_TO_MODULE_RULES declarative mapping table
 └── walkAndMap.ts      — DOM walker + importHtml() entry point
 
@@ -40,17 +41,21 @@ src/__tests__/htmlImport/mapping.test.ts    — 95 per-rule unit tests
 
 ## The pipeline
 
-`importHtml(source)` runs three steps in sequence:
+`importHtml(source)` runs four steps in sequence:
 
 ```text
 importHtml(source: string)
-  1. parseHtml(source)      — new DOMParser().parseFromString(source, 'text/html')
-                              Returns a DOM Document. Uses the global DOMParser;
-                              no server-side DOM library is imported.
-  2. stripUnsafe(doc)       — mutates doc in place; returns StripReport
-  3. walkAndMap(doc)        — maps doc.body element children to PageNodes
-                              Returns { nodes, rootIds }
-→ { nodes, rootIds, stripped }   (ImportResult)
+  1. parseHtml(source)            — new DOMParser().parseFromString(source, 'text/html')
+                                    Returns a DOM Document. Uses the global DOMParser;
+                                    no server-side DOM library is imported.
+  2. harvestInlineBackgrounds(doc)— captures each element's inline background image
+                                    (style="background-image: url(…)") BEFORE step 3
+                                    removes the style attribute. Keyed by Element.
+  3. stripUnsafe(doc)             — mutates doc in place; returns StripReport
+  4. walkAndMap(doc, backgrounds) — maps doc.body element children to PageNodes,
+                                    attaching each harvested background to its node
+                                    via nodeStyles. Returns { nodes, rootIds, nodeStyles? }
+→ { nodes, rootIds, nodeStyles?, stripped }   (ImportResult)
 ```
 
 ### Return type
@@ -61,12 +66,17 @@ interface ImportResult {
   nodes: Record<string, PageNode>
   /** IDs of the top-level nodes (direct children of doc.body), in document order. */
   rootIds: string[]
+  /**
+   * Per-node inline background styles (the one inline-CSS exception — see below),
+   * keyed by node id. Absent when no element carried an inline background image.
+   */
+  nodeStyles?: Record<string, Record<string, string>>
   /** Counts of constructs removed by stripUnsafe. */
   stripped: StripReport
 }
 ```
 
-Callers splice `nodes` and `rootIds` into the page tree via `insertImportedNodes(parentId, fragment)` in the editor store — one `mutateActiveTree` call, one undo step.
+Callers splice the fragment into the page tree via `insertImportedNodes(parentId, fragment)` in the editor store — one `mutateActiveTree` call, one undo step. During that step each `nodeStyles[nodeId]` entry is materialised into a node-scoped "module-style" StyleRule (`scope: { type: 'node', … }`) and attached to the node's `classIds`, so the editor's `BackgroundImageControl` shows the imported image. The whole-site Super Import path (`mutateAllPagesAndSite`) does the same in `addPage` / `overwritePage`.
 
 ---
 
@@ -111,6 +121,8 @@ Callers splice `nodes` and `rootIds` into the page tree via `insertImportedNodes
 | HTML comments and processing instructions | (silent — no count) |
 
 After insert, `ImportHtmlModal` builds a toast body from non-zero counts, e.g. `"Stripped: 2 <script>, 3 inline handlers"`. If nothing was stripped, the toast shows only the node count.
+
+**The one inline-CSS exception — background images.** Before `stripUnsafe` removes a `style` attribute, `harvestInlineBackgrounds` (`inlineStyle.ts`) extracts the image-bearing background subset — `background-image` plus `background-size` / `background-position` / `background-repeat`, and the `url(…)` out of a `background:` shorthand — but **only when an actual `url(…)` image is present**. Colours, plain gradients, and every other inline declaration are still dropped (and the raw attribute is still counted in `stripped.inlineStyles`). The captured subset rides through the fragment as `nodeStyles` and becomes a node-scoped module-style class on insert. In Super Import the `url(…)` is uploaded to the media library and rewritten exactly like a CSS-rule background.
 
 ---
 

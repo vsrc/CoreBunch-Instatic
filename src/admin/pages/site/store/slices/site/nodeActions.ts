@@ -34,7 +34,7 @@ import {
 import type { NodeTree, PageNode, SiteDocument } from '@core/page-tree'
 import { syncSlotInstances, applySlotSyncResult } from '@core/visualComponents/slotSync'
 import { depthInTree } from './helpers'
-import { indexStyleRulesByName, linkImportedClassNames } from './importLinking'
+import { indexStyleRulesByName, linkImportedClassNames, materializeImportedNodeStyle } from './importLinking'
 import type { SiteSlice, SiteSliceHelpers } from './types'
 
 export type NodeActions = Pick<
@@ -149,10 +149,12 @@ export function createNodeActions(helpers: SiteSliceHelpers): NodeActions {
         // risk on the node map.
         const classesByName = indexStyleRulesByName(site.styleRules)
         for (const [id, node] of Object.entries(fragment.nodes)) {
-          tree.nodes[id] = {
-            ...node,
-            classIds: linkImportedClassNames(node.classIds, site.styleRules, classesByName),
-          }
+          const classIds = linkImportedClassNames(node.classIds, site.styleRules, classesByName)
+          // Inline background image → node-scoped module-style class, appended
+          // last so it outranks the element's reusable classes.
+          const scopedId = materializeImportedNodeStyle(fragment.nodeStyles, id, site.styleRules)
+          if (scopedId) classIds.push(scopedId)
+          tree.nodes[id] = { ...node, classIds }
         }
 
         // Wire the imported root nodes as children of the target parent.

@@ -239,7 +239,47 @@ function normalizeFragment(
     normalizedNodes[id] = { ...node, props: newProps }
   }
 
-  return { nodes: normalizedNodes, rootIds: fragment.rootIds }
+  // Inline background images live in `nodeStyles` as CSS `url(...)` payloads —
+  // normalise them to FileMap keys exactly like CSS-rule background values so
+  // `applyAssetRewrites` can swap in the uploaded media URL.
+  let normalizedNodeStyles: ImportFragment['nodeStyles']
+  if (fragment.nodeStyles) {
+    normalizedNodeStyles = {}
+    for (const [id, bag] of Object.entries(fragment.nodeStyles)) {
+      normalizedNodeStyles[id] = normalizeCssBag(bag, htmlFilePath, fileMap, assetMap)
+    }
+  }
+
+  return {
+    nodes: normalizedNodes,
+    rootIds: fragment.rootIds,
+    ...(normalizedNodeStyles ? { nodeStyles: normalizedNodeStyles } : {}),
+  }
+}
+
+/**
+ * Normalise every `url(...)` payload inside a CSS property bag to its FileMap
+ * key, registering each referenced asset for upload. External / special-scheme
+ * URLs and unresolved paths are left untouched.
+ */
+function normalizeCssBag(
+  bag: Record<string, string>,
+  basePath: string,
+  fileMap: FileMap,
+  assetMap: Map<string, { sourcePath: string; mimeType: string; bytes: Uint8Array }>,
+): Record<string, string> {
+  const out: Record<string, string> = { ...bag }
+  for (const [prop, val] of Object.entries(out)) {
+    if (typeof val !== 'string') continue
+    out[prop] = val.replace(
+      /url\(\s*(['"]?)([^'")\n]+)\1\s*\)/g,
+      (match, _quote: string, rawUrl: string) => {
+        const fileMapKey = resolveAndRecord(rawUrl.trim(), basePath, fileMap, assetMap)
+        return fileMapKey ? `url('${fileMapKey}')` : match
+      },
+    )
+  }
+  return out
 }
 
 function normalizeNodeProps(

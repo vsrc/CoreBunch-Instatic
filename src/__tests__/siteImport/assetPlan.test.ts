@@ -69,6 +69,43 @@ describe('buildAssetPlan — img src normalisation', () => {
 })
 
 // ---------------------------------------------------------------------------
+// Inline background-image (fragment.nodeStyles) normalisation
+// ---------------------------------------------------------------------------
+
+describe('buildAssetPlan — inline background nodeStyles normalisation', () => {
+  it('normalises an inline background url() to a FileMap key and records the asset', () => {
+    const fileMap = makeFileMap({
+      'index.html': {
+        bytes: txt(`<html><body><section style="background-image: url('images/hero.png')">x</section></body></html>`),
+      },
+      'images/hero.png': { bytes: MINIMAL_PNG, mimeType: 'image/png' },
+    })
+    const { pagePlan } = makeHtmlPagePlan('index.html', new TextDecoder().decode(fileMap.files['index.html']!.bytes), fileMap)
+    // Sanity: the importer captured the inline background.
+    expect(Object.keys(pagePlan.nodeFragment.nodeStyles ?? {})).toHaveLength(1)
+
+    const { normalizedPagePlans, assets } = buildAssetPlan([pagePlan], [], fileMap)
+    const ns = normalizedPagePlans[0].nodeFragment.nodeStyles!
+    const bag = Object.values(ns)[0]
+    expect(bag.backgroundImage).toContain(`url('images/hero.png')`)
+    expect(assets.some((a) => a.sourcePath === 'images/hero.png')).toBe(true)
+  })
+
+  it('leaves an external inline background url() unchanged and records no asset', () => {
+    const fileMap = makeFileMap({
+      'index.html': {
+        bytes: txt(`<html><body><section style="background-image: url('https://cdn.example.com/bg.png')">x</section></body></html>`),
+      },
+    })
+    const { pagePlan } = makeHtmlPagePlan('index.html', new TextDecoder().decode(fileMap.files['index.html']!.bytes), fileMap)
+    const { normalizedPagePlans, assets } = buildAssetPlan([pagePlan], [], fileMap)
+    const bag = Object.values(normalizedPagePlans[0].nodeFragment.nodeStyles!)[0]
+    expect(bag.backgroundImage).toContain('https://cdn.example.com/bg.png')
+    expect(assets).toHaveLength(0)
+  })
+})
+
+// ---------------------------------------------------------------------------
 // CSS url() normalisation
 // ---------------------------------------------------------------------------
 

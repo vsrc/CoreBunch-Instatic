@@ -224,8 +224,6 @@ export async function commitImportPlan(
     rewrittenPlan.conflicts.rules.map((c) => [c.desiredName, c]),
   )
 
-  const resultFonts: ImportResult['fonts'] = []
-
   await adapter.commit((tx) => {
     // Merge reusable conditions first so rule contextStyles keys resolve.
     if ((rewrittenPlan.conditions ?? []).length > 0) {
