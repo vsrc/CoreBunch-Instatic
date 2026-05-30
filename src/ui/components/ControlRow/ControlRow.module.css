@@ -19,6 +19,16 @@
     gap: 6px;
 }
 
+/*
+ * No-label variant — when the caller passes `label=""` to suppress the label
+ * row entirely (e.g. a child control mounted under an already-labelled
+ * parent). The control fills the wrapper's full width.
+ */
+.controlWrapperNoLabel {
+    grid-template-columns: 1fr;
+    gap: 0;
+}
+
 .controlWrapperDisabled {
     opacity: 0.5;
 }

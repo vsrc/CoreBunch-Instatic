@@ -53,23 +53,34 @@ export function ControlRow({
   description,
   children,
 }: ControlRowProps) {
+  // Allow callers to fully suppress the label row by passing `label=""`
+  // (empty string). Useful when a control is embedded inside another
+  // labelled control (e.g. BackgroundImageControl mounting MediaLibraryControl
+  // inside its `image` mode) and a second label would just add a dead row
+  // beneath the outer label. Passing `undefined` keeps the legacy fallback
+  // of using `propKey` as the visible label.
+  const showLabelRow = label !== ''
+
   return (
     <div
       className={cn(
         styles.controlWrapper,
         layout === 'stacked' && styles.controlWrapperStacked,
+        !showLabelRow && styles.controlWrapperNoLabel,
         disabled && styles.controlWrapperDisabled,
       )}
     >
-      <div className={styles.labelRow}>
-        <label
-          htmlFor={inputId ?? `ctrl-${propKey}`}
-          className={isOverride ? styles.labelOverride : undefined}
-        >
-          {label ?? propKey}
-        </label>
-        {labelSuffix}
-      </div>
+      {showLabelRow && (
+        <div className={styles.labelRow}>
+          <label
+            htmlFor={inputId ?? `ctrl-${propKey}`}
+            className={isOverride ? styles.labelOverride : undefined}
+          >
+            {label ?? propKey}
+          </label>
+          {labelSuffix}
+        </div>
+      )}
       {children}
       {description && (
         <span className={styles.description}>{description}</span>

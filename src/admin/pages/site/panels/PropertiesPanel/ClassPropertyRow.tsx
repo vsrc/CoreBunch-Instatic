@@ -17,6 +17,7 @@ import type { CSSPropertyBag } from '@core/page-tree'
 import { TextControl } from '@site/property-controls/TextControl'
 import { ColorControl } from '@site/property-controls/ColorControl'
 import { SelectControl } from '@site/property-controls/SelectControl'
+import { BackgroundImageControl } from '@site/property-controls/BackgroundImageControl'
 import { ControlRow } from '@ui/components/ControlRow'
 import { TokenAwareInput } from '@site/property-controls/TokenAwareInput'
 import {
@@ -126,6 +127,21 @@ export function ClassPropertyRow({
           onCommit={handleTokenCommit}
         />
       </ControlRow>
+    )
+  } else if (property === 'backgroundImage') {
+    // background-image gets its own multi-mode control (None / Image picker /
+    // Gradient text). See BackgroundImageControl for the value-string format
+    // (`url('...')` / `linear-gradient(...)` / empty) — chosen so imported
+    // CSS from the Super Import pipeline lands on the right tab without any
+    // post-processing. We intentionally drop the schema-level placeholder
+    // (always `none` here, which is unhelpful inside the gradient input).
+    control = (
+      <BackgroundImageControl
+        propKey={String(property)}
+        value={String(value ?? '')}
+        onChange={handleControlChange}
+        label={label}
+      />
     )
   } else switch (type) {
     case 'color':
