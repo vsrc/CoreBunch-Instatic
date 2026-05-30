@@ -179,6 +179,14 @@ export interface UiSlice {
   openImportHtmlModal: (opts?: { parentId?: string; prefillHtml?: string }) => void
   /** Close the Import HTML modal and clear its transient state. */
   closeImportHtmlModal: () => void
+
+  // ─── Site Import wizard modal ─────────────────────────────────────────────
+  /** Whether the Super Import wizard modal is currently open. */
+  siteImportModalOpen: boolean
+  /** Open the Super Import wizard modal. */
+  openSiteImportModal: () => void
+  /** Close the Super Import wizard modal. */
+  closeSiteImportModal: () => void
 }
 
 const PANEL_FOCUS_ORDER: FocusedPanel[] = ['canvas', 'domTree', 'properties']
@@ -251,6 +259,7 @@ export const createUiSlice: EditorStoreSliceCreator<UiSlice> = (set, get) => ({
   importHtmlModalOpen: false,
   importHtmlModalParentId: null,
   importHtmlModalPrefill: '',
+  siteImportModalOpen: false,
 
   setDomTreePanel: (partial) => {
     // Guard: skip the set() call entirely when every supplied field already
@@ -461,6 +470,9 @@ export const createUiSlice: EditorStoreSliceCreator<UiSlice> = (set, get) => ({
 
   closeImportHtmlModal: () =>
     set({ importHtmlModalOpen: false, importHtmlModalParentId: null, importHtmlModalPrefill: '' }),
+
+  openSiteImportModal: () => set({ siteImportModalOpen: true }),
+  closeSiteImportModal: () => set({ siteImportModalOpen: false }),
 
   openPageInCanvas: (pageId) =>
     // Atomic: clear VC mode + switch to the target page in one store write.

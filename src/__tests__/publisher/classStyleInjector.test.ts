@@ -15,7 +15,7 @@
 import { describe, it, expect } from 'bun:test'
 import { bagToCSS, generateClassCSS } from '@core/publisher/classCss'
 import { collectClassCSS } from '@core/publisher/cssCollector'
-import type { CSSClass, Page, PageNode, SiteDocument } from '@core/page-tree'
+import type { StyleRule, Page, PageNode, SiteDocument } from '@core/page-tree'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -23,10 +23,10 @@ import type { CSSClass, Page, PageNode, SiteDocument } from '@core/page-tree'
 
 function makeClass(
   id: string,
-  styles: CSSClass['styles'],
-  breakpointStyles: CSSClass['breakpointStyles'] = {},
+  styles: StyleRule['styles'],
+  breakpointStyles: StyleRule['breakpointStyles'] = {},
   name = id,
-): CSSClass {
+): StyleRule {
   return {
     id,
     name,
@@ -59,8 +59,10 @@ describe('bagToCSS', () => {
   })
 
   it('drops properties NOT in the allowlist', () => {
-    // 'content' is not in ALLOWED_PROPS
-    const css = bagToCSS({ content: '"hack"' } as never)
+    // Synthetic key — the invariant we're asserting (unallowlisted props are
+    // dropped) must hold regardless of which CSS properties are currently
+    // in ALLOWED_PROPS, so the test doesn't drift each time the set expands.
+    const css = bagToCSS({ definitelyNotAllowed: '"hack"' } as never)
     expect(css).toBe('')
   })
 
@@ -354,10 +356,11 @@ describe('generateClassCSS', () => {
   })
 
   it('does not include allowlist-blocked properties in output', () => {
-    // 'content' not in allowlist
-    const classes = { bad: makeClass('bad', { content: '"injected"' } as never) }
+    // Synthetic key — same rationale as the bagToCSS allowlist test above.
+    const classes = { bad: makeClass('bad', { definitelyNotAllowed: '"injected"' } as never) }
     const css = generateClassCSS(classes, BREAKPOINTS)
-    expect(css).not.toContain('content')
+    expect(css).not.toContain('definitely-not-allowed')
+    expect(css).not.toContain('injected')
   })
 
   it('sanitises javascript: values in class styles', () => {
@@ -404,7 +407,7 @@ describe('generateClassCSS', () => {
 // ---------------------------------------------------------------------------
 
 function makeSite(
-  classes: SiteDocument['classes'],
+  styleRules: SiteDocument['styleRules'],
   nodeClassIds: Record<string, string[]> = {},
 ): SiteDocument {
   const node: PageNode = {
@@ -443,7 +446,7 @@ function makeSite(
       colorTokens: {},
       shortcuts: {},
     },
-    classes,
+    styleRules,
     createdAt: 0,
     updatedAt: 0,
   }
@@ -452,7 +455,7 @@ function makeSite(
 describe('collectClassCSS', () => {
   it('emits user-authored CSS but skips framework-generated CSS', () => {
     const userClass = makeClass('user-class', { color: 'green' })
-    const frameworkClass: CSSClass = {
+    const frameworkClass: StyleRule = {
       ...makeClass('framework:color:primary-token:base:text', { color: 'var(--primary)' }, {}, 'text-primary'),
       generated: {
         origin: 'framework',

@@ -5,7 +5,7 @@
  *
  * Manages site.files[] CRUD.  State lives in site.files (owned by
  * siteSlice); this slice owns only the action methods — same pattern as
- * classSlice (site.classes).
+ * classSlice (site.styleRules).
  *
  * Every write boundary:
  *  - Calls normalizePath() to collapse dot-segments.

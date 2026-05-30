@@ -7,7 +7,7 @@
  * layer preserves arbitrary keys (forward-compat with future CSS properties).
  *
  * Consequence:
- *   - `CSSClassSchema.styles` uses `Type.Record(Type.String(), Type.Unknown())`
+ *   - `StyleRuleSchema.styles` uses `Type.Record(Type.String(), Type.Unknown())`
  *     to match the persistence semantics exactly.
  *   - `CSSPropertyBagSchema` exists as the TypeBox source-of-truth for the
  *     type only, used at the publisher narrowing point (classCss.ts

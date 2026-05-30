@@ -73,8 +73,8 @@ export function previewFrameworkClassRemovals(
   afterSite: SiteDocument,
 ): FrameworkChangeImpact | null {
   const removedIds: string[] = []
-  for (const id of Object.keys(beforeSite.classes)) {
-    if (!(id in afterSite.classes)) removedIds.push(id)
+  for (const id of Object.keys(beforeSite.styleRules)) {
+    if (!(id in afterSite.styleRules)) removedIds.push(id)
   }
   if (removedIds.length === 0) return null
 
@@ -89,7 +89,7 @@ export function previewFrameworkClassRemovals(
         if (!removedSet.has(classId)) continue
         usages.push({
           classId,
-          className: beforeSite.classes[classId]?.name ?? classId,
+          className: beforeSite.styleRules[classId]?.name ?? classId,
           source: {
             kind: 'page',
             pageId: page.id,
@@ -109,7 +109,7 @@ export function previewFrameworkClassRemovals(
         if (!removedSet.has(classId)) continue
         usages.push({
           classId,
-          className: beforeSite.classes[classId]?.name ?? classId,
+          className: beforeSite.styleRules[classId]?.name ?? classId,
           source: {
             kind: 'visualComponent',
             vcId: vc.id,
@@ -126,7 +126,7 @@ export function previewFrameworkClassRemovals(
         if (!removedSet.has(classId)) continue
         usages.push({
           classId,
-          className: beforeSite.classes[classId]?.name ?? classId,
+          className: beforeSite.styleRules[classId]?.name ?? classId,
           source: {
             kind: 'visualComponent',
             vcId: vc.id,
@@ -143,7 +143,7 @@ export function previewFrameworkClassRemovals(
 
   const removedClasses = removedIds.map((id) => ({
     id,
-    name: beforeSite.classes[id]?.name ?? id,
+    name: beforeSite.styleRules[id]?.name ?? id,
   }))
   return { removedClasses, usages }
 }

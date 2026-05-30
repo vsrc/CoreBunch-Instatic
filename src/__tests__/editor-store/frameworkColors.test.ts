@@ -51,8 +51,8 @@ describe('framework color store actions', () => {
     expect(token.darkValue).toStartWith('hsla(')
     expect(token.darkValue).not.toBe(token.lightValue)
 
-    const textClass = state.site!.classes[frameworkColorClassId(token.id, 'base', 'text')]
-    const fillClass = state.site!.classes[frameworkColorClassId(token.id, 'base', 'fill')]
+    const textClass = state.site!.styleRules[frameworkColorClassId(token.id, 'base', 'text')]
+    const fillClass = state.site!.styleRules[frameworkColorClassId(token.id, 'base', 'fill')]
     expect(textClass).toMatchObject({
       name: 'text-primary',
       styles: { color: 'var(--primary)' },
@@ -98,8 +98,8 @@ describe('framework color store actions', () => {
 
     const state = useEditorStore.getState()
     expect(state.site!.pages[0].nodes.hero.classIds).toEqual([classId])
-    expect(state.site!.classes[classId].name).toBe('text-brand-primary')
-    expect(state.site!.classes[classId].styles).toEqual({ color: 'var(--brand-primary)' })
+    expect(state.site!.styleRules[classId].name).toBe('text-brand-primary')
+    expect(state.site!.styleRules[classId].styles).toEqual({ color: 'var(--brand-primary)' })
   })
 
   it('removes disabled generated utility classes from nodes', () => {
@@ -139,7 +139,7 @@ describe('framework color store actions', () => {
     })
 
     const state = useEditorStore.getState()
-    expect(state.site!.classes[classId]).toBeUndefined()
+    expect(state.site!.styleRules[classId]).toBeUndefined()
     expect(state.site!.pages[0].nodes.hero.classIds).toEqual([])
   })
 
@@ -164,7 +164,7 @@ describe('framework color store actions', () => {
 
     const state = useEditorStore.getState()
     expect(duplicate).toBeNull()
-    expect(state.site!.classes[classId]).toMatchObject({
+    expect(state.site!.styleRules[classId]).toMatchObject({
       name: 'text-primary',
       styles: { color: 'var(--primary)' },
       breakpointStyles: {},
@@ -176,7 +176,7 @@ describe('framework color store actions', () => {
     // Reproduces the regression where a class like `text-primary-l-3`
     // could exist as a plain user class (no `generated` metadata, no
     // lock) while the framework also generated a class with the same
-    // name. Both lived in `site.classes` under different IDs; the user
+    // name. Both lived in `site.styleRules` under different IDs; the user
     // version was editable, defeating the lock.
     const token: FrameworkColorToken = {
       id: 'primary-token',
@@ -212,7 +212,7 @@ describe('framework color store actions', () => {
         ...makeSite().settings,
         framework: { colors: { tokens: [token] } },
       },
-      classes: {
+      styleRules: {
         [userClassId]: {
           id: userClassId,
           name: 'text-primary-l-3',
@@ -226,7 +226,7 @@ describe('framework color store actions', () => {
 
     useEditorStore.getState().loadSite(site)
 
-    const classes = useEditorStore.getState().site!.classes
+    const classes = useEditorStore.getState().site!.styleRules
     const frameworkId = frameworkColorClassId(token.id, 'tint-3', 'text')
 
     // Framework class exists and is locked.
@@ -282,14 +282,14 @@ describe('framework color store actions', () => {
         ...makeSite().settings,
         framework: { colors: { tokens: [token] } },
       },
-      classes: {},
+      styleRules: {},
     })
     useEditorStore.getState().loadSite(site)
 
     // Pre-condition: both classes exist and are assigned.
     const before = useEditorStore.getState().site!
-    expect(before.classes[tintClassId]).toBeDefined()
-    expect(before.classes[baseClassId]).toBeDefined()
+    expect(before.styleRules[tintClassId]).toBeDefined()
+    expect(before.styleRules[baseClassId]).toBeDefined()
 
     // Preview: turn tints off — should report tint-N as the
     // soon-to-be-removed class, used on the hero node.
@@ -315,7 +315,7 @@ describe('framework color store actions', () => {
     // Preview must not mutate the live site.
     const after = useEditorStore.getState().site!
     expect(after).toBe(before)
-    expect(after.classes[tintClassId]).toBeDefined()
+    expect(after.styleRules[tintClassId]).toBeDefined()
     expect(after.pages[0].nodes.hero.classIds).toEqual([tintClassId, baseClassId])
   })
 
@@ -336,13 +336,13 @@ describe('framework color store actions', () => {
       updatedAt: 2,
     }
     // No assignments anywhere — disabling tints removes classes that
-    // were in `site.classes` but used by no node, so no dialog needed.
+    // were in `site.styleRules` but used by no node, so no dialog needed.
     const site = makeSite({
       settings: {
         ...makeSite().settings,
         framework: { colors: { tokens: [token] } },
       },
-      classes: {},
+      styleRules: {},
     })
     useEditorStore.getState().loadSite(site)
 
@@ -394,7 +394,7 @@ describe('framework color store actions', () => {
         ...makeSite().settings,
         framework: { colors: { tokens: [token] } },
       },
-      classes: {
+      styleRules: {
         // Orphan: framework-prefixed ID, but `generated` is missing
         // (the persistence round-trip lost it). Old prune logic would
         // have skipped this class because it lacked the metadata,
@@ -413,7 +413,7 @@ describe('framework color store actions', () => {
     useEditorStore.getState().loadSite(site)
 
     const state = useEditorStore.getState()
-    expect(state.site!.classes[orphanFrameworkId]).toBeUndefined()
+    expect(state.site!.styleRules[orphanFrameworkId]).toBeUndefined()
     // The orphan was removed from the node's class list, too.
     expect(state.site!.pages[0].nodes.hero.classIds).toEqual([])
   })
@@ -448,12 +448,12 @@ describe('framework color store actions', () => {
           },
         },
       },
-      classes: {},
+      styleRules: {},
     })
 
     useEditorStore.getState().loadSite(site)
 
-    expect(useEditorStore.getState().site!.classes[frameworkColorClassId(token.id, 'base', 'text')]).toMatchObject({
+    expect(useEditorStore.getState().site!.styleRules[frameworkColorClassId(token.id, 'base', 'text')]).toMatchObject({
       name: 'text-primary',
       styles: { color: 'var(--primary)' },
       generated: { locked: true, sourceId: token.id },
@@ -485,7 +485,7 @@ describe('framework color store actions', () => {
       lightValue: first.lightValue,
       generateUtilities: first.generateUtilities,
     })
-    expect(useEditorStore.getState().site!.classes[frameworkColorClassId(copy!.id, 'base', 'text')]).toMatchObject({
+    expect(useEditorStore.getState().site!.styleRules[frameworkColorClassId(copy!.id, 'base', 'text')]).toMatchObject({
       name: 'text-primary-copy',
       generated: { locked: true, sourceId: copy!.id },
     })

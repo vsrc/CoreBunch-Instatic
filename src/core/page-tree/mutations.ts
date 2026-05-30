@@ -718,7 +718,7 @@ export function reorderPages(site: SiteDocument, fromIndex: number, toIndex: num
  * are also cloned with fresh class ids and rewritten `scope.nodeId`s — the
  * publisher emits one CSS rule per class, so without this clone the new page
  * would silently share style entries with the source page (editing one would
- * restyle both). The newly cloned classes are written to `site.classes`.
+ * restyle both). The newly cloned classes are written to `site.styleRules`.
  */
 export function duplicatePage(
   site: SiteDocument,
@@ -740,10 +740,10 @@ export function duplicatePage(
   // duplicate's node ids). Non-scoped classes are shared and not cloned.
   const { added: clonedClasses, classIdRemap } = cloneScopedClassesForNodeMap(
     idMap,
-    site.classes,
+    site.styleRules,
   )
   for (const cls of clonedClasses) {
-    site.classes[cls.id] = cls
+    site.styleRules[cls.id] = cls
   }
 
   // Clone each node with remapped IDs, remapped child references, and
