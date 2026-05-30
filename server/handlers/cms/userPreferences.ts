@@ -33,7 +33,7 @@ import {
 import { Type, parseValue, safeParseValue } from '@core/utils/typeboxHelpers'
 import {
   deleteUserPreferenceRow,
-  readUserPreferenceRow,
+  getUserPreferenceRow,
   upsertUserPreferenceRow,
 } from '../../repositories/userPreferences'
 
@@ -71,7 +71,7 @@ export async function handleUserPreferencesRoutes(
   if (user instanceof Response) return user
 
   if (req.method === 'GET') {
-    const stored = await readUserPreferenceRow(db, user.id, key)
+    const stored = await getUserPreferenceRow(db, user.id, key)
     if (stored === null) {
       return jsonResponse({ error: 'Preference not set' }, { status: 404 })
     }

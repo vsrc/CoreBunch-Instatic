@@ -19,6 +19,7 @@ import type {
   DataTableKind,
   DataTableListItem,
 } from '@core/data/schemas'
+import { toIso } from './shared'
 
 interface CreateDataTableInput {
   id?: string
@@ -70,9 +71,6 @@ interface DataTableRow {
   created_at: string | Date
   updated_at: string | Date
 }
-
-const toIso = (value: string | Date): string =>
-  typeof value === 'string' ? value : value.toISOString()
 
 function mapTable(row: DataTableRow): DataTable {
   return {

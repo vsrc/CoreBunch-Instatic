@@ -21,6 +21,7 @@ import type { Page, PageNode } from '@core/page-tree'
 import type { IModuleRegistry } from '@core/module-engine/types'
 import type { CmsMediaAsset } from '@core/persistence/cmsMedia'
 import type { DbClient } from '../db/client'
+import { isoDate, isoDateOrNull } from '@core/utils/isoDate'
 import { materializeAssetMapForClient } from './mediaPresentation'
 
 // Re-export under the client-shared type name so RenderContext can type
@@ -73,14 +74,6 @@ function collectMediaPaths(page: Page, registry: IModuleRegistry): Set<string> {
     }
   }
   return paths
-}
-
-function toIsoString(value: Date | string): string {
-  return value instanceof Date ? value.toISOString() : new Date(value).toISOString()
-}
-
-function toIsoOrNull(value: Date | string | null): string | null {
-  return value == null ? null : toIsoString(value)
 }
 
 function parseTags(value: unknown): string[] {
@@ -136,7 +129,7 @@ function mapRow(row: PrefetchedAssetRow): MediaAsset {
     sizeBytes: Number(row.size_bytes),
     publicPath: row.public_path,
     uploadedByUserId: row.uploaded_by_user_id ?? null,
-    createdAt: toIsoString(row.created_at),
+    createdAt: isoDate(row.created_at),
     altText: row.alt_text ?? '',
     caption: row.caption ?? '',
     title: row.title ?? '',
@@ -145,8 +138,8 @@ function mapRow(row: PrefetchedAssetRow): MediaAsset {
     height: numberOrNull(row.height),
     durationMs: numberOrNull(row.duration_ms),
     dominantColor: row.dominant_color ?? null,
-    deletedAt: toIsoOrNull(row.deleted_at),
-    replacedAt: toIsoOrNull(row.replaced_at),
+    deletedAt: isoDateOrNull(row.deleted_at),
+    replacedAt: isoDateOrNull(row.replaced_at),
     folderIds: [],  // Not needed at render time; left empty to skip the per-asset
                     // join roundtrip the regular repo path would do.
     blurHash: row.blur_hash ?? null,

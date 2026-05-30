@@ -22,7 +22,7 @@ import {
   parsePluginPack,
   PluginPackError,
 } from '../../../plugins/pack'
-import { loadDraftSite, saveDraftSite } from '../../../repositories/site'
+import { getDraftSite, saveDraftSite } from '../../../repositories/site'
 import {
   listDataRows,
   createDataRow,
@@ -62,7 +62,7 @@ async function installPluginPackToSite(
   const raw = await loadPluginPackFile(uploadsDir, plugin.manifest.assetBasePath, plugin.manifest.pack.path)
   const pack = parsePluginPack(plugin.id, raw)
 
-  const shell = await loadDraftSite(db)
+  const shell = await getDraftSite(db)
   if (!shell) return null
 
   // Assemble a temporary SiteDocument for the pack merge function.

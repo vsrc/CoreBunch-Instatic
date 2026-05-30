@@ -62,7 +62,7 @@ function readStoredShell(row: SiteRow): SiteShell {
   }
 }
 
-export async function loadDraftSite(db: DbClient): Promise<SiteShell | null> {
+export async function getDraftSite(db: DbClient): Promise<SiteShell | null> {
   const { rows } = await db<SiteRow>`
     select id, name, settings_json, created_at, updated_at
     from site

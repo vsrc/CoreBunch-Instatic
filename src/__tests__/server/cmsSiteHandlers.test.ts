@@ -63,7 +63,7 @@ function makeFakeDb() {
       }
       return { rows: [], rowCount: 1 }
     }
-    // loadDraftSite: select site
+    // getDraftSite: select site
     if (normalized.includes('select id, name, settings_json')) {
       return { rows: siteRow ? [siteRow as Row] : [], rowCount: siteRow ? 1 : 0 }
     }

@@ -39,6 +39,7 @@ import { buildFolderTree, type MediaFolderNode } from '../utils/folderTree'
 import { collectMediaTags, filterMediaAssets, type MediaFilters, type MediaSort, type MediaType } from '../utils/filters'
 import { useUploadQueue, type UseUploadQueueResult } from './useUploadQueue'
 import { refreshCmsMediaAssetCache } from './useCmsMediaAssetByPath'
+import type { WorkspaceLoadState } from '@admin/lib/workspaceLoadState'
 
 /**
  * Sentinel folder ids used in the sidebar selection state. Real folder ids
@@ -112,10 +113,8 @@ function smartFolderPredicate(id: SmartFolderId): (asset: CmsMediaAsset) => bool
   }
 }
 
-export interface UseMediaWorkspaceResult {
-  // Async state
-  loading: boolean
-  error: string | null
+export interface UseMediaWorkspaceResult extends WorkspaceLoadState {
+  // Async state (loading / error come from WorkspaceLoadState)
   clearError: () => void
   refresh: () => Promise<void>
 

@@ -30,7 +30,7 @@
  */
 import type { DbClient } from '../../db/client'
 import { requireCapability } from '../../auth/authz'
-import { loadDraftSite } from '../../repositories/site'
+import { getDraftSite } from '../../repositories/site'
 import {
   listDataRows,
   createDataRow,
@@ -72,7 +72,7 @@ export async function handlePagesRoutes(req: Request, db: DbClient): Promise<Res
 
     // Load current shell and VC roster for full validatePages context
     const [shell, vcRows] = await Promise.all([
-      loadDraftSite(db),
+      getDraftSite(db),
       listDataRows(db, 'components'),
     ])
     if (!shell) return jsonResponse({ error: 'draft site not found' }, { status: 404 })

@@ -4,7 +4,7 @@ import { SiteValidationError } from '@core/persistence/validate'
 import { normalizeSiteRuntimeConfig } from '@core/site-runtime'
 import type { DbResult } from '../../../server/db'
 import {
-  loadDraftSite,
+  getDraftSite,
   saveDraftSite,
 } from '../../../server/repositories/site'
 import { createFakeDb } from './dbTestFake'
@@ -93,7 +93,7 @@ describe('CMS draft site persistence', () => {
     const { db } = createSiteFakeDb()
     await saveDraftSite(db, validShell(), 'user_1')
 
-    const loaded = await loadDraftSite(db)
+    const loaded = await getDraftSite(db)
 
     expect(loaded).toMatchObject({
       id: 'project_1',
@@ -116,7 +116,7 @@ describe('CMS draft site persistence', () => {
     const site = payload.site as Record<string, unknown>
     site.breakpoints = [{ id: 'desktop', label: 'Desktop', width: 'not-a-number', icon: 'monitor' }]
 
-    await expect(loadDraftSite(db)).rejects.toThrow(SiteValidationError)
+    await expect(getDraftSite(db)).rejects.toThrow(SiteValidationError)
   })
 
   it('round-trips site runtime settings in the site shell', async () => {
@@ -132,7 +132,7 @@ describe('CMS draft site persistence', () => {
       }),
     }))
 
-    const loaded = await loadDraftSite(db)
+    const loaded = await getDraftSite(db)
 
     expect(loaded?.runtime?.scripts.script_1).toMatchObject({
       placement: 'head',

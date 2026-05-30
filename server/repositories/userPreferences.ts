@@ -31,7 +31,7 @@ interface UserPreferenceRow {
  * This is the server-side SQL counterpart — the `…Row` suffix mirrors
  * other repository conventions (e.g. `readMediaAssetRow`).
  */
-export async function readUserPreferenceRow(
+export async function getUserPreferenceRow(
   db: DbClient,
   userId: string,
   key: string,

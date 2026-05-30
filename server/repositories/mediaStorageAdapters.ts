@@ -16,6 +16,7 @@
  */
 
 import type { DbClient } from '../db/client'
+import { isoDate } from '@core/utils/isoDate'
 import type { MediaAssetRole } from '@core/plugin-sdk'
 
 interface ElectedAdapterRow {
@@ -32,15 +33,11 @@ export interface ElectedAdapter {
   electedByUserId: string | null
 }
 
-function toIsoString(value: Date | string): string {
-  return value instanceof Date ? value.toISOString() : new Date(value).toISOString()
-}
-
 function mapRow(row: ElectedAdapterRow): ElectedAdapter {
   return {
     role: row.role as MediaAssetRole,
     adapterId: row.adapter_id,
-    electedAt: toIsoString(row.elected_at),
+    electedAt: isoDate(row.elected_at),
     electedByUserId: row.elected_by_user_id,
   }
 }
@@ -167,7 +164,7 @@ function mapVariantDelegateRow(row: VariantDelegateRow): ElectedVariantDelegate 
     variantUrlTemplate: row.variant_url_template,
     widths: parseWidths(row.widths_json),
     formats: parseFormats(row.formats_json),
-    electedAt: toIsoString(row.elected_at),
+    electedAt: isoDate(row.elected_at),
     electedByUserId: row.elected_by_user_id,
   }
 }

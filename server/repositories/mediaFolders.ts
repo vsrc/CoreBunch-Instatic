@@ -9,6 +9,7 @@
  * `repositories/media.ts → assignAssetToFolders` for that join.
  */
 import type { DbClient } from '../db/client'
+import { isoDate } from '@core/utils/isoDate'
 
 export interface MediaFolder {
   id: string
@@ -46,10 +47,6 @@ interface MediaFolderRow {
   created_at: Date | string
 }
 
-function toIsoString(value: Date | string): string {
-  return value instanceof Date ? value.toISOString() : new Date(value).toISOString()
-}
-
 function mapFolder(row: MediaFolderRow): MediaFolder {
   return {
     id: row.id,
@@ -58,7 +55,7 @@ function mapFolder(row: MediaFolderRow): MediaFolder {
     slug: row.slug,
     sortOrder: Number(row.sort_order),
     createdByUserId: row.created_by_user_id ?? null,
-    createdAt: toIsoString(row.created_at),
+    createdAt: isoDate(row.created_at),
   }
 }
 

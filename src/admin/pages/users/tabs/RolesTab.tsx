@@ -200,7 +200,7 @@ export function RolesTab({ data, canManageRoles }: RolesTabProps) {
           </Button>
         )}
       </div>
-      {data.isLoading ? (
+      {data.loading ? (
         <DataTable aria-label="Loading roles" density="compact" aria-busy="true">
           <DataTableHead>
             <DataTableRow>

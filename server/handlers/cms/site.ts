@@ -17,7 +17,7 @@
 import type { DbClient } from '../../db/client'
 import { requireAnyCapability, requireCapability } from '../../auth/authz'
 import { SITE_WRITE_CAPABILITIES } from '../../auth/capabilities'
-import { loadDraftSite, saveDraftSite } from '../../repositories/site'
+import { getDraftSite, saveDraftSite } from '../../repositories/site'
 import { validateSite, SiteValidationError } from '@core/persistence/validate'
 import {
   ForbiddenSiteChangeError,
@@ -36,7 +36,7 @@ export async function handleSiteRoutes(req: Request, db: DbClient): Promise<Resp
   if (user instanceof Response) return user
 
   if (req.method === 'GET') {
-    const shell = await loadDraftSite(db)
+    const shell = await getDraftSite(db)
     if (!shell) return jsonResponse({ error: 'draft site not found' }, { status: 404 })
     return jsonResponse({ site: shell })
   }
@@ -50,7 +50,7 @@ export async function handleSiteRoutes(req: Request, db: DbClient): Promise<Resp
       // Granular diff gate: walk the changes between the saved draft shell and
       // the incoming one, and reject if any change category isn't covered by
       // the caller's capabilities.
-      const previousShell = await loadDraftSite(db)
+      const previousShell = await getDraftSite(db)
       try {
         validateSiteWriteDiff(previousShell, nextShell, user.capabilities)
       } catch (err) {

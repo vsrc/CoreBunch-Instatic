@@ -23,7 +23,7 @@ import { pluginCacheKey } from '@core/plugins/cacheBuster'
 import {
   createCmsPluginResourceRecord,
   deleteCmsPluginResourceRecord,
-  loadCmsPluginResource,
+  getCmsPluginResource,
 } from '@core/persistence'
 import { pluginRuntime } from '@core/plugins/runtime'
 import {
@@ -235,7 +235,7 @@ function PluginResourcePage({ page }: { page: ResourcePluginPageRoute }) {
       setLoading(true)
       setError(null)
       try {
-        const payload = await loadCmsPluginResource(page.pluginId, page.content.resource)
+        const payload = await getCmsPluginResource(page.pluginId, page.content.resource)
         if (cancelled) return
         setResource(payload.resource)
         setRecords(payload.records)

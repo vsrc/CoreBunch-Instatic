@@ -29,7 +29,7 @@ export {
   installCmsPluginPack,
   listCmsPlugins,
   listCmsPluginSchedules,
-  loadCmsPluginSettings,
+  getCmsPluginSettings,
   pauseCmsPluginSchedule,
   removeCmsPlugin,
   restartCmsPlugin,
@@ -50,7 +50,7 @@ export type {
 export {
   createCmsPluginResourceRecord,
   deleteCmsPluginResourceRecord,
-  loadCmsPluginResource,
+  getCmsPluginResource,
 } from './cmsPluginRecords'
 export {
   createCmsRole,

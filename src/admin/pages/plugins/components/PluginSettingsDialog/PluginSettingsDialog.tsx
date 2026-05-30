@@ -4,7 +4,7 @@
  * the shared `<Dialog/>` primitive; only the body content lives here.
  *
  * Flow:
- *   1. Open dialog → `loadCmsPluginSettings` fetches the declared schema +
+ *   1. Open dialog → `getCmsPluginSettings` fetches the declared schema +
  *      the masked stored values (secrets are `'***'`).
  *   2. User edits form fields.
  *   3. Save → `updateCmsPluginSettings`, wrapped in `runStepUp`. The host
@@ -19,7 +19,7 @@ import { useEffect, useState } from 'react'
 import { Button } from '@ui/components/Button'
 import { Dialog } from '@ui/components/Dialog'
 import {
-  loadCmsPluginSettings,
+  getCmsPluginSettings,
   updateCmsPluginSettings,
   type PluginSettingsRecord,
   type PluginSettingsSchema,
@@ -58,7 +58,7 @@ export function PluginSettingsDialog({
 
   useEffect(() => {
     let cancelled = false
-    void loadCmsPluginSettings(pluginId)
+    void getCmsPluginSettings(pluginId)
       .then((body) => {
         if (cancelled) return
         setSchema(body.schema)

@@ -223,7 +223,7 @@ export function UsersTab({ data, canManageUsers }: UsersTabProps) {
           {/* Suppress "0 accounts" while loading — looks like an empty
               install. The skeleton table below carries the loading signal. */}
           <p>
-            {data.isLoading
+            {data.loading
               ? ' '
               : `${users.length} account${users.length === 1 ? '' : 's'} with admin access.`}
           </p>
@@ -235,7 +235,7 @@ export function UsersTab({ data, canManageUsers }: UsersTabProps) {
           </Button>
         )}
       </div>
-      {data.isLoading ? (
+      {data.loading ? (
         // Skeleton table — matches the real users table 1:1 (same
         // header row, same 4-column layout, same identity cluster
         // shape). Avoids the "no users yet" empty-state flash and

@@ -19,7 +19,7 @@ import { describe, test, expect, beforeAll } from 'bun:test'
 import { createSqliteClient } from '../../../server/db/sqlite'
 import { runMigrations } from '../../../server/db/runMigrations'
 import { sqliteMigrations } from '../../../server/db/migrations-sqlite'
-import { saveDraftSite, loadDraftSite } from '../../../server/repositories/site'
+import { saveDraftSite, getDraftSite } from '../../../server/repositories/site'
 import { createUser } from '../../../server/repositories/users'
 import { createSession } from '../../../server/auth/sessions'
 import {
@@ -249,7 +249,7 @@ describe('handleImportRoute — strategy: replace', () => {
   })
 
   test('site shell is overwritten from the bundle', async () => {
-    const shell = await loadDraftSite(db)
+    const shell = await getDraftSite(db)
     expect(shell).not.toBeNull()
     expect(shell!.name).toBe('Bundle Site Name')
   })
@@ -333,7 +333,7 @@ describe('handleImportRoute — strategy: merge-add', () => {
   })
 
   test('site shell is NOT overwritten by merge-add', async () => {
-    const shell = await loadDraftSite(db)
+    const shell = await getDraftSite(db)
     expect(shell).not.toBeNull()
     // Local shell name, not the bundle's shell name
     expect(shell!.name).toBe('Import Test Site')
@@ -425,7 +425,7 @@ describe('handleImportRoute — strategy: merge-overwrite', () => {
   })
 
   test('site shell IS overwritten by merge-overwrite when bundle has one', async () => {
-    const shell = await loadDraftSite(db)
+    const shell = await getDraftSite(db)
     expect(shell).not.toBeNull()
     expect(shell!.name).toBe('Bundle Site Name')
   })

@@ -29,6 +29,12 @@ function updateRowList(rows: DataRow[], row: DataRow): DataRow[] {
   return next
 }
 
+/**
+ * Intentional exception to WorkspaceLoadState: this hook runs two independent
+ * fetches (tables + rows) that load at different times, so the granular
+ * loadingTables/loadingRows and tablesError/rowsError fields are kept instead
+ * of a single composite loading/error pair.
+ */
 export interface DataWorkspace {
   tables: DataTableListItem[]
   loadingTables: boolean

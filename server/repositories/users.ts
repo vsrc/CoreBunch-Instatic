@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import { nanoid } from 'nanoid'
 import type { DbClient } from '../db/client'
+import { isoDateOrNull } from '@core/utils/isoDate'
 import { normalizeCapabilities, type CoreCapability } from '../auth/capabilities'
 import type { UserRow, UserStatus } from '../types'
 import { Type, filterArray } from '@core/utils/typeboxHelpers'
@@ -68,11 +69,6 @@ function normalizeEmail(email: string): string {
   return email.trim().toLowerCase()
 }
 
-function dateString(value: Date | string | null | undefined): string | null {
-  if (value == null) return null
-  return new Date(value).toISOString()
-}
-
 /**
  * SHA-256 hex of the normalized email. Gravatar accepts both MD5 and SHA-256
  * hashes; we use SHA-256 because Node/Bun ship it natively and it's the modern
@@ -109,20 +105,20 @@ export function rowToUser(row: JoinedUserRow): AuthUser {
     role,
     capabilities,
     passwordHash: row.password_hash,
-    lastLoginAt: dateString(row.last_login_at),
+    lastLoginAt: isoDateOrNull(row.last_login_at),
     failedLoginCount: Number(row.failed_login_count ?? 0),
-    lockedUntil: dateString(row.locked_until),
+    lockedUntil: isoDateOrNull(row.locked_until),
     avatarMediaId: row.avatar_media_id ?? null,
-    passwordUpdatedAt: dateString(row.password_updated_at),
+    passwordUpdatedAt: isoDateOrNull(row.password_updated_at),
     mfaEnabled: Boolean(row.mfa_enabled),
-    mfaEnabledAt: dateString(row.mfa_enabled_at),
+    mfaEnabledAt: isoDateOrNull(row.mfa_enabled_at),
     mfaTotpSecret: row.mfa_totp_secret ?? null,
     mfaRecoveryCodeHashes,
     mfaRecoveryCodesRemaining: mfaRecoveryCodeHashes.length,
     avatarUrl: row.avatar_public_path ?? null,
     gravatarHash: computeGravatarHash(row.email),
-    createdAt: dateString(row.created_at)!,
-    updatedAt: dateString(row.updated_at)!,
+    createdAt: isoDateOrNull(row.created_at)!,
+    updatedAt: isoDateOrNull(row.updated_at)!,
   }
 }
 
@@ -513,6 +509,6 @@ export async function recordFailedLoginAttempt(
   if (!rows[0]) return null
   return {
     failedLoginCount: Number(rows[0].failed_login_count ?? 0),
-    lockedUntil: dateString(rows[0].locked_until),
+    lockedUntil: isoDateOrNull(rows[0].locked_until),
   }
 }

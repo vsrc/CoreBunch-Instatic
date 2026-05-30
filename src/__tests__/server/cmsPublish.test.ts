@@ -34,7 +34,7 @@ function createPublishFakeDb() {
       }
       return { rows: [], rowCount: 1 }
     }
-    // loadDraftSite — select site row
+    // getDraftSite — select site row
     if (sql.startsWith('select id, name, settings_json')) {
       return { rows: state.site ? [state.site] : [], rowCount: state.site ? 1 : 0 }
     }

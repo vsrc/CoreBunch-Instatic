@@ -72,7 +72,7 @@ function buildFakeDb(
   return createFakeDb(async (sql: string, params: unknown[]): Promise<DbResult> => {
     const s = sql.replace(/\s+/g, ' ').trim().toLowerCase()
 
-    // ── loadDraftSite ──────────────────────────────────────────────────────
+    // ── getDraftSite ───────────────────────────────────────────────────────
     if (s.startsWith('select id, name, version, enabled, lifecycle_status')) {
       // Plugin listing for hook bus
       return { rows: [], rowCount: 0 }

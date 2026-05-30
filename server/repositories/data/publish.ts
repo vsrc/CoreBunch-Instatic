@@ -22,6 +22,7 @@ import { normalizeRouteBase } from '@core/templates/templateMatching'
 import { selectEntryTemplate } from '@core/templates/templateMatching'
 import { readFeaturedMediaCell } from '@core/data/cells'
 import { getDataRow } from './rows'
+import { toIso } from './shared'
 import { getLatestPublishedSiteSnapshot } from '../publish'
 import {
   renderPublishedDataRowTemplate,
@@ -81,9 +82,6 @@ interface PublishDataRowResult {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-const toIso = (value: string | Date): string =>
-  typeof value === 'string' ? value : value.toISOString()
 
 function publicDataPath(routeBase: string, slug: string): string {
   const normalizedBase = normalizeRouteBase(routeBase)

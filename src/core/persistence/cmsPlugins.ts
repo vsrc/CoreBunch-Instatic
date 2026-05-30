@@ -219,7 +219,7 @@ export interface CmsPluginSettingsResponse {
   settings: PluginSettingsRecord
 }
 
-export async function loadCmsPluginSettings(
+export async function getCmsPluginSettings(
   pluginId: string,
   fetchImpl: FetchLike = globalThis.fetch.bind(globalThis),
   basePath = '/admin/api/cms',

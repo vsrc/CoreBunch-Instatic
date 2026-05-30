@@ -10,6 +10,7 @@
  */
 
 import type { LoopEntitySource, LoopFetchResult, LoopItem, LoopSourceDb } from '@core/loops/types'
+import { isoDate } from '../../utils/isoDate'
 
 interface MediaRow {
   id: string
@@ -19,10 +20,6 @@ interface MediaRow {
   public_path: string
   uploaded_by_user_id: string | null
   created_at: Date | string
-}
-
-function toIsoString(value: Date | string): string {
-  return value instanceof Date ? value.toISOString() : new Date(value).toISOString()
 }
 
 function rowToLoopItem(row: MediaRow): LoopItem {
@@ -38,7 +35,7 @@ function rowToLoopItem(row: MediaRow): LoopItem {
       src: row.public_path,
       uploadedByUserId: row.uploaded_by_user_id,
       uploadedById: row.uploaded_by_user_id,
-      createdAt: toIsoString(row.created_at),
+      createdAt: isoDate(row.created_at),
     },
   }
 }

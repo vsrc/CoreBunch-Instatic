@@ -19,6 +19,7 @@
 
 import { nanoid } from 'nanoid'
 import type { DbClient } from '../../db/client'
+import { isoDateOrNull } from '@core/utils/isoDate'
 import {
   decryptSecret,
   encryptSecret,
@@ -56,11 +57,6 @@ interface CredentialRow {
   last_used_at: Date | string | null
 }
 
-function dateString(value: Date | string | null | undefined): string | null {
-  if (value == null) return null
-  return new Date(value).toISOString()
-}
-
 function rowToRecord(row: CredentialRow): CredentialRecord {
   return {
     id: row.id,
@@ -72,9 +68,9 @@ function rowToRecord(row: CredentialRow): CredentialRecord {
     iv: row.iv,
     baseUrl: row.base_url,
     keyFingerprint: row.key_fingerprint,
-    createdAt: dateString(row.created_at)!,
-    updatedAt: dateString(row.updated_at)!,
-    lastUsedAt: dateString(row.last_used_at),
+    createdAt: isoDateOrNull(row.created_at)!,
+    updatedAt: isoDateOrNull(row.updated_at)!,
+    lastUsedAt: isoDateOrNull(row.last_used_at),
   }
 }
 

@@ -12,6 +12,7 @@
 import { nanoid } from 'nanoid'
 import { Type, safeParseValue } from '@core/utils/typeboxHelpers'
 import type { DbClient } from '../../db/client'
+import { isoDateOrNull } from '@core/utils/isoDate'
 import type { AiContentBlock, ToolScope } from '../runtime/types'
 import type {
   AppendMessageInput,
@@ -80,11 +81,6 @@ interface MessageRow {
   created_at: Date | string
 }
 
-function dateString(value: Date | string | null | undefined): string | null {
-  if (value == null) return null
-  return new Date(value).toISOString()
-}
-
 function toNumber(value: number | string): number {
   return typeof value === 'number' ? value : Number(value)
 }
@@ -104,9 +100,9 @@ function conversationRowToRecord(row: ConversationRow): ConversationRecord {
     costUsdTotal: toNumber(row.cost_usd_total),
     cacheReadTokensTotal: toNumber(row.cache_read_tokens_total),
     cacheCreationTokensTotal: toNumber(row.cache_creation_tokens_total),
-    createdAt: dateString(row.created_at)!,
-    updatedAt: dateString(row.updated_at)!,
-    deletedAt: dateString(row.deleted_at),
+    createdAt: isoDateOrNull(row.created_at)!,
+    updatedAt: isoDateOrNull(row.updated_at)!,
+    deletedAt: isoDateOrNull(row.deleted_at),
   }
 }
 
@@ -141,7 +137,7 @@ function messageRowToRecord(row: MessageRow): MessageRecord {
     costUsd: toNumber(row.cost_usd),
     cacheReadTokens: row.cache_read_tokens,
     cacheCreationTokens: row.cache_creation_tokens,
-    createdAt: dateString(row.created_at)!,
+    createdAt: isoDateOrNull(row.created_at)!,
   }
 }
 

@@ -20,6 +20,7 @@
  * `db-postgres-isms.test.ts` enforces this.
  */
 import type { DbClient } from '../db/client'
+import { isoDate, isoDateOrNull } from '@core/utils/isoDate'
 
 // ---------------------------------------------------------------------------
 // Domain types
@@ -115,15 +116,6 @@ interface ScheduleRunRow {
   triggered_by: string
 }
 
-function toIso(value: string | Date | null): string | null {
-  if (value == null) return null
-  return value instanceof Date ? value.toISOString() : new Date(value).toISOString()
-}
-
-function toIsoRequired(value: string | Date): string {
-  return value instanceof Date ? value.toISOString() : new Date(value).toISOString()
-}
-
 function parseCadence(value: unknown): Cadence {
   if (typeof value === 'string') {
     try { return JSON.parse(value) as Cadence } catch { /* fall through */ }
@@ -149,17 +141,17 @@ function mapSchedule(row: ScheduleRow): PluginSchedule {
     maxDurationMs: row.max_duration_ms,
     enabled: Boolean(row.enabled),
     consecutiveFailures: row.consecutive_failures,
-    lastRunAt: toIso(row.last_run_at),
-    lastFinishedAt: toIso(row.last_finished_at),
+    lastRunAt: isoDateOrNull(row.last_run_at),
+    lastFinishedAt: isoDateOrNull(row.last_finished_at),
     lastStatus: parseStatus(row.last_status),
     lastError: row.last_error,
     lastDurationMs: row.last_duration_ms,
-    nextRunAt: toIsoRequired(row.next_run_at),
+    nextRunAt: isoDate(row.next_run_at),
     runningToken: row.running_token,
-    lockUntil: toIso(row.lock_until),
-    claimedAt: toIso(row.claimed_at),
-    createdAt: toIsoRequired(row.created_at),
-    updatedAt: toIsoRequired(row.updated_at),
+    lockUntil: isoDateOrNull(row.lock_until),
+    claimedAt: isoDateOrNull(row.claimed_at),
+    createdAt: isoDate(row.created_at),
+    updatedAt: isoDate(row.updated_at),
   }
 }
 
@@ -168,8 +160,8 @@ function mapRun(row: ScheduleRunRow): PluginScheduleRun {
     id: row.id,
     pluginId: row.plugin_id,
     scheduleId: row.schedule_id,
-    startedAt: toIsoRequired(row.started_at),
-    finishedAt: toIso(row.finished_at),
+    startedAt: isoDate(row.started_at),
+    finishedAt: isoDateOrNull(row.finished_at),
     status: parseStatus(row.status),
     error: row.error,
     durationMs: row.duration_ms,

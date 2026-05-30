@@ -1,4 +1,5 @@
 import type { DbClient } from '../db/client'
+import { isoDate, isoDateOrNull } from '@core/utils/isoDate'
 
 export interface MediaVariant {
   width: number
@@ -111,14 +112,6 @@ interface DeletedMediaAssetRow {
   storage_path: string
 }
 
-function toIsoString(value: Date | string): string {
-  return value instanceof Date ? value.toISOString() : new Date(value).toISOString()
-}
-
-function toIsoOrNull(value: Date | string | null): string | null {
-  return value == null ? null : toIsoString(value)
-}
-
 function parseTags(value: unknown): string[] {
   if (Array.isArray(value)) return value.filter((tag): tag is string => typeof tag === 'string')
   if (typeof value !== 'string') return []
@@ -188,7 +181,7 @@ function mapMediaAsset(row: MediaAssetRow, folderIds: string[] = []): MediaAsset
     sizeBytes: Number(row.size_bytes),
     publicPath: row.public_path,
     uploadedByUserId: row.uploaded_by_user_id ?? null,
-    createdAt: toIsoString(row.created_at),
+    createdAt: isoDate(row.created_at),
     altText: row.alt_text ?? '',
     caption: row.caption ?? '',
     title: row.title ?? '',
@@ -197,8 +190,8 @@ function mapMediaAsset(row: MediaAssetRow, folderIds: string[] = []): MediaAsset
     height: numberOrNull(row.height),
     durationMs: numberOrNull(row.duration_ms),
     dominantColor: row.dominant_color ?? null,
-    deletedAt: toIsoOrNull(row.deleted_at),
-    replacedAt: toIsoOrNull(row.replaced_at),
+    deletedAt: isoDateOrNull(row.deleted_at),
+    replacedAt: isoDateOrNull(row.replaced_at),
     folderIds,
     blurHash: row.blur_hash ?? null,
     variants: parseVariants(row.variants_json),

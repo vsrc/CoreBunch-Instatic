@@ -31,8 +31,7 @@ import { runMigrations } from '../../../server/db/runMigrations'
 import { sqliteMigrations } from '../../../server/db/migrations-sqlite'
 import { listDataTables } from '../../../server/repositories/data/tables'
 import { listDataRows, createDataRow, upsertDataRow } from '../../../server/repositories/data/rows'
-import { saveDraftSite } from '../../../server/repositories/site'
-import { loadDraftSite } from '../../../server/repositories/site'
+import { saveDraftSite, getDraftSite } from '../../../server/repositories/site'
 import { createUser } from '../../../server/repositories/users'
 import { createSession } from '../../../server/auth/sessions'
 import {
@@ -198,15 +197,15 @@ describe('import/export round-trip — data integrity', () => {
 // ---------------------------------------------------------------------------
 
 describe('import/export round-trip — site shell', () => {
-  test('loadDraftSite returns null on a fresh in-memory DB (before setup)', async () => {
+  test('getDraftSite returns null on a fresh in-memory DB (before setup)', async () => {
     // A separate fresh DB to confirm the null case without touching the seeded one
     const freshDb = createSqliteClient(':memory:')
     await runMigrations(freshDb, sqliteMigrations)
-    const shell = await loadDraftSite(freshDb)
+    const shell = await getDraftSite(freshDb)
     expect(shell).toBeNull()
   })
 
-  test('saveDraftSite + loadDraftSite round-trips the shell', async () => {
+  test('saveDraftSite + getDraftSite round-trips the shell', async () => {
     const db = createSqliteClient(':memory:')
     await runMigrations(db, sqliteMigrations)
 
@@ -241,7 +240,7 @@ describe('import/export round-trip — site shell', () => {
     }
 
     await saveDraftSite(db, mockShell as Parameters<typeof saveDraftSite>[1])
-    const loaded = await loadDraftSite(db)
+    const loaded = await getDraftSite(db)
     expect(loaded).not.toBeNull()
     expect(loaded!.name).toBe('Test Site')
     expect(loaded!.id).toBe('default')

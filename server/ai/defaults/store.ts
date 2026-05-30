@@ -11,6 +11,7 @@
  */
 
 import type { DbClient } from '../../db/client'
+import { isoDateOrNull } from '@core/utils/isoDate'
 import type { ToolScope } from '../runtime/types'
 
 // ---------------------------------------------------------------------------
@@ -33,17 +34,12 @@ interface DefaultRow {
   updated_by: string | null
 }
 
-function dateString(value: Date | string | null | undefined): string | null {
-  if (value == null) return null
-  return new Date(value).toISOString()
-}
-
 function rowToRecord(row: DefaultRow): DefaultRecord {
   return {
     scope: row.scope as ToolScope,
     credentialId: row.credential_id,
     modelId: row.model_id,
-    updatedAt: dateString(row.updated_at)!,
+    updatedAt: isoDateOrNull(row.updated_at)!,
     updatedBy: row.updated_by,
   }
 }

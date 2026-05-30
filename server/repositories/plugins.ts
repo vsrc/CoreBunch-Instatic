@@ -9,6 +9,7 @@ import { pluginSettingsDefaults } from '@core/plugin-sdk'
 import type { StorageListOptions, StorageFilterOperator } from '@core/plugin-sdk/storageSchemas'
 import { parsePluginManifest } from '@core/plugins/manifest'
 import type { DbClient, Dialect } from '../db/client'
+import { isoDate } from '@core/utils/isoDate'
 import { jsonField } from '../db/jsonExtract'
 
 /**
@@ -50,10 +51,6 @@ interface PluginRecordRow {
   updated_at: Date | string
 }
 
-function toIsoString(value: Date | string): string {
-  return value instanceof Date ? value.toISOString() : new Date(value).toISOString()
-}
-
 // Returns unknown by design — every caller validates downstream via
 // parsePluginManifest (TypeBox) or readPermissionGrants. Safe boundary.
 function readManifestJson(value: unknown): unknown {
@@ -93,8 +90,8 @@ function mapInstalledPlugin(row: InstalledPluginRow): InstalledPluginResult {
           : manifest.grantedPermissions ?? [],
         manifest,
         settings,
-        installedAt: toIsoString(row.installed_at),
-        updatedAt: toIsoString(row.updated_at),
+        installedAt: isoDate(row.installed_at),
+        updatedAt: isoDate(row.updated_at),
       },
     }
   } catch (err) {
@@ -152,8 +149,8 @@ function mapPluginRecord(row: PluginRecordRow): PluginRecord {
     pluginId: row.plugin_id,
     resourceId: row.resource_id,
     data: readManifestJson(row.data_json) as Record<string, unknown>,
-    createdAt: toIsoString(row.created_at),
-    updatedAt: toIsoString(row.updated_at),
+    createdAt: isoDate(row.created_at),
+    updatedAt: isoDate(row.updated_at),
   }
 }
 
@@ -463,7 +460,7 @@ function mapPluginCrashEvent(row: PluginCrashEventRow): PluginCrashEvent {
   return {
     id: row.id,
     pluginId: row.plugin_id,
-    occurredAt: toIsoString(row.occurred_at),
+    occurredAt: isoDate(row.occurred_at),
     reason: row.reason,
     stack: row.stack ?? null,
   }

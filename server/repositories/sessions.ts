@@ -12,6 +12,7 @@
  * pulling the user from the cookie before calling these.
  */
 import type { DbClient } from '../db/client'
+import { isoDateOrNull } from '@core/utils/isoDate'
 
 export interface SessionListItem {
   id: string                       // sha256 hash of the cookie token (same as session.id_hash)
@@ -36,11 +37,6 @@ interface SessionListRow {
   expires_at: Date | string
   mfa_passed_at: Date | string | null
   step_up_expires_at: Date | string | null
-}
-
-function dateString(value: Date | string | null | undefined): string | null {
-  if (value == null) return null
-  return new Date(value).toISOString()
 }
 
 /**
@@ -76,12 +72,12 @@ export async function listSessionsForUser(
     deviceLabel: row.device_label || '',
     ipAddress: row.ip_address,
     userAgent: row.user_agent,
-    createdAt: dateString(row.created_at)!,
-    lastSeenAt: dateString(row.last_seen_at)!,
-    expiresAt: dateString(row.expires_at)!,
+    createdAt: isoDateOrNull(row.created_at)!,
+    lastSeenAt: isoDateOrNull(row.last_seen_at)!,
+    expiresAt: isoDateOrNull(row.expires_at)!,
     isCurrent: currentSessionHash !== null && row.id_hash === currentSessionHash,
-    mfaPassedAt: dateString(row.mfa_passed_at),
-    stepUpExpiresAt: dateString(row.step_up_expires_at),
+    mfaPassedAt: isoDateOrNull(row.mfa_passed_at),
+    stepUpExpiresAt: isoDateOrNull(row.step_up_expires_at),
   }))
 }
 

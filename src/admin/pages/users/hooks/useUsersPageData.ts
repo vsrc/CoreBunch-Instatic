@@ -21,6 +21,7 @@ import {
   type CmsCurrentUser,
   type CmsRole,
 } from '@core/persistence'
+import type { WorkspaceLoadState } from '@admin/lib/workspaceLoadState'
 import { emptyUserForm, type UsersPageLoadAccess } from '../types'
 
 interface LoadedData {
@@ -29,17 +30,10 @@ interface LoadedData {
   events: CmsAuditEvent[]
 }
 
-export interface UsersPageData {
+export interface UsersPageData extends WorkspaceLoadState {
   users: CmsCurrentUser[]
   roles: CmsRole[]
   events: CmsAuditEvent[]
-  /**
-   * True while the initial load is in flight. Surfaces so the page
-   * shell can show the universal skeleton instead of an empty list /
-   * "no users" message during the round-trip.
-   */
-  isLoading: boolean
-  error: string | null
   /**
    * The first role id that admins can assign to a user (i.e. excludes the
    * Owner role). Used to seed the create-user dialog so it never opens
@@ -65,11 +59,11 @@ export function useUsersPageData(access: UsersPageLoadAccess): UsersPageData {
   const [users, setUsers] = useState<CmsCurrentUser[]>([])
   const [roles, setRoles] = useState<CmsRole[]>([])
   const [events, setEvents] = useState<CmsAuditEvent[]>([])
-  // `isLoading` flips to false only after the FIRST round-trip
-  // completes. Without this, the page would render the "No users yet"
-  // empty state for the ~50-200 ms window between mount and first
-  // response — visually identical to a fresh install and tragic UX.
-  const [isLoading, setIsLoading] = useState(true)
+  // `loading` flips to false only after the FIRST round-trip completes.
+  // Without this, the page would render the "No users yet" empty state for
+  // the ~50-200 ms window between mount and first response — visually
+  // identical to a fresh install and tragic UX.
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   // Exception #1 (react-hooks/exhaustive-deps): feeds the load effect's
@@ -110,7 +104,7 @@ export function useUsersPageData(access: UsersPageLoadAccess): UsersPageData {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Could not load users')
       })
       .finally(() => {
-        if (!cancelled) setIsLoading(false)
+        if (!cancelled) setLoading(false)
       })
     return () => {
       cancelled = true
@@ -124,7 +118,7 @@ export function useUsersPageData(access: UsersPageLoadAccess): UsersPageData {
     users,
     roles,
     events,
-    isLoading,
+    loading,
     error,
     defaultAssignableRoleId,
     setUsers,

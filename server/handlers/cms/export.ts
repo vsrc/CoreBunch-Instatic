@@ -30,7 +30,7 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { DbClient } from '../../db/client'
 import { requireCapability } from '../../auth/authz'
-import { loadDraftSite } from '../../repositories/site'
+import { getDraftSite } from '../../repositories/site'
 import { listDataTables } from '../../repositories/data/tables'
 import { listDataRows } from '../../repositories/data/rows'
 import { listMediaAssetsForExport } from '../../repositories/media'
@@ -78,7 +78,7 @@ export async function handleExportRoute(
   }
 
   // Always load the site shell — needed for sourceSiteName even when includeSite=false
-  const shell = await loadDraftSite(db)
+  const shell = await getDraftSite(db)
   if (!shell) {
     return jsonResponse({ error: 'Site not initialised — run setup before exporting' }, { status: 404 })
   }

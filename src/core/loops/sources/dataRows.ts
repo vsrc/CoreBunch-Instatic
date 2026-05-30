@@ -20,6 +20,7 @@
  */
 
 import type { LoopEntitySource, LoopFetchResult, LoopItem, LoopSourceDb } from '@core/loops/types'
+import { isoDate } from '../../utils/isoDate'
 import { firstImagePathFromMarkdown } from '@core/markdown/renderMarkdown'
 import { normalizeRouteBase } from '@core/templates/templateMatching'
 import { publicDataUserFromParts } from '@core/data/publicDataUser'
@@ -66,10 +67,6 @@ const ALLOWED_ORDER_BY: ReadonlySet<OrderColumn> = new Set([
   'updatedAt',
   'slug',
 ])
-
-function toIsoString(value: Date | string): string {
-  return value instanceof Date ? value.toISOString() : new Date(value).toISOString()
-}
 
 // ---------------------------------------------------------------------------
 // Media path resolution
@@ -177,9 +174,9 @@ function rowToLoopItem(
       firstImageUrl: firstImagePath,
       // Dates / routing
       slug: row.slug,
-      publishedAt: toIsoString(row.published_at),
-      createdAt: toIsoString(row.created_at),
-      updatedAt: toIsoString(row.updated_at),
+      publishedAt: isoDate(row.published_at),
+      createdAt: isoDate(row.created_at),
+      updatedAt: isoDate(row.updated_at),
       permalink,
     },
   }
@@ -600,9 +597,9 @@ function dataKindRowToLoopItem(
       slug: row.slug,
       // Data-kind rows have no publishedAt — use createdAt as a proxy so
       // ordering / display stays consistent across both kinds.
-      publishedAt: toIsoString(row.created_at),
-      createdAt: toIsoString(row.created_at),
-      updatedAt: toIsoString(row.updated_at),
+      publishedAt: isoDate(row.created_at),
+      createdAt: isoDate(row.created_at),
+      updatedAt: isoDate(row.updated_at),
       permalink,
     },
   }

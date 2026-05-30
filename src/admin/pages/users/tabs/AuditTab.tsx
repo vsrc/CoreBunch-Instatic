@@ -39,7 +39,7 @@ export function AuditTab({ data }: { data: UsersPageData }) {
           <p>Security and access changes across the admin area.</p>
         </div>
       </div>
-      {data.isLoading ? (
+      {data.loading ? (
         <DataTable aria-label="Loading audit events" density="compact" aria-busy="true">
           <DataTableHead>
             <DataTableRow>

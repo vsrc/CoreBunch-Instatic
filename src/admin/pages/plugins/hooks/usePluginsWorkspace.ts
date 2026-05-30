@@ -23,6 +23,7 @@ import type {
   PluginPermission,
 } from '@core/plugin-sdk'
 import { CMS_SITE_RELOAD_EVENT } from '@admin/state/adminEvents'
+import type { WorkspaceLoadState } from '@admin/lib/workspaceLoadState'
 import {
   getEditorActivationErrors,
   subscribeEditorActivationErrors,
@@ -63,13 +64,11 @@ export interface PendingInstall {
  * Read-only view-model returned to `PluginsPage`. Splits state, mutators that
  * drive dialogs, and async actions so the render component stays declarative.
  */
-export interface PluginsWorkspaceVM {
+export interface PluginsWorkspaceVM extends WorkspaceLoadState {
   fileInputRef: RefObject<HTMLInputElement | null>
   payload: CmsPluginsPayload
-  loading: boolean
   uploading: boolean
   busyPluginId: string | null
-  error: string | null
   editorActivationErrors: Record<string, string>
   pendingInstall: PendingInstall | null
   settingsPluginId: string | null

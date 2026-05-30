@@ -65,7 +65,7 @@ export async function listCmsPluginResourceRecords(
   }
 }
 
-export async function loadCmsPluginResource(
+export async function getCmsPluginResource(
   pluginId: string,
   resourceId: string,
   fetchImpl: FetchLike = globalThis.fetch.bind(globalThis),

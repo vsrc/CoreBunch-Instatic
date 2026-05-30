@@ -19,7 +19,7 @@ import type { PublishedRuntimePackageImportmap } from '@core/publisher/render'
 import { normalizeSiteRuntimeConfig } from '@core/site-runtime'
 import { registry } from '@core/module-engine/registry'
 import type { DbClient } from '../db/client'
-import { loadDraftSite } from './site'
+import { getDraftSite } from './site'
 import { listDataRows } from './data'
 import { pageFromRow } from '../../src/core/data/pageFromRow'
 import { visualComponentFromRow } from '../../src/core/data/componentFromRow'
@@ -120,7 +120,7 @@ async function nextVersionNumber(db: DbClient, rowId: string): Promise<number> {
 // ---------------------------------------------------------------------------
 
 export async function getDraftPublishStatus(db: DbClient): Promise<DraftPublishStatus> {
-  const shell = await loadDraftSite(db)
+  const shell = await getDraftSite(db)
   if (!shell) {
     return {
       hasPublishedVersion: false,
@@ -183,7 +183,7 @@ export async function publishDraftSite(
   uploadsDir?: string,
 ): Promise<PublishResult> {
   const { publishedPages, snapshots, runtimeAssetFiles } = await db.transaction(async (tx) => {
-    const shell = await loadDraftSite(tx)
+    const shell = await getDraftSite(tx)
     if (!shell) throw new Error('draft site not found')
 
     const [pageRows, vcRows] = await Promise.all([
