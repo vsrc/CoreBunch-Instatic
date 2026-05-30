@@ -1,0 +1,55 @@
+/* CustomPropertiesSection — generic key/value editor for uncurated CSS props. */
+
+.row {
+    position: relative;
+}
+
+/* Remove button overlaid on the label column, revealed on hover/focus-within —
+ * mirrors ClassPropertyRow's remove affordance. */
+.removeBtn {
+    position: absolute;
+    top: 3px;
+    left: 78px;
+    opacity: 0;
+    transition: opacity 100ms ease;
+}
+
+.row:hover .removeBtn,
+.row:focus-within .removeBtn {
+    opacity: 1;
+}
+
+/* ── Add-property form ───────────────────────────────────────────────────── */
+
+.addForm {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px;
+    border-radius: var(--editor-radius);
+    background: var(--editor-surface-2);
+}
+
+.addInputs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+}
+
+.addActions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+}
+
+.error {
+    margin: 0;
+    color: var(--editor-danger-light);
+    font-size: 10px;
+}
+
+.addTrigger {
+    align-self: flex-start;
+    gap: 6px;
+    color: var(--editor-text-secondary);
+}

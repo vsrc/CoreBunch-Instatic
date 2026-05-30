@@ -13,6 +13,7 @@ import { ClassPropertyRow } from './ClassPropertyRow'
 import { Section } from '@ui/components/Section'
 import { SpacingBoxControl } from './SpacingBoxControl/SpacingBoxControl'
 import { BorderControl } from './BorderControl/BorderControl'
+import { CustomPropertiesSection } from './CustomPropertiesSection'
 import { LayoutSection } from './LayoutSection'
 import { PositionSection } from './PositionSection'
 import {
@@ -139,7 +140,21 @@ export function ClassComposer({
           />
         </div>
       ))}
-      {visibleStyleSections.length === 0 && (
+      {/* Custom properties — generic editor for the long tail of CSS the
+          curated sections don't claim. Hidden while a style search is active
+          (the search filters the curated sections; the raw editor isn't a
+          search target). */}
+      {!styleQuery.trim() && (
+        <div data-style-section="custom">
+          <CustomPropertiesSection
+            key={activeTab}
+            storedStyles={storedStyles}
+            onChange={handleChange}
+            onRemove={handleRemoveProperty}
+          />
+        </div>
+      )}
+      {visibleStyleSections.length === 0 && styleQuery.trim() && (
         <div className={styles.noStyleMatches}>No matching styles.</div>
       )}
     </div>

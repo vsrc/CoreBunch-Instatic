@@ -536,3 +536,38 @@ export function getClassStyleSectionSetCounts(
 export function getActiveStyleTab(activeBreakpointId: string | undefined): string {
   return activeBreakpointId && activeBreakpointId !== 'desktop' ? activeBreakpointId : 'base'
 }
+
+// ---------------------------------------------------------------------------
+// Custom properties — the long tail of CSS the curated sections don't claim
+// ---------------------------------------------------------------------------
+
+/**
+ * Every property claimed by a curated style section. Anything a rule has set
+ * that is NOT in this set is "custom" — surfaced in the generic Custom
+ * properties editor (Phase 1b of the CSS fidelity plan). Includes the Border
+ * Advanced shorthands and per-side longhands the visual controls own, so they
+ * never double-appear in Custom.
+ */
+const CLAIMED_PROPERTIES: ReadonlySet<string> = new Set(
+  CLASS_STYLE_SECTIONS.flatMap((section) => section.properties.map((p) => String(p))),
+)
+
+/**
+ * Whether a property is claimed by a curated section (and therefore must NOT
+ * appear in the Custom properties editor).
+ */
+export function isCuratedProperty(prop: string): boolean {
+  return CLAIMED_PROPERTIES.has(prop)
+}
+
+/**
+ * The set-but-uncurated property keys of a style bag, sorted for stable
+ * display order. These are the rows the Custom properties editor renders:
+ * imported exotica (`gridAutoFlow`) and any `--custom-property`, editable as
+ * raw key/value pairs.
+ */
+export function getCustomProperties(storedStyles: Record<string, unknown>): string[] {
+  return Object.keys(storedStyles)
+    .filter((key) => hasStyleValue(storedStyles[key]) && !isCuratedProperty(key))
+    .sort()
+}
