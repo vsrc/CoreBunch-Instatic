@@ -2,6 +2,7 @@
  * SiteDocument lifecycle actions: createSite, loadSite, clearSite, updateSiteName.
  */
 
+import { findHomePage } from '@core/page-tree'
 import { renderCache } from '@site/canvas/renderCache'
 import {
   clonePackageJson,
@@ -33,7 +34,9 @@ export function createLifecycleActions({
         state.site = { ...site, runtime: siteRuntime }
         state.packageJson = clonePackageJson(site.packageJson)
         state.siteRuntime = siteRuntime
-        state.activePageId = site.pages[0].id
+        // Default to the home page (slug `index`) so the editor opens on `/`
+        // rather than whatever happens to be first in the array.
+        state.activePageId = (findHomePage(site.pages) ?? site.pages[0]).id
         // Reset activeDocument — any previously-open VC reference belongs to
         // the prior site and would cause `mutateActiveTree` to silently no-op
         // (early-return) when the VC id is not present in the new site.
@@ -59,7 +62,9 @@ export function createLifecycleActions({
         state.site = { ...site, packageJson, runtime: siteRuntime }
         state.packageJson = packageJson
         state.siteRuntime = siteRuntime
-        state.activePageId = site.pages[0]?.id ?? null
+        // Default to the home page (slug `index`) so the editor opens on `/`
+        // rather than whatever happens to be first in the array.
+        state.activePageId = (findHomePage(site.pages) ?? site.pages[0])?.id ?? null
         // Reset activeDocument — see createSite for rationale.
         state.activeDocument = null
         state._historyPast = []

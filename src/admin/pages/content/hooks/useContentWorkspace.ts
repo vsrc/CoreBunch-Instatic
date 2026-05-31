@@ -29,7 +29,7 @@ import {
   readSeoTitleCell,
 } from '@core/data/cells'
 import { updateRowList } from '@content/utils/contentEntryUtils'
-import { useLocation } from '@admin/lib/routing'
+import { useInitialQueryParams, useUrlQuerySync } from '@admin/lib/urlState'
 
 interface UseContentWorkspaceOptions {
   loadAuthors?: boolean
@@ -48,11 +48,13 @@ export function useContentWorkspace({
   const [entriesLoading, setEntriesLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const location = useLocation()
-  // Capture the initial search string exactly once. useRef's initial-value
-  // argument is only consumed on the first render, so later replaceState calls
-  // don't overwrite it — and we don't re-read location.search after mount.
-  const initialSearchRef = useRef(location.search)
+  // Capture the deep-link query params present at mount once — later
+  // replaceState writes (from the URL sync below) don't change what the
+  // one-shot deep-link reads. Held in refs so the deep-link effects read
+  // imperative values rather than reactive state.
+  const initialParams = useInitialQueryParams()
+  const initialTableSlugRef = useRef(initialParams.get('table'))
+  const initialRowIdRef = useRef(initialParams.get('row'))
   // Prevent the one-shot deep-link from firing more than once per mount.
   const deepLinkAppliedRef = useRef(false)
   // Set by deep-link effect A; consumed and cleared by effect B.
@@ -184,8 +186,7 @@ export function useContentWorkspace({
     if (loading) return
     deepLinkAppliedRef.current = true
 
-    const params = new URLSearchParams(initialSearchRef.current)
-    const tableSlug = params.get('table')
+    const tableSlug = initialTableSlugRef.current
     if (!tableSlug) return
 
     const targetCollection = collections.find((c) => c.slug === tableSlug)
@@ -196,14 +197,14 @@ export function useContentWorkspace({
 
     // Store the row id so effect B can resolve it once the target collection's
     // entries have loaded. null means "no specific row — keep default".
-    pendingDeepLinkRef.current = { rowId: params.get('row') }
+    pendingDeepLinkRef.current = { rowId: initialRowIdRef.current }
     setSelectedCollectionId(targetCollection.id)
     setEntriesLoading(true)
   }, [loading, collections])
 
   // Deep-link effect B: once entries finish loading for the deep-linked
-  // collection, select the requested row (if any) and strip the URL params so
-  // the deep-link is one-shot (navigating away and back won't re-apply it).
+  // collection, select the requested row (if any). The URL is NOT stripped —
+  // the sync below keeps `?table=…&row=…` current so the view stays linkable.
   useEffect(() => {
     const pending = pendingDeepLinkRef.current
     if (!pending || entriesLoading) return
@@ -218,9 +219,20 @@ export function useContentWorkspace({
         console.warn('[content] unknown ?row= id:', pending.rowId)
       }
     }
-
-    history.replaceState({}, '', '/admin/content')
   }, [entries, entriesLoading, selectEntry])
+
+  // Mirror the active collection + entry into the URL so a reload / bookmark /
+  // shared link reopens the same selection. Contract matches the inbound
+  // deep link: `?table=<collectionSlug>&row=<entryId>`. Gated on `!loading` so
+  // the initial selection settles before we write (otherwise the first render
+  // would briefly strip an inbound deep link).
+  useUrlQuerySync(
+    {
+      table: selectedCollection?.slug ?? null,
+      row: selectedEntry?.id ?? null,
+    },
+    { enabled: !loading },
+  )
 
   const selectCollection = (tableId: string) => {
     if (tableId === selectedCollectionId) return

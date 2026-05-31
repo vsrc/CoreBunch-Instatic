@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useInitialQueryParams, useUrlQuerySync } from '@admin/lib/urlState'
 import {
   createCmsDataRow,
   createCmsDataTable,
@@ -60,7 +61,16 @@ export interface DataWorkspace {
   setRowStatus: (rowId: string, status: 'draft' | 'unpublished') => Promise<DataRow>
 }
 
-export function useDataWorkspace(initialTableSlug?: string): DataWorkspace {
+export function useDataWorkspace(): DataWorkspace {
+  // The Data workspace is directly linkable via `?table=<slug>&row=<id>`. We
+  // capture the params at mount once (so the URL sync below can't clobber the
+  // one-shot read) and mirror the live selection back into the URL.
+  const initialParams = useInitialQueryParams()
+  const initialTableSlug = initialParams.get('table') ?? undefined
+  // Holds the deep-linked row id until the initial table's rows have loaded;
+  // cleared after the one-shot apply.
+  const initialRowIdRef = useRef<string | null>(initialParams.get('row'))
+
   const [tables, setTables] = useState<DataTableListItem[]>([])
   // Initialize to true — the on-mount effect starts a fetch immediately, so
   // the loading state is already correct with no synchronous setState needed.
@@ -147,6 +157,31 @@ export function useDataWorkspace(initialTableSlug?: string): DataWorkspace {
     })()
     return () => { cancelled = true }
   }, [selectedTableId])
+
+  // Deep-link: once the (initially selected) table's rows have loaded, select
+  // the `?row=<id>` from the URL. One-shot — cleared after the first apply so
+  // later selections / reloads don't re-trigger it.
+  useEffect(() => {
+    const rowId = initialRowIdRef.current
+    if (!rowId) return
+    if (selectedTableId === null || loadingRows || trackedTableId !== selectedTableId) return
+
+    initialRowIdRef.current = null
+    if (rows.some((r) => r.id === rowId)) {
+      setSelectedRowId(rowId)
+    } else {
+      console.warn('[data-workspace] unknown ?row= id:', rowId)
+    }
+  }, [rows, loadingRows, selectedTableId, trackedTableId])
+
+  // Mirror the active table + row into the URL so the view is directly
+  // linkable. Contract matches the inbound deep link: `?table=<slug>&row=<id>`.
+  // Gated on `!loadingTables` so the initial selection settles before we write
+  // (otherwise the first render would briefly strip an inbound deep link).
+  useUrlQuerySync(
+    { table: selectedTable?.slug ?? null, row: selectedRowId },
+    { enabled: !loadingTables },
+  )
 
   // ---------------------------------------------------------------------------
   // Table actions

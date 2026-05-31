@@ -4,7 +4,7 @@ import { useEditorStore } from '@site/store/store'
 import type { SiteFile } from '@core/files/schemas'
 import type { Page } from '@core/page-tree'
 import type { VisualComponent } from '@core/visualComponents'
-import { createUniquePageSlug, pagePublicPath } from '@core/page-tree/slugs'
+import { createUniquePageSlug, pagePublicPath, isHomePage } from '@core/page-tree/slugs'
 import { Panel, useAutoFocusPanel } from '@admin/shared/Panel'
 import { Button } from '@ui/components/Button'
 import { EmptyState } from '@ui/components/EmptyState'
@@ -146,7 +146,12 @@ export function SiteExplorerPanel({
   }
 
   const pages = site?.pages ?? []
-  const normalPages = pages.filter((page) => !page.template)
+  // Pin the home page (slug `index`) to the top of the list; keep the rest in
+  // their existing order. A stable sort preserves relative order for non-home
+  // pages.
+  const normalPages = pages
+    .filter((page) => !page.template)
+    .sort((a, b) => Number(isHomePage(b)) - Number(isHomePage(a)))
   const templatePages = pages.filter((page) => page.template)
   const components = site?.visualComponents ?? []
 

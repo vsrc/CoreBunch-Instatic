@@ -260,6 +260,10 @@ function clickToolbarPublish() {
 beforeEach(() => {
   const site = makeSite({ name: 'Content Shell Site' })
   localStorage.clear()
+  // The workspaces now mirror their selection into the URL (`?table=&row=`).
+  // jsdom's location persists across tests in a file, so reset it here to
+  // simulate a fresh navigation and stop one test's URL leaking into the next.
+  window.history.replaceState({}, '', '/')
   useEditorStore.setState({
     site,
     activePageId: site.pages[0].id,

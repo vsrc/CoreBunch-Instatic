@@ -53,3 +53,17 @@ export function createUniquePageSlug(title: string, pages: Page[]): string {
 export function pagePublicPath(slug: string): string {
   return slug === 'index' ? '/' : `/${slug}`
 }
+
+/** The home page is the one published at the site root (`/`) — slug `index`. */
+export function isHomePage(page: Page): boolean {
+  return page.slug === 'index'
+}
+
+/**
+ * Resolve the site's home page (slug `index`). Used as the default selection
+ * when the editor opens without an explicit page in the URL, and to pin the
+ * home page to the top of the site explorer's page list.
+ */
+export function findHomePage(pages: Page[]): Page | undefined {
+  return pages.find(isHomePage)
+}

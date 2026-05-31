@@ -56,7 +56,7 @@ import { RightSidebar } from '@admin/pages/site/sidebars/RightSidebar'
 import { ConfirmDeleteProvider } from '@admin/shared/dialogs/ConfirmDeleteDialog'
 import { useEditorSelectPreference } from '@admin/pages/site/preferences/editorPreferences'
 import { usePersistence } from '@admin/pages/site/hooks/usePersistence'
-import { useSiteEditorDeepLink } from '@admin/pages/site/hooks/useSiteEditorDeepLink'
+import { useSiteEditorUrlSync } from '@admin/pages/site/hooks/useSiteEditorUrlSync'
 import { useEditorLayoutPersistence } from '@admin/pages/site/hooks/useEditorLayoutPersistence'
 import { selectActiveCanvasPage, selectActivePage, selectRightSidebarExpanded, useEditorStore } from '@admin/pages/site/store/store'
 import { resolveInsertLocation } from '@admin/pages/site/store/insertLocation'
@@ -257,10 +257,10 @@ export function AdminCanvasLayout({
     markNewSiteUnsaved: true,
     enabled: true,
   })
-  // When the Site editor is opened with `?table=pages&row=<id>` or
-  // `?table=components&row=<id>` (from the Data workspace), select that
-  // row's page or component once the site has finished loading.
-  useSiteEditorDeepLink({
+  // Keep the open page in lockstep with the URL: consume `?page=<slug>` (or a
+  // Data-workspace `?table=…&row=…` deep link) on load, and mirror the active
+  // page's slug back into the address bar so it's directly linkable.
+  useSiteEditorUrlSync({
     enabled: workspace === 'site',
     loaded: persistence.saveStatus.state !== 'loading',
   })
