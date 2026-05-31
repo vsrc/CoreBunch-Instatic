@@ -30,6 +30,7 @@ src/core/siteImport/
 ├── cssToStyleRules.ts   — single-file CSS → StyleRule[] + AssetRef[] + warnings
 ├── colorTokens.ts       — extract root custom-property color tokens from :root/html/body rules
 ├── scopeClasses.ts      — scope colliding class names across per-page stylesheets
+├── mimeTypes.ts         — extension → MIME fallback for FileMap entries that carry no MIME type (e.g. ZIP)
 ├── assetPlan.ts         — normalise URL props in node fragments + CSS url(); resolve @font-face; collect assets
 ├── applyAssetRewrites.ts — patch fragment props + CSS url() with new media URLs (post-upload)
 ├── linkRewrite.ts       — rewrite intra-site <a href> to cms:page:<id> refs
