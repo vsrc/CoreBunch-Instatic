@@ -20,7 +20,7 @@
  */
 import { describe, it, expect, beforeEach } from 'bun:test'
 import { useEditorStore } from '@site/store/store'
-import { instantiateVCAtRef } from '@core/visualComponents/instantiate'
+import { instantiateVCAtRef } from '@core/visualComponents'
 import type { BaseNode } from '@core/page-tree/baseNode'
 import { makeSite, makePage, makeNode } from '../fixtures'
 import '@modules/base/index'

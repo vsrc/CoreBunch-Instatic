@@ -32,7 +32,7 @@
  */
 
 import { Marked, type Tokens } from 'marked'
-import { escapeHtml, isSafeUrl } from '@core/publisher/utils'
+import { escapeHtml, isSafeUrl } from '@core/publisher'
 
 export { firstMediaPathFromMarkdown as firstImagePathFromMarkdown } from './markdownDocument'
 

@@ -22,6 +22,17 @@ export type {
   PropertyCondition,
 } from './propertySchema'
 
+export {
+  PropertyControlSchema,
+  PropertySchemaSchema,
+  resolvePropertyControlCategory,
+} from './propertySchema'
+
+export {
+  createModuleImportMap,
+  resolveDependencyUrl,
+} from './runtimeResolver'
+
 export type {
   NormalizedModuleDependency,
   SiteModuleDependencyUsage,

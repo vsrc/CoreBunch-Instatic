@@ -4,8 +4,8 @@
  * Content and semantic tag are module settings; visual typography belongs to
  * class styles. Emits a bare semantic element with no default class or CSS.
  */
-import type { ModuleDefinition } from '@core/module-engine/types'
-import { registry } from '@core/module-engine/registry'
+import { registry } from '@core/module-engine'
+import type { ModuleDefinition } from '@core/module-engine'
 import { TextStartTIcon } from 'pixel-art-icons/icons/text-start-t'
 import { Type, Value, type Static } from '@core/utils/typeboxHelpers'
 import { TextEditor } from './TextEditor'

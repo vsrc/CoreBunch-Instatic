@@ -84,7 +84,7 @@ describe('plugin worker IPC protocol', () => {
       'utf8',
     )
 
-    expect(source).toContain('@core/module-engine/propertySchema')
+    expect(source).toContain('@core/module-engine')
     expect(source).toContain('PropertySchemaSchema')
     expect(source).not.toContain('const PropertyControlSchema = Type.Recursive')
     expect(source).not.toContain('const PropertyConditionSchema = Type.Recursive')

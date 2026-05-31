@@ -13,7 +13,7 @@
 
 import { describe, it, expect, beforeEach } from 'bun:test'
 import { renderCache } from '@site/canvas/renderCache'
-import type { RenderOutput } from '@core/module-engine/types'
+import type { RenderOutput } from '@core/module-engine'
 
 // Reset cache between tests
 beforeEach(() => {

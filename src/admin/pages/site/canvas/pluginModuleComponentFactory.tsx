@@ -23,7 +23,7 @@
  */
 import type {
   ModuleComponentProps,
-} from '@core/module-engine/types'
+} from '@core/module-engine'
 import type {
   PluginModuleDefinition,
 } from '@core/plugin-sdk'

@@ -25,7 +25,7 @@ import { evaluateCondition } from '@core/page-tree/selectors'
 import type {
   AnyModuleDefinition,
   PropertyControl,
-} from '@core/module-engine/types'
+} from '@core/module-engine'
 import type {
   DynamicPropBinding,
   PageNode,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 import { makeModule, makePage, makeRegistry, makeSite } from '../publisher/helpers'
-import { publishPage } from '@core/publisher/render'
+import { publishPage } from '@core/publisher'
 import { resolveDynamicProps } from '@core/templates/dynamicBindings'
 import type { LoopItem } from '@core/loops/types'
 import { ContentModule } from '@modules/base/content'

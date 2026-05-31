@@ -20,7 +20,7 @@
  * that could break out of the attribute / tag context.
  */
 
-import type { PropertyControl } from '@core/module-engine/types'
+import type { PropertyControl } from '@core/module-engine'
 
 const BUILTIN_HTML_TAGS = [
   'div',

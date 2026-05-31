@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { registry } from '@core/module-engine/registry'
+import { registry } from '@core/module-engine'
 import { selectActiveCanvasPage, useEditorStore } from '@site/store/store'
 import type { CanvasDropResolution } from './canvasDnd'
 import { resolveCanvasDropTarget } from './canvasDnd'

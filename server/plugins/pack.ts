@@ -26,10 +26,8 @@ import type {
   Page,
   SiteDocument,
 } from '@core/page-tree'
-import {
-  parseVisualComponent,
-  type VisualComponent,
-} from '@core/visualComponents/schemas'
+import { parseVisualComponent } from '@core/visualComponents'
+import type { VisualComponent } from '@core/visualComponents'
 import { parseValue, safeParseValue, Value } from '@core/utils/typeboxHelpers'
 import { Type } from '@sinclair/typebox'
 import { PageSchema } from '@core/page-tree'

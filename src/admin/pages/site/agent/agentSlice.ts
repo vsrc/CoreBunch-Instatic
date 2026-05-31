@@ -27,12 +27,12 @@
 
 import { nanoid } from 'nanoid'
 import type { EditorStore, EditorStoreSliceCreator } from '@site/store/types'
-import { registry } from '@core/module-engine/registry'
+import { registry } from '@core/module-engine'
 import type {
   AnyModuleDefinition,
   PropertyControl,
   PropertySchema,
-} from '@core/module-engine/types'
+} from '@core/module-engine'
 import { Type, type Static } from '@core/utils/typeboxHelpers'
 import type { Page } from '@core/page-tree'
 import {

@@ -6,8 +6,8 @@ import {
   renderNode,
   publishPage,
   type RenderContext,
-} from '@core/publisher/render'
-import type { ModuleDefinition } from '@core/module-engine/types'
+} from '@core/publisher'
+import type { ModuleDefinition } from '@core/module-engine'
 import {
   frameworkColorClassId,
   generateFrameworkColorUtilityClasses,

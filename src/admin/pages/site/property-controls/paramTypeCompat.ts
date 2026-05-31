@@ -6,8 +6,8 @@
  * Constraint #269: This file may import from core/ (it lives in editor/).
  */
 
-import type { PropertyControl } from '@core/module-engine/types'
-import type { VCParamType } from '@core/visualComponents/schemas'
+import type { PropertyControl } from '@core/module-engine'
+import type { VCParamType } from '@core/visualComponents'
 
 /**
  * Return the canonical VCParamType for a given PropertyControl.

@@ -17,7 +17,7 @@ import { useEffect, useState } from 'react'
 import { useEditorStore } from '@site/store/store'
 import { loopSourceRegistry } from '@core/loops/registry'
 import type { LoopEntitySource } from '@core/loops/types'
-import type { PropertyControl, PropertySchema } from '@core/module-engine/types'
+import type { PropertyControl, PropertySchema } from '@core/module-engine'
 import { listCmsDataTables } from '@core/persistence/cmsData'
 import { PropertyControlRenderer } from '@site/property-controls/PropertyControlRenderer'
 import {

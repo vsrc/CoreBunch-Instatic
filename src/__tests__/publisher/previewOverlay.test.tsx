@@ -17,7 +17,7 @@ import { render, screen, cleanup, fireEvent } from '@testing-library/react'
 import { readFileSync } from 'fs'
 import { PreviewOverlay } from '@site/preview/PreviewOverlay'
 import { useEditorStore } from '@site/store/store'
-import { publishPage } from '@core/publisher/render'
+import { publishPage } from '@core/publisher'
 import { makeModule, makeRegistry, makePage, makeSite } from './helpers'
 
 // ---------------------------------------------------------------------------

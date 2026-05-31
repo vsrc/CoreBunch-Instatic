@@ -3,7 +3,7 @@ import { Value } from '@core/utils/typeboxHelpers'
 import {
   PropertyControlSchema,
   PropertySchemaSchema,
-} from '@core/module-engine/propertySchema'
+} from '@core/module-engine'
 
 describe('module-engine property schema', () => {
   it('accepts every host property control type, including nested groups', () => {

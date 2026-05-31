@@ -1,7 +1,7 @@
 import { selectActiveCanvasPage, useEditorStore } from '@site/store/store'
 import { resolveInsertLocation } from '@site/store/insertLocation'
-import { getMissingModuleDependencies } from '@core/module-engine/dependencies'
-import type { AnyModuleDefinition } from '@core/module-engine/types'
+import { getMissingModuleDependencies } from '@core/module-engine'
+import type { AnyModuleDefinition } from '@core/module-engine'
 
 /**
  * Insert a module into the active canvas document (page or Visual Component).

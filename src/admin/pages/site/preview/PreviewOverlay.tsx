@@ -18,8 +18,8 @@
 
 import { useEffect, useRef } from 'react'
 import { useEditorStore, selectActivePage } from '@site/store/store'
-import { publishPage } from '@core/publisher/render'
-import { registry } from '@core/module-engine/registry'
+import { publishPage } from '@core/publisher'
+import { registry } from '@core/module-engine'
 import { useTemplatePreviewContext } from '@site/hooks/useTemplatePreviewContext'
 import { EyeSolidIcon } from 'pixel-art-icons/icons/eye-solid'
 import { CloseIcon } from 'pixel-art-icons/icons/close'

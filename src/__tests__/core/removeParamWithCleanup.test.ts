@@ -17,7 +17,7 @@ import { describe, it, expect, beforeEach } from 'bun:test'
 import { produce } from 'immer'
 import { useEditorStore } from '@site/store/store'
 import type { SiteDocument } from '@core/page-tree'
-import type { VisualComponent } from '@core/visualComponents/schemas'
+import type { VisualComponent } from '@core/visualComponents'
 
 // ---------------------------------------------------------------------------
 // Helpers

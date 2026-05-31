@@ -23,8 +23,8 @@
  */
 
 import { describe, it, expect } from 'bun:test'
-import { instantiateVCAtRef } from '@core/visualComponents/instantiate'
-import type { VisualComponent, VCNode } from '@core/visualComponents/schemas'
+import { instantiateVCAtRef } from '@core/visualComponents'
+import type { VisualComponent, VCNode } from '@core/visualComponents'
 
 // ---------------------------------------------------------------------------
 // Helpers

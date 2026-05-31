@@ -9,8 +9,8 @@
  * target / drop zone for the body node — that wrapper is editor-only and
  * never reaches published HTML.
  */
-import type { ModuleDefinition } from '@core/module-engine/types'
-import { registry } from '@core/module-engine/registry'
+import type { ModuleDefinition } from '@core/module-engine'
+import { registry } from '@core/module-engine'
 import { FileTextSolidIcon } from 'pixel-art-icons/icons/file-text-solid'
 import { BodyEditor } from './BodyEditor'
 import { Type } from '@core/utils/typeboxHelpers'

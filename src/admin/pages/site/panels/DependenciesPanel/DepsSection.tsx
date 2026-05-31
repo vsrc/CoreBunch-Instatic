@@ -27,14 +27,14 @@ import { CloseIcon } from 'pixel-art-icons/icons/close'
 import { isSafePackageName } from '@core/site-dependencies/packageNames'
 import {
   getSiteModuleDependencyUsage,
+  registry,
   type SiteModuleDependencyUsage,
-} from '@core/module-engine/dependencies'
+} from '@core/module-engine'
 import {
   analyzeRuntimeScriptImports,
   type RuntimePackageDependencyUsage,
   type SiteRuntimeDiagnostic,
 } from '@core/site-runtime'
-import { registry } from '@core/module-engine/registry'
 import { evaluateDependencyLockStatus } from './lockStatus'
 import styles from './DepsSection.module.css'
 

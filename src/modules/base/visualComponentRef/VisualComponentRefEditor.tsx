@@ -18,9 +18,9 @@
  * to pass to `instantiateVCAtRef`.
  */
 import React from 'react'
-import type { ModuleComponentProps } from '@core/module-engine/types'
+import type { ModuleComponentProps } from '@core/module-engine'
 import { useEditorStore } from '@site/store/store'
-import { instantiateVCAtRef } from '@core/visualComponents/instantiate'
+import { instantiateVCAtRef } from '@core/visualComponents'
 import type { BaseNode } from '@core/page-tree/baseNode'
 import { BracesIcon } from 'pixel-art-icons/icons/braces'
 import { CanvasModulePlaceholder } from '@ui/components/CanvasModulePlaceholder'

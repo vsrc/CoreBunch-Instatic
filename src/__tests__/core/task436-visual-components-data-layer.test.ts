@@ -81,7 +81,7 @@ let wouldCreateCycle: (
 
 try {
    
-  const nvMod = require('@core/visualComponents/nameValidation')
+  const nvMod = require('@core/visualComponents')
   validateComponentName = nvMod.validateComponentName
 } catch {
   validateComponentName = undefined as unknown as typeof validateComponentName
@@ -89,7 +89,7 @@ try {
 
 try {
    
-  const rgMod = require('@core/visualComponents/recursionGuard')
+  const rgMod = require('@core/visualComponents')
   getReferencedComponentIds = rgMod.getReferencedComponentIds
   wouldCreateCycle          = rgMod.wouldCreateCycle
 } catch {

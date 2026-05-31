@@ -11,8 +11,8 @@ import { handleHoleRequest, isHoleRuntimeAssetPath, serveHoleRuntimeAsset } from
 import { isRuntimePackagePath, tryServeRuntimePackage } from './publish/runtime/packageServer'
 import { jsonResponse } from './http'
 import { hardenUploadResponse, serveAdminApp, serveStaticFile } from './static'
-import { registry } from '@core/module-engine/registry'
-import type { CssBundleFile, SiteCssBundleId } from '@core/publisher/siteCssBundle'
+import { registry } from '@core/module-engine'
+import type { CssBundleFile, SiteCssBundleId } from '@core/publisher'
 import { buildSiteCssBundle } from './publish/siteCssBundle'
 import { mediaStorageRegistry } from '@core/plugins/mediaStorageRegistry'
 

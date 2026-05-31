@@ -18,7 +18,7 @@
  */
 
 import type { DataRow, DataRowCells } from '@core/data/schemas'
-import { parseVisualComponent, type VisualComponent } from '@core/visualComponents/schemas'
+import { parseVisualComponent, type VisualComponent } from '@core/visualComponents'
 
 // ---------------------------------------------------------------------------
 // DataRow → VisualComponent

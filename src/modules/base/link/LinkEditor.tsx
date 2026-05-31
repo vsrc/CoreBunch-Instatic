@@ -12,7 +12,7 @@
  * canvas while the published page renders the text.
  */
 import React from 'react'
-import type { ModuleComponentProps } from '@core/module-engine/types'
+import type { ModuleComponentProps } from '@core/module-engine'
 
 interface LinkProps extends Record<string, unknown> {
   href: string

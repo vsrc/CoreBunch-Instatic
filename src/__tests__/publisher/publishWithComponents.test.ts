@@ -14,10 +14,10 @@ import { describe, it, expect } from 'bun:test'
 // Populate module registry (side-effect: registers all base modules)
 import '@modules/base'
 
-import { publishPage } from '@core/publisher/render'
-import type { VisualComponent, VCNode, VCParam } from '@core/visualComponents/schemas'
+import { publishPage } from '@core/publisher'
+import type { VisualComponent, VCNode, VCParam } from '@core/visualComponents'
 import type { SiteDocument, Page, PageNode } from '@core/page-tree'
-import { registry } from '@core/module-engine/registry'
+import { registry } from '@core/module-engine'
 
 // ---------------------------------------------------------------------------
 // Fixture helpers

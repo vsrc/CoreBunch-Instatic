@@ -13,7 +13,7 @@
  * designed separately.
  */
 import React from 'react'
-import type { ModuleComponentProps } from '@core/module-engine/types'
+import type { ModuleComponentProps } from '@core/module-engine'
 
 type TextTag =
   | 'p'

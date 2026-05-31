@@ -9,7 +9,7 @@
 
 import { describe, it, expect } from 'bun:test'
 import { Type, Value } from '@core/utils/typeboxHelpers'
-import type { AnyModuleDefinition } from '@core/module-engine/types'
+import type { AnyModuleDefinition } from '@core/module-engine'
 import { validateNodeProps } from '@core/module-engine'
 import { SquareSolidIcon } from 'pixel-art-icons/icons/square-solid'
 

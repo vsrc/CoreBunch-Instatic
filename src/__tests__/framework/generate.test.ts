@@ -5,9 +5,9 @@ import {
 } from '@core/framework/colors'
 import { buildDefaultSpacingSettings, buildDefaultTypographySettings } from '@core/framework/defaults'
 import { generateFrameworkRootCss } from '@core/framework/generate'
-import { generateFrameworkCss } from '@core/publisher/frameworkCss'
+import { generateFrameworkCss } from '@core/publisher'
 import { resolveFrameworkPreferences } from '@core/framework/preferences'
-import type { VisualComponent } from '@core/visualComponents/schemas'
+import type { VisualComponent } from '@core/visualComponents'
 import { makePage, makeSite } from '../publisher/helpers'
 
 const colors = {

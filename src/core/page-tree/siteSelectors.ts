@@ -24,7 +24,7 @@
  */
 import type { Page } from './page'
 import type { SiteDocument } from './siteDocument'
-import type { VisualComponent } from '@core/visualComponents/schemas'
+import type { VisualComponent } from '@core/visualComponents'
 
 // ---------------------------------------------------------------------------
 // Internal caches

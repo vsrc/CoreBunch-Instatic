@@ -42,7 +42,7 @@ import { SiteFileSchema, type SiteFile, type SiteFileType } from '@core/files/sc
 import { SiteRuntimeConfigSchema, type SiteRuntimeConfig } from '@core/site-runtime/schemas'
 import { normalizeSiteRuntimeConfig } from '@core/site-runtime/runtimeConfig'
 import { SitePackageJsonSchema, type SitePackageJson } from '@core/site-dependencies/manifest'
-import { type VisualComponent } from '@core/visualComponents/schemas'
+import { type VisualComponent } from '@core/visualComponents'
 import type { Page } from './page'
 
 // ---------------------------------------------------------------------------

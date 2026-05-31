@@ -7,7 +7,7 @@
  */
 
 import { createContext, use } from 'react'
-import type { VCDeletionImpact } from '@core/visualComponents/deletionImpact'
+import type { VCDeletionImpact } from '@core/visualComponents'
 
 export interface ConfirmVCDeletionRequest {
   /** ID of the visual component to delete. */

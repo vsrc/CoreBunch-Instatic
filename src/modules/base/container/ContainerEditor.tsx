@@ -32,7 +32,7 @@
  * children at all.
  */
 import React from 'react'
-import type { ModuleComponentProps } from '@core/module-engine/types'
+import type { ModuleComponentProps } from '@core/module-engine'
 import { resolveHtmlTag } from '@modules/base/utils/htmlTag'
 import { CanvasModulePlaceholder } from '@ui/components/CanvasModulePlaceholder'
 import { ContainerSolidIcon } from 'pixel-art-icons/icons/container-solid'

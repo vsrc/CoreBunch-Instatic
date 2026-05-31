@@ -17,12 +17,16 @@
 
 import { nanoid } from 'nanoid'
 import type { EditorStoreSliceCreator } from '@site/store/types'
-import type { VisualComponent, VCParam, VCNode } from '@core/visualComponents/schemas'
+import type { VisualComponent, VCParam, VCNode } from '@core/visualComponents'
 import type { PageNode, StyleRule } from '@core/page-tree'
 import type { BaseNode } from '@core/page-tree/baseNode'
-import { validateComponentName, validateParamName } from '@core/visualComponents/nameValidation'
-import { wouldCreateCycle } from '@core/visualComponents/recursionGuard'
-import { syncSlotInstances, applySlotSyncResult } from '@core/visualComponents/slotSync'
+import {
+  validateComponentName,
+  validateParamName,
+  wouldCreateCycle,
+  syncSlotInstances,
+  applySlotSyncResult,
+} from '@core/visualComponents'
 import { buildSiteHelpers } from './site/helpers'
 
 // ---------------------------------------------------------------------------

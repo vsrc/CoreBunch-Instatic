@@ -3,7 +3,7 @@
  */
 
 import { Type } from '@sinclair/typebox'
-import { PropertySchemaSchema } from '@core/module-engine/propertySchema'
+import { PropertySchemaSchema } from '@core/module-engine'
 
 const LoopSourceFieldSchema = Type.Object(
   {

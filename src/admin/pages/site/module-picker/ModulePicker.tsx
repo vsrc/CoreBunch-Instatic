@@ -22,9 +22,9 @@ import {
   type RefObject,
 } from 'react'
 import { useEditorStore } from '@site/store/store'
-import { registry } from '@core/module-engine/registry'
-import type { AnyModuleDefinition } from '@core/module-engine/types'
-import type { VisualComponent } from '@core/visualComponents/schemas'
+import { registry } from '@core/module-engine'
+import type { AnyModuleDefinition } from '@core/module-engine'
+import type { VisualComponent } from '@core/visualComponents'
 import { BracesIcon } from 'pixel-art-icons/icons/braces'
 import { SearchBar } from '@ui/components/SearchBar'
 import {

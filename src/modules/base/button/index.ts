@@ -5,8 +5,8 @@
  * default class or default CSS. Visual styling is opt-in via user classes
  * (mcClassName / multi-class system).
  */
-import type { ModuleDefinition } from '@core/module-engine/types'
-import { registry } from '@core/module-engine/registry'
+import type { ModuleDefinition } from '@core/module-engine'
+import { registry } from '@core/module-engine'
 import { CursorClickSolidIcon } from 'pixel-art-icons/icons/cursor-click-solid'
 import { safeUrl } from '@modules/base/utils/escape'
 import { Type, Value, type Static } from '@core/utils/typeboxHelpers'

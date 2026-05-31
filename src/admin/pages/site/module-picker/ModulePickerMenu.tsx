@@ -14,7 +14,7 @@
 
 import { useRef, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
-import type { AnyModuleDefinition } from '@core/module-engine/types'
+import type { AnyModuleDefinition } from '@core/module-engine'
 import { ContextMenu } from '@ui/components/ContextMenu'
 import type { FloatingAlign, FloatingSide } from '@ui/lib/floatingPosition'
 import { ModulePicker } from './ModulePicker'

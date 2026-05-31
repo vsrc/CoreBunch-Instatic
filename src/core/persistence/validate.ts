@@ -30,16 +30,14 @@
 
 import { parseSiteDocument, parsePage, parseVisualComponent, type SiteShell } from '@core/page-tree'
 import type { SiteDocument, Page } from '@core/page-tree'
-import type { VisualComponent } from '@core/visualComponents/schemas'
+import type { VisualComponent } from '@core/visualComponents'
 import { isSafePath, normalizePath } from '@core/files/pathValidation'
-import { validateComponentName } from '@core/visualComponents/nameValidation'
+import { validateComponentName, getReferencedComponentIds, syncSlotInstances, applySlotSyncResult } from '@core/visualComponents'
 import { sanitizeRichtext, isRichtextPropKey } from '@core/sanitize'
 import { normalizeSitePackageJson } from '@core/site-dependencies/manifest'
 import { normalizeSiteRuntimeConfig } from '@core/site-runtime'
 import { pageSlugDuplicateError, pageSlugError } from '@core/page-tree/slugs'
 import { generateDefaultDarkColor, normalizeFrameworkColorSlug } from '@core/framework/colors'
-import { getReferencedComponentIds } from '@core/visualComponents/recursionGuard'
-import { syncSlotInstances, applySlotSyncResult } from '@core/visualComponents/slotSync'
 import type { BaseNode } from '@core/page-tree/baseNode'
 
 // ---------------------------------------------------------------------------

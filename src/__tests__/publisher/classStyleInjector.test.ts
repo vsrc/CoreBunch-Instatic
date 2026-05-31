@@ -13,8 +13,7 @@
  */
 
 import { describe, it, expect } from 'bun:test'
-import { bagToCSS, generateClassCSS } from '@core/publisher/classCss'
-import { collectClassCSS } from '@core/publisher/cssCollector'
+import { bagToCSS, collectClassCSS, generateClassCSS } from '@core/publisher'
 import { makeConditionDef } from '@core/page-tree'
 import type { StyleRule, Page, PageNode, SiteDocument } from '@core/page-tree'
 

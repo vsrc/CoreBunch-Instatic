@@ -20,7 +20,7 @@
  * without re-running module registration.
  */
 import React from 'react'
-import type { ModuleComponentProps } from '@core/module-engine/types'
+import type { ModuleComponentProps } from '@core/module-engine'
 import { CanvasModulePlaceholder } from '@ui/components/CanvasModulePlaceholder'
 import { BoxStackSolidIcon } from 'pixel-art-icons/icons/box-stack-solid'
 import { resolveHtmlTag } from '@modules/base/utils/htmlTag'

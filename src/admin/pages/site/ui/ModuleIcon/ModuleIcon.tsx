@@ -12,8 +12,8 @@
  * Pass either `moduleId` (preferred — handles unknown ids gracefully) or
  * `module` directly when the caller already has the resolved definition.
  */
-import { registry } from '@core/module-engine/registry'
-import type { AnyModuleDefinition } from '@core/module-engine/types'
+import { registry } from '@core/module-engine'
+import type { AnyModuleDefinition } from '@core/module-engine'
 import type { IconProps } from 'pixel-art-icons/types'
 import { SquareSolidIcon } from 'pixel-art-icons/icons/square-solid'
 

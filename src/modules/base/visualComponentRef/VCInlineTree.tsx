@@ -22,9 +22,9 @@
  *   same contract as the publisher's `injectClassIntoRootElement`.
  */
 
-import { registry } from '@core/module-engine/registry'
-import type { NodeWrapperProps as NodeWrapperPropsType } from '@core/module-engine/types'
-import type { VCNode } from '@core/visualComponents/schemas'
+import { registry } from '@core/module-engine'
+import type { NodeWrapperProps as NodeWrapperPropsType } from '@core/module-engine'
+import type { VCNode } from '@core/visualComponents'
 import { classNamesForClassIds, type StyleRuleRegistry } from '@core/page-tree/classNames'
 
 interface VCInlineTreeProps {

@@ -14,11 +14,11 @@
  * built pre-pipeline, editor canvas preview), we fall back to a plain
  * `<img src loading decoding>` so the module never breaks.
  */
-import type { ModuleDefinition } from '@core/module-engine/types'
-import type { RenderResolvedMedia } from '@core/publisher/render'
+import type { ModuleDefinition } from '@core/module-engine'
+import type { RenderResolvedMedia } from '@core/publisher'
 import { Type, Value } from '@core/utils/typeboxHelpers'
 import type { Static } from '@core/utils/typeboxHelpers'
-import { registry } from '@core/module-engine/registry'
+import { registry } from '@core/module-engine'
 import { ImageSolidIcon } from 'pixel-art-icons/icons/image-solid'
 import { safeUrl } from '@modules/base/utils/escape'
 import { ImageEditor } from './ImageEditor'

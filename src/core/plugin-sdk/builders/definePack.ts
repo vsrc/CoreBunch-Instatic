@@ -29,7 +29,7 @@
 
 import type { StyleRule, Page } from '@core/page-tree'
 import { classKindSelector } from '@core/page-tree'
-import type { VisualComponent } from '@core/visualComponents/schemas'
+import type { VisualComponent } from '@core/visualComponents'
 
 export interface PluginPackContents {
   visualComponents: VisualComponent[]

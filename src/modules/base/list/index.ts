@@ -4,8 +4,8 @@
  * Emits a bare `<ul>` / `<ol>` with no default class or default CSS.
  * Visual styling is opt-in via user classes (mcClassName / multi-class system).
  */
-import type { ModuleDefinition } from '@core/module-engine/types'
-import { registry } from '@core/module-engine/registry'
+import type { ModuleDefinition } from '@core/module-engine'
+import { registry } from '@core/module-engine'
 import { Type, Value, type Static } from '@core/utils/typeboxHelpers'
 import { ListBoxSolidIcon } from 'pixel-art-icons/icons/list-box-solid'
 import { ListEditor } from './ListEditor'

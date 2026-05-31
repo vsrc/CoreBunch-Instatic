@@ -33,7 +33,7 @@ import {
   useEditorStore,
   selectActiveCanvasPage,
 } from '@site/store/store'
-import { registry } from '@core/module-engine/registry'
+import { registry } from '@core/module-engine'
 import {
   getNodeDisplayName,
   getNodeHtmlTag,

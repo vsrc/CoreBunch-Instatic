@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
 import { useEditorStore } from '@site/store/store'
 import { buildPageContext } from '@site/agent/agentSlice'
-import { registry } from '@core/module-engine/registry'
-import type { AnyModuleDefinition } from '@core/module-engine/types'
+import { registry } from '@core/module-engine'
+import type { AnyModuleDefinition } from '@core/module-engine'
 import { SquareSolidIcon } from 'pixel-art-icons/icons/square-solid'
 import '@modules/base'
 

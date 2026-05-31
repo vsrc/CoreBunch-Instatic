@@ -18,9 +18,9 @@
  */
 
 import { describe, it, expect } from 'bun:test'
-import { syncSlotInstances, applySlotSyncResult } from '@core/visualComponents/slotSync'
+import { syncSlotInstances, applySlotSyncResult } from '@core/visualComponents'
 import type { BaseNode } from '@core/page-tree/baseNode'
-import type { VisualComponent } from '@core/visualComponents/schemas'
+import type { VisualComponent } from '@core/visualComponents'
 
 // ---------------------------------------------------------------------------
 // Helpers

@@ -22,7 +22,7 @@
  * Output shape conforms to the host `BaseNode` schema.
  */
 
-import type { VisualComponent, VCNode } from '@core/visualComponents/schemas'
+import type { VisualComponent, VCNode } from '@core/visualComponents'
 
 let counter = 0
 function nextId(prefix: string): string {

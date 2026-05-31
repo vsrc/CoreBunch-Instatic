@@ -13,7 +13,7 @@
 import { useRef } from 'react'
 import { Button } from '@ui/components/Button'
 import { Dialog } from '@ui/components/Dialog'
-import type { VCDeletionImpact, VCRefUsage } from '@core/visualComponents/deletionImpact'
+import type { VCDeletionImpact, VCRefUsage } from '@core/visualComponents'
 import styles from './VCDeletionConfirmDialog.module.css'
 
 export interface VCDeletionConfirmDialogProps {

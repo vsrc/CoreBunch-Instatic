@@ -9,7 +9,7 @@
  * treatment makes it clear this is a structural VC slot, not a plain container.
  */
 import React from 'react'
-import type { ModuleComponentProps } from '@core/module-engine/types'
+import type { ModuleComponentProps } from '@core/module-engine'
 import { TargetSolidIcon } from 'pixel-art-icons/icons/target-solid'
 import styles from './SlotInstance.module.css'
 

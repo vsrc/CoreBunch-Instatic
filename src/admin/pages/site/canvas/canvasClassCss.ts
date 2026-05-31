@@ -1,5 +1,4 @@
-import { bagToCSS, conditionPrelude } from '@core/publisher/classCss'
-import { PUBLISHER_RESET_CSS } from '@core/publisher/reset'
+import { bagToCSS, conditionPrelude, PUBLISHER_RESET_CSS } from '@core/publisher'
 import { generateFrameworkRootCss } from '@core/framework/generate'
 import { generateFontsCss } from '@core/fonts/css'
 import { styleRuleSelector } from '@core/page-tree/classNames'

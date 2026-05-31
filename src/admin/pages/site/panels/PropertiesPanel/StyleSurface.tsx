@@ -23,7 +23,7 @@
 
 import { useState, useRef, useEffect, type ReactNode } from 'react'
 import { useEditorStore } from '@site/store/store'
-import type { AnyModuleDefinition } from '@core/module-engine/types'
+import type { AnyModuleDefinition } from '@core/module-engine'
 import type { StyleRule, CSSPropertyBag } from '@core/page-tree'
 import { isGeneratedClassLocked } from '@core/page-tree/classUtils'
 import { Button } from '@ui/components/Button'

@@ -12,7 +12,7 @@ import { ModuleSandboxFrame } from '@site/canvas/ModuleSandboxFrame'
 import { useEditorStore } from '@site/store/store'
 import { makeSite } from '../fixtures'
 import { normalizeSiteRuntimeConfig } from '@core/site-runtime'
-import type { AnyModuleDefinition } from '@core/module-engine/types'
+import type { AnyModuleDefinition } from '@core/module-engine'
 
 afterEach(cleanup)
 

@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
-import type { AnyModuleDefinition } from '@core/module-engine/types'
-import { createModuleImportMap } from '@core/module-engine/runtimeResolver'
+import type { AnyModuleDefinition } from '@core/module-engine'
 import {
+  createModuleImportMap,
   getMissingModuleDependencies,
   normalizeModuleDependencies,
-} from '@core/module-engine/dependencies'
+} from '@core/module-engine'
 import type { SiteDocument } from '@core/page-tree'
 import { useEditorStore } from '@site/store/store'
 import type { FocusedPanel } from '@site/store/slices/uiSlice'
@@ -12,7 +12,7 @@ import { Button } from '@ui/components/Button'
 import { CanvasModulePlaceholder } from '@ui/components/CanvasModulePlaceholder'
 import { PackageSolidIcon } from 'pixel-art-icons/icons/package-solid'
 import { cn } from '@ui/cn'
-import { generateClassCSS } from '@core/publisher/classCss'
+import { generateClassCSS } from '@core/publisher'
 import {
   createSandboxSrcDoc,
   HOST_MESSAGE_SOURCE,

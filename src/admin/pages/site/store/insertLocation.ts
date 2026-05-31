@@ -24,7 +24,7 @@
  *     VC ref, which read as a broken click in the editor.
  */
 
-import { registry } from '@core/module-engine/registry'
+import { registry } from '@core/module-engine'
 import type { Page } from '@core/page-tree'
 
 export interface InsertLocation {

@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect } from 'bun:test'
-import { escapeProps, publishPage, type RenderContext, renderNode } from '@core/publisher/render'
+import { escapeProps, publishPage, type RenderContext, renderNode } from '@core/publisher'
 import { makeModule, makeRegistry, makePage, makeSite } from './helpers'
 
 // ---------------------------------------------------------------------------

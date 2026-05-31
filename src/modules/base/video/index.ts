@@ -23,11 +23,11 @@
  * upload) and `poster` (variant ladder + intrinsic dims). Both are
  * optional — missing values fall back gracefully.
  */
-import type { ModuleDefinition } from '@core/module-engine/types'
-import type { RenderResolvedMedia } from '@core/publisher/render'
+import { registry } from '@core/module-engine'
+import type { ModuleDefinition } from '@core/module-engine'
+import type { RenderResolvedMedia } from '@core/publisher'
 import { Type, Value } from '@core/utils/typeboxHelpers'
 import type { Static } from '@core/utils/typeboxHelpers'
-import { registry } from '@core/module-engine/registry'
 import { VideoSolidIcon } from 'pixel-art-icons/icons/video-solid'
 import { safeUrl } from '@modules/base/utils/escape'
 import { VideoEditor } from './VideoEditor'

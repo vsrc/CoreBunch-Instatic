@@ -11,9 +11,8 @@
  */
 
 import { nanoid } from 'nanoid'
-import { registry } from '@core/module-engine/registry'
+import { registry } from '@core/module-engine'
 
-import { wouldCreateCycle } from '@core/visualComponents/recursionGuard'
 import {
   cloneScopedClassesForNodeMap,
   createNode,
@@ -32,7 +31,7 @@ import {
   wrapNodes,
 } from '@core/page-tree'
 import type { NodeTree, PageNode, SiteDocument } from '@core/page-tree'
-import { syncSlotInstances, applySlotSyncResult } from '@core/visualComponents/slotSync'
+import { wouldCreateCycle, syncSlotInstances, applySlotSyncResult } from '@core/visualComponents'
 import { depthInTree } from './helpers'
 import { indexStyleRulesByName, linkImportedClassNames } from './importLinking'
 import type { SiteSlice, SiteSliceHelpers } from './types'

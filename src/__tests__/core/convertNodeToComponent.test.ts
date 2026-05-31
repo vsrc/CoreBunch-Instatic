@@ -22,7 +22,7 @@ import { describe, it, expect, beforeEach } from 'bun:test'
 import { useEditorStore } from '@site/store/store'
 import { produce } from 'immer'
 import type { SiteDocument, PageNode, StyleRule } from '@core/page-tree'
-import type { VisualComponent } from '@core/visualComponents/schemas'
+import type { VisualComponent } from '@core/visualComponents'
 import { VisualComponentNameError } from '@site/store/slices/visualComponentsSlice'
 // Side-effect import: registers base modules in the registry so
 // `registry.get('base.text')`, `'base.container'`, etc. resolve at runtime.

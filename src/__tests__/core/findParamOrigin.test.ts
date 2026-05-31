@@ -15,8 +15,8 @@
  */
 
 import { describe, it, expect } from 'bun:test'
-import { findParamOrigin } from '@core/visualComponents/origin'
-import type { VisualComponent, VCNode, VCParam } from '@core/visualComponents/schemas'
+import { findParamOrigin } from '@core/visualComponents'
+import type { VisualComponent, VCNode, VCParam } from '@core/visualComponents'
 
 // ---------------------------------------------------------------------------
 // Helpers

@@ -6,7 +6,7 @@ import { CmsSiteEnvelopeSchema, CmsPagesEnvelopeSchema, CmsComponentsEnvelopeSch
 import { validateSite, validatePages, validateVisualComponents } from './validate'
 import { pageFromRow } from '@core/data/pageFromRow'
 import { visualComponentFromRow } from '@core/data/componentFromRow'
-import type { VisualComponent } from '@core/visualComponents/schemas'
+import type { VisualComponent } from '@core/visualComponents'
 
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
 

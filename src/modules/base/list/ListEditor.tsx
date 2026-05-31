@@ -7,7 +7,7 @@
  * for the publisher render path.
  */
 import React from 'react'
-import type { ModuleComponentProps } from '@core/module-engine/types'
+import type { ModuleComponentProps } from '@core/module-engine'
 import styles from './list.module.css'
 
 interface ListProps extends Record<string, unknown> {

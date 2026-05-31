@@ -26,8 +26,8 @@ import { Button } from '@ui/components/Button'
 import { Input } from '@ui/components/Input'
 import { ChevronLeftIcon } from 'pixel-art-icons/icons/chevron-left'
 import { ChevronRightIcon } from 'pixel-art-icons/icons/chevron-right'
-import { validateComponentName } from '@core/visualComponents/nameValidation'
-import type { VisualComponent } from '@core/visualComponents/schemas'
+import { validateComponentName } from '@core/visualComponents'
+import type { VisualComponent } from '@core/visualComponents'
 import styles from './VCBreadcrumb.module.css'
 
 /**

@@ -22,7 +22,7 @@ import type {
 } from '@core/page-tree'
 import type { SiteRuntimeConfig } from '@core/site-runtime'
 import { addPage, createNode } from '@core/page-tree'
-import { syncSlotInstances, applySlotSyncResult } from '@core/visualComponents/slotSync'
+import { syncSlotInstances, applySlotSyncResult } from '@core/visualComponents'
 import type { Draft } from 'immer'
 import type { ImportFragment } from '@core/htmlImport'
 import type { NewStyleRule, ImportFontFamily, ImportColorToken, ImportScript } from '@core/siteImport'

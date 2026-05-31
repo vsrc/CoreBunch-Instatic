@@ -36,7 +36,7 @@
  */
 
 import type { Page, SiteDocument, DynamicPropBinding } from '@core/page-tree'
-import type { IModuleRegistry } from '@core/module-engine/types'
+import type { IModuleRegistry } from '@core/module-engine'
 import { selectVisualComponentById } from '@core/page-tree'
 import { loopSourceRegistry } from '@core/loops/registry'
 import { containsTokens, parseTokenString } from '@core/templates/tokenInterpolation'

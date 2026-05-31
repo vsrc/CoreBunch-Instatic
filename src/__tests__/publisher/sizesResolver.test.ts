@@ -12,7 +12,7 @@
  *   - Multi-class on one node: latest declaration wins.
  */
 import { describe, it, expect } from 'bun:test'
-import { resolveAutoSizes } from '@core/publisher/sizesResolver'
+import { resolveAutoSizes } from '@core/publisher'
 import { makePage, makeSite } from './helpers'
 import type { StyleRule } from '@core/page-tree'
 

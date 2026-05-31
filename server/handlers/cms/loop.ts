@@ -21,9 +21,9 @@
  */
 
 import type { DbClient } from '../../db/client'
-import { registry } from '@core/module-engine/registry'
+import { registry } from '@core/module-engine'
 import { loopSourceRegistry } from '@core/loops/registry'
-import { renderNode, type RenderContext, type ResolvedLoopRenderData } from '@core/publisher/render'
+import { renderNode, type RenderContext, type ResolvedLoopRenderData } from '@core/publisher'
 import { jsonResponse } from '../../http'
 import { getLatestPublishedSiteSnapshot, getPublishedPageBySlug } from '../../repositories/publish'
 import { collectLoopNodes, readLoopProps } from '../../publish/loopPrefetch'

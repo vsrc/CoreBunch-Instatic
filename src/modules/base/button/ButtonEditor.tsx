@@ -10,7 +10,7 @@
  * a clean replacement will be designed separately.
  */
 import React from 'react'
-import type { ModuleComponentProps } from '@core/module-engine/types'
+import type { ModuleComponentProps } from '@core/module-engine'
 
 interface ButtonProps extends Record<string, unknown> {
   label: string

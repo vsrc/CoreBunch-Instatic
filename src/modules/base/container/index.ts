@@ -8,8 +8,8 @@
  * built-in layout/list tags plus a 'custom' escape hatch (free-form `customTag`
  * text input) so authors can render any valid HTML element name.
  */
-import type { ModuleDefinition } from '@core/module-engine/types'
-import { registry } from '@core/module-engine/registry'
+import type { ModuleDefinition } from '@core/module-engine'
+import { registry } from '@core/module-engine'
 import { SquareSolidIcon } from 'pixel-art-icons/icons/square-solid'
 import {
   customHtmlTagControl,

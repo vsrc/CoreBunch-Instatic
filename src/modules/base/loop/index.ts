@@ -27,8 +27,8 @@
  * can pick a built-in tag (div, ul, nav, …) or supply a custom name.
  * Default is 'div' so existing loops keep their current published HTML.
  */
-import type { ModuleDefinition } from '@core/module-engine/types'
-import { registry } from '@core/module-engine/registry'
+import type { ModuleDefinition } from '@core/module-engine'
+import { registry } from '@core/module-engine'
 import { Type, Value, type Static } from '@core/utils/typeboxHelpers'
 import { BoxStackSolidIcon } from 'pixel-art-icons/icons/box-stack-solid'
 import { resolveHtmlTag } from '@modules/base/utils/htmlTag'

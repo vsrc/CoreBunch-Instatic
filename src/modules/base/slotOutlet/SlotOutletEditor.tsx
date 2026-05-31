@@ -11,7 +11,7 @@
  * (their content is injected at the outlet's position from the slot-instance).
  */
 import React from 'react'
-import type { ModuleComponentProps } from '@core/module-engine/types'
+import type { ModuleComponentProps } from '@core/module-engine'
 import { useEditorStore } from '@site/store/store'
 import { CanvasModulePlaceholder } from '@ui/components/CanvasModulePlaceholder'
 import { TargetSolidIcon } from 'pixel-art-icons/icons/target-solid'

@@ -5,7 +5,7 @@
  * re-running module registration.
  */
 import React from 'react'
-import type { ModuleComponentProps } from '@core/module-engine/types'
+import type { ModuleComponentProps } from '@core/module-engine'
 import { CanvasModulePlaceholder } from '@ui/components/CanvasModulePlaceholder'
 import { TextPlusIcon } from 'pixel-art-icons/icons/text-plus'
 

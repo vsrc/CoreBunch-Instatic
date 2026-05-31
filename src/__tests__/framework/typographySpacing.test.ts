@@ -19,7 +19,7 @@ import {
   generateFrameworkSpacingUtilityClasses,
   generateFrameworkSpacingVariables,
 } from '@core/framework/spacing'
-import { generateClassCSS } from '@core/publisher/classCss'
+import { generateClassCSS } from '@core/publisher'
 import { DEFAULT_FRAMEWORK_PREFERENCES } from '@core/framework/scale'
 import { resolveFrameworkPreferences } from '@core/framework/preferences'
 import {

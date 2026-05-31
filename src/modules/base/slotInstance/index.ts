@@ -16,8 +16,8 @@
  *
  * Architecture source: Task 4 of the Tree Unification Refactor.
  */
-import type { ModuleDefinition } from '@core/module-engine/types'
-import { registry } from '@core/module-engine/registry'
+import type { ModuleDefinition } from '@core/module-engine'
+import { registry } from '@core/module-engine'
 import { TargetSolidIcon } from 'pixel-art-icons/icons/target-solid'
 import { SlotInstanceEditor } from './SlotInstanceEditor'
 import { Type } from '@core/utils/typeboxHelpers'

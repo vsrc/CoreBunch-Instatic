@@ -7,7 +7,7 @@ import { SiteExplorerPanel } from '@site/panels/SiteExplorerPanel'
 import { MediaExplorerPanel } from '@site/panels/MediaExplorerPanel'
 import { useEditorStore } from '@site/store/store'
 import { makeNode, makePage, makeSite } from '../fixtures'
-import type { VisualComponent } from '@core/visualComponents/schemas'
+import type { VisualComponent } from '@core/visualComponents'
 import '@modules/base/index'
 
 afterEach(cleanup)

@@ -6,7 +6,7 @@
  * Pure module, no side effects.
  */
 
-import type { PropertyControl } from '@core/module-engine/types'
+import type { PropertyControl } from '@core/module-engine'
 import type { DataFieldType, DataMetaField } from '@core/data/schemas'
 
 /**

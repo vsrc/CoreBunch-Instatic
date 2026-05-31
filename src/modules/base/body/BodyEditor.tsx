@@ -17,7 +17,7 @@
  * re-running module registration.
  */
 import { useEffect, useRef } from 'react'
-import type { ModuleComponentProps, NodeWrapperProps as NodeWrapperPropsType } from '@core/module-engine/types'
+import type { ModuleComponentProps, NodeWrapperProps as NodeWrapperPropsType } from '@core/module-engine'
 
 type BodyProps = Record<string, unknown>
 

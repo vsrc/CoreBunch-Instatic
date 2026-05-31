@@ -30,7 +30,7 @@ import {
 import { useEditorStore, selectActiveCanvasPage } from '@site/store/store'
 import { useInsertModule } from '@site/hooks/useInsertModule'
 import { ModulePicker } from '@site/module-picker'
-import type { AnyModuleDefinition } from '@core/module-engine/types'
+import type { AnyModuleDefinition } from '@core/module-engine'
 import { FilesStack2SolidIcon } from 'pixel-art-icons/icons/files-stack-2-solid'
 import { PlusIcon } from 'pixel-art-icons/icons/plus'
 

@@ -11,9 +11,9 @@
  */
 
 import { useEditorStore } from '@site/store/store'
-import { findParamOrigin } from '@core/visualComponents/origin'
-import { registry } from '@core/module-engine/registry'
-import type { VisualComponent, VCParam } from '@core/visualComponents/schemas'
+import { findParamOrigin } from '@core/visualComponents'
+import { registry } from '@core/module-engine'
+import type { VisualComponent, VCParam } from '@core/visualComponents'
 import { Button } from '@ui/components/Button'
 import { EmptyState } from '@ui/components/EmptyState'
 import { CloseIcon } from 'pixel-art-icons/icons/close'

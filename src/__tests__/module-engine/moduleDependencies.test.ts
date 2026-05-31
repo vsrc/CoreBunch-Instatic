@@ -4,8 +4,8 @@ import {
   getSiteDependencyVersion,
   getSiteModuleDependencyUsage,
   normalizeModuleDependencies,
-} from '@core/module-engine/dependencies'
-import type { AnyModuleDefinition, IModuleRegistry } from '@core/module-engine/types'
+} from '@core/module-engine'
+import type { AnyModuleDefinition, IModuleRegistry } from '@core/module-engine'
 import { makeNode } from '../fixtures'
 
 function makeModule(dependencies: AnyModuleDefinition['dependencies']): AnyModuleDefinition {

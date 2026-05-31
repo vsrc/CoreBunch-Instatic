@@ -41,7 +41,7 @@ export { parseSiteDocument } from './siteDocument'
 
 // Re-export visualComponent parser for the persistence layer.
 // (Single canonical location: `@core/visualComponents/schemas`.)
-export { parseVisualComponent } from '@core/visualComponents/schemas'
+export { parseVisualComponent } from '@core/visualComponents'
 
 // Other re-exports unrelated to the schemas split
 export type { FontEntry } from '@core/fonts/schemas'

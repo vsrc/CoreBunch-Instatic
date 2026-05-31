@@ -13,10 +13,10 @@
 import { nanoid } from 'nanoid'
 import type { Page, PageNode, SiteDocument } from '@core/page-tree'
 import { DEFAULT_BREAKPOINTS, DEFAULT_SITE_SETTINGS } from '@core/page-tree'
-import type { AnyModuleDefinition } from '@core/module-engine/types'
-import type { VisualComponent, VCNode } from '@core/visualComponents/schemas'
+import type { AnyModuleDefinition } from '@core/module-engine'
+import type { VisualComponent, VCNode } from '@core/visualComponents'
 import { SquareSolidIcon } from 'pixel-art-icons/icons/square-solid'
-import { isSafeUrl } from '@core/publisher/utils'
+import { isSafeUrl } from '@core/publisher'
 import { normalizeSitePackageJson } from '@core/site-dependencies/manifest'
 import { normalizeSiteRuntimeConfig } from '@core/site-runtime'
 

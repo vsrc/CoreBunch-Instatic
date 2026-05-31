@@ -4,7 +4,7 @@
  * Styles are now in controls.module.css — imported per-component.
  * This file only exports TypeScript interfaces.
  */
-import type { PropertyControlLayout } from '@core/module-engine/types'
+import type { PropertyControlLayout } from '@core/module-engine'
 
 /** Props shared by every property control component. */
 export interface ControlProps<T = unknown> {

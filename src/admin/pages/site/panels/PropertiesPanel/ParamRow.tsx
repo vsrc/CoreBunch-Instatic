@@ -13,8 +13,8 @@
  */
 
 import { useState } from 'react'
-import { validateParamName } from '@core/visualComponents/nameValidation'
-import type { VCParamType } from '@core/visualComponents/schemas'
+import { validateParamName } from '@core/visualComponents'
+import type { VCParamType } from '@core/visualComponents'
 import { Input, Textarea } from '@ui/components/Input'
 import { Switch } from '@ui/components/Switch'
 import { Select } from '@ui/components/Select'

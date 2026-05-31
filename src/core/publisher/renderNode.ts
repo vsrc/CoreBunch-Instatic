@@ -22,7 +22,7 @@
  */
 
 import type { PageNode } from '@core/page-tree'
-import type { AnyModuleDefinition } from '@core/module-engine/types'
+import type { AnyModuleDefinition } from '@core/module-engine'
 import { validateNodeProps } from '@core/module-engine'
 import { resolveProps } from '@core/page-tree/selectors'
 import { resolveDynamicProps } from '@core/templates/dynamicBindings'

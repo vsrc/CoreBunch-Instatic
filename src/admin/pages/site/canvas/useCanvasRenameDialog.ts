@@ -9,7 +9,7 @@
 
 import { useState } from 'react'
 import { useEditorStore, selectActiveCanvasPage } from '@site/store/store'
-import { registry } from '@core/module-engine/registry'
+import { registry } from '@core/module-engine'
 import { getNodeDisplayName } from '@core/page-tree/nodeDisplayName'
 
 export interface CanvasRenameDialogState {

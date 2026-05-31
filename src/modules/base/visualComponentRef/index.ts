@@ -15,8 +15,8 @@
  *
  * Architecture source: Contribution #619 §8 / Task 4 Tree Unification.
  */
-import type { ModuleDefinition } from '@core/module-engine/types'
-import { registry } from '@core/module-engine/registry'
+import { registry } from '@core/module-engine'
+import type { ModuleDefinition } from '@core/module-engine'
 import { BracesIcon } from 'pixel-art-icons/icons/braces'
 import { VisualComponentRefEditor } from './VisualComponentRefEditor'
 import { Type } from '@core/utils/typeboxHelpers'

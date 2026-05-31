@@ -26,7 +26,7 @@
 
 import { useEffect } from 'react'
 import { useEditorStore } from '@site/store/store'
-import { collectUserStylesheetCss } from '@core/publisher/userStylesheets'
+import { collectUserStylesheetCss } from '@core/publisher'
 import { resolveViewportUnitsForCanvas, type CanvasViewport } from './resolveViewportUnits'
 
 const STYLE_TAG_ID = 'mc-user-styles'

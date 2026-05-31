@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test'
-import { publishPage } from '@core/publisher/render'
+import { publishPage } from '@core/publisher'
 import type { PublishedPageRuntimeAssets } from '@core/site-runtime'
 import { makeModule, makePage, makeRegistry, makeSite } from './helpers'
 

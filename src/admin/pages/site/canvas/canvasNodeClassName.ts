@@ -1,7 +1,6 @@
 import type { ClassPreviewAssignment } from '@site/store/slices/classSlice'
 import { classNamesForClassIds, type StyleRuleRegistry } from '@core/page-tree/classNames'
-import { isEmittableProperty } from '@core/publisher/classCss'
-import { sanitiseCssValue } from '@core/publisher/utils'
+import { isEmittableProperty, sanitiseCssValue } from '@core/publisher'
 
 export function getCanvasNodeClassIds(
   classIds: readonly string[] | undefined,

@@ -19,10 +19,10 @@
  *     was registered for this plugin id.
  */
 import type { ComponentType } from 'react'
-import { registry } from '@core/module-engine/registry'
+import { registry } from '@core/module-engine'
 import type {
   ModuleComponentProps,
-} from '@core/module-engine/types'
+} from '@core/module-engine'
 import type { PluginManifest } from '@core/plugin-sdk'
 import type {
   PluginEditorRuntime,

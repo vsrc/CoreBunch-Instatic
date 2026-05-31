@@ -157,7 +157,7 @@ export function resolveProps(
 // Property condition evaluation
 // ---------------------------------------------------------------------------
 
-import type { PropertyCondition, PropertySchema } from '@core/module-engine/types'
+import type { PropertyCondition, PropertySchema } from '@core/module-engine'
 
 /**
  * Evaluate a declarative PropertyCondition against a props object.

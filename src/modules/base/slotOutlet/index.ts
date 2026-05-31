@@ -10,8 +10,8 @@
  *
  * Architecture source: Contribution #619 §8
  */
-import type { ModuleDefinition } from '@core/module-engine/types'
-import { registry } from '@core/module-engine/registry'
+import type { ModuleDefinition } from '@core/module-engine'
+import { registry } from '@core/module-engine'
 import { TargetSolidIcon } from 'pixel-art-icons/icons/target-solid'
 import { SlotOutletEditor } from './SlotOutletEditor'
 import { Type } from '@core/utils/typeboxHelpers'

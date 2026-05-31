@@ -3,7 +3,7 @@
  * Re-uses the flat-map PageNode structure from the locked types.
  */
 import type { Page, PageNode, SiteDocument, Breakpoint } from '@core/page-tree'
-import type { ModuleDefinition, IModuleRegistry, AnyModuleDefinition } from '@core/module-engine/types'
+import type { ModuleDefinition, IModuleRegistry, AnyModuleDefinition } from '@core/module-engine'
 import { SquareSolidIcon } from 'pixel-art-icons/icons/square-solid'
 import { DEFAULT_SITE_SETTINGS } from '@core/page-tree'
 

@@ -15,7 +15,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { TreeBackgroundContextMenu } from '@site/panels/DomPanel/TreeBackgroundContextMenu'
 import { useEditorStore } from '@site/store/store'
 import { makeNode, makePage, makeSite } from '../fixtures'
-import type { VisualComponent } from '@core/visualComponents/schemas'
+import type { VisualComponent } from '@core/visualComponents'
 import '@modules/base/index'
 
 afterEach(cleanup)

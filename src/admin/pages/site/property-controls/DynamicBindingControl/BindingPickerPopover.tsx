@@ -22,7 +22,7 @@
 
 import { useEffect, useState, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
-import type { PropertyControl } from '@core/module-engine/types'
+import type { PropertyControl } from '@core/module-engine'
 import type { DynamicPropBinding } from '@core/page-tree'
 import type { LoopItem, LoopSourceField } from '@core/loops/types'
 import type { DataMeta, DataMetaField, DataMetaTable } from '@core/data/schemas'

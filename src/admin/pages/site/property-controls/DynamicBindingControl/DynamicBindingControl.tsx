@@ -16,7 +16,7 @@
  */
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import type { PropertyControl } from '@core/module-engine/types'
+import type { PropertyControl } from '@core/module-engine'
 import type { DynamicPropBinding } from '@core/page-tree'
 import type { LoopSourceField } from '@core/loops/types'
 import type { DataMeta } from '@core/data/schemas'

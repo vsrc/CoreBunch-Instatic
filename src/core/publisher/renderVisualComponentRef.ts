@@ -14,7 +14,7 @@
 
 import type { Page, PageNode } from '@core/page-tree'
 import { selectVisualComponentById } from '@core/page-tree/siteSelectors'
-import { instantiateVCAtRef, type InstantiatedVCNode } from '@core/visualComponents/instantiate'
+import { instantiateVCAtRef, type InstantiatedVCNode } from '@core/visualComponents'
 import { injectNodeClassIds, injectNodeInlineStyles } from './classInjection'
 import { escapeHtml } from './utils'
 import type { RenderContext } from './renderContext'

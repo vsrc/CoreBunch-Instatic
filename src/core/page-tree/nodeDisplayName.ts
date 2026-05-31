@@ -24,8 +24,8 @@
  */
 
 import type { PageNode } from './pageNode'
-import type { VisualComponent } from '@core/visualComponents/schemas'
-import type { AnyModuleDefinition } from '@core/module-engine/types'
+import type { VisualComponent } from '@core/visualComponents'
+import type { AnyModuleDefinition } from '@core/module-engine'
 import { classNamesForClassIds, type StyleRuleRegistry } from './classNames'
 
 export function getNodeDisplayName(

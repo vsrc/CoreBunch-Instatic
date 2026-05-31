@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from 'bun:test'
 import { makeModule, makePage, makeRegistry, makeSite } from './helpers'
-import { publishPage, type ResolvedLoopRenderData } from '@core/publisher/render'
+import { publishPage, type ResolvedLoopRenderData } from '@core/publisher'
 import type { LoopItem } from '@core/loops/types'
 
 function loopData(items: LoopItem[]): ResolvedLoopRenderData {

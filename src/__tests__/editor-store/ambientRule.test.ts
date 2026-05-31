@@ -17,8 +17,7 @@
 import { describe, it, expect } from 'bun:test'
 import { useEditorStore } from '@site/store/store'
 import { classNamesForClassIds } from '@core/page-tree/classNames'
-import { collectClassCSS } from '@core/publisher/cssCollector'
-import { generateClassCSS } from '@core/publisher/classCss'
+import { collectClassCSS, generateClassCSS } from '@core/publisher'
 import type { StyleRule } from '@core/page-tree'
 import '@modules/base'
 

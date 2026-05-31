@@ -20,7 +20,7 @@ import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { render, screen, cleanup, fireEvent } from '@testing-library/react'
 import { PropertyControlRenderer } from '@site/property-controls/PropertyControlRenderer'
-import type { PropertyControl } from '@core/module-engine/types'
+import type { PropertyControl } from '@core/module-engine'
 import type { CmsMediaAsset } from '@core/persistence/cmsMedia'
 import { useEditorStore } from '@site/store/store'
 

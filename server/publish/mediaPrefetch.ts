@@ -18,7 +18,7 @@
  */
 
 import type { Page, PageNode } from '@core/page-tree'
-import type { IModuleRegistry } from '@core/module-engine/types'
+import type { IModuleRegistry } from '@core/module-engine'
 import type { CmsMediaAsset } from '@core/persistence/cmsMedia'
 import type { DbClient } from '../db/client'
 import { isoDate, isoDateOrNull } from '@core/utils/isoDate'

@@ -19,7 +19,7 @@ import { render as renderReact } from '@testing-library/react'
 import './matchers'  // Register toBeCleanHTML
 
 import { runModuleConformanceSuite, renderModule, withBannedGlobals } from './helpers'
-import { escapeProps } from '@core/publisher/render'
+import { escapeProps } from '@core/publisher'
 
 // ---------------------------------------------------------------------------
 // Import base modules (self-register into global registry on import)

@@ -22,16 +22,16 @@ import { ensureRuntimeDependencyCache } from '../../publish/runtime/dependencyCa
 import { buildRuntimePackageImportmap } from '../../publish/runtime/packageImportmap'
 import { buildRuntimePreviewDocument } from '../../publish/runtime/previewRuntime'
 import { validateSite, validatePages, validateVisualComponents, SiteValidationError } from '@core/persistence/validate'
-import { parseVisualComponent } from '@core/visualComponents/schemas'
 import { isSafePackageName } from '@core/site-dependencies/packageNames'
 import type { SitePackageJson } from '@core/site-dependencies/manifest'
 import { normalizeSiteRuntimeConfig } from '@core/site-runtime'
 import type { TemplateRenderDataContext } from '@core/templates/dynamicBindings'
-import { registry } from '@core/module-engine/registry'
+import { registry } from '@core/module-engine'
 import {
+  parseVisualComponent,
   flattenVCToVirtualPage,
   parseVirtualVCPageId,
-} from '@core/visualComponents/virtualPage'
+} from '@core/visualComponents'
 import type { Page, SiteDocument, SiteShell } from '@core/page-tree'
 import { badRequest, jsonResponse, methodNotAllowed, readValidatedBody } from '../../http'
 import { Type } from '@core/utils/typeboxHelpers'

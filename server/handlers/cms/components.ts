@@ -37,8 +37,8 @@ import {
   visualComponentToCells,
   vcSlugFromName,
 } from '../../../src/core/data/componentFromRow'
-import { parseVisualComponent } from '@core/visualComponents/schemas'
-import type { VisualComponent } from '@core/visualComponents/schemas'
+import { parseVisualComponent } from '@core/visualComponents'
+import type { VisualComponent } from '@core/visualComponents'
 import { badRequest, jsonResponse, methodNotAllowed, readValidatedBody } from '../../http'
 import { Type } from '@core/utils/typeboxHelpers'
 import { CMS_API_PREFIX } from './shared'

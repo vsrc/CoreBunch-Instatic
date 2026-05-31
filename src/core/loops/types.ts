@@ -21,7 +21,7 @@
  */
 
 import { Type, type Static } from '@core/utils/typeboxHelpers'
-import type { PropertySchema } from '@core/module-engine/types'
+import type { PropertySchema } from '@core/module-engine'
 import type { SiteDocument } from '@core/page-tree'
 
 // ---------------------------------------------------------------------------

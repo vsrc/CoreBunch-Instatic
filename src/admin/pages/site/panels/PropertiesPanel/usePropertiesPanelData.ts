@@ -15,19 +15,19 @@
 import { useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useEditorStore, selectSelectedNode } from '@site/store/store'
-import { registry } from '@core/module-engine/registry'
+import { registry } from '@core/module-engine'
 import { getAncestors, resolveProps } from '@core/page-tree/selectors'
 import { loopSourceRegistry } from '@core/loops/registry'
 import type {
   AnyModuleDefinition,
-} from '@core/module-engine/types'
+} from '@core/module-engine'
 import type {
   StyleRule,
   DynamicPropBinding,
   Page,
   PageNode,
 } from '@core/page-tree'
-import type { VisualComponent } from '@core/visualComponents/schemas'
+import type { VisualComponent } from '@core/visualComponents'
 import type { LoopEntitySource } from '@core/loops/types'
 import type { ActiveDocument, PanelState, FocusedPanel, PropertiesPanelMode } from '../../store/slices/uiSlice'
 

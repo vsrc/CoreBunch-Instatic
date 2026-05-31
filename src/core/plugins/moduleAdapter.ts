@@ -22,7 +22,7 @@ import type {
   ModuleDefinition,
   PropertyControl,
   PropertySchema,
-} from '@core/module-engine/types'
+} from '@core/module-engine'
 import type {
   PluginEditorRuntime,
   PluginModuleDefinition,

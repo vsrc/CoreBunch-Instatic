@@ -27,7 +27,7 @@ import {
 } from 'react'
 import { useEditorStore } from '@site/store/store'
 import { useConfirmDelete } from '@admin/shared/dialogs/ConfirmDeleteDialog'
-import { previewVCDeletion } from '@core/visualComponents/deletionImpact'
+import { previewVCDeletion } from '@core/visualComponents'
 import { VCDeletionConfirmDialog } from './VCDeletionConfirmDialog'
 import {
   VCDeletionConfirmContext,

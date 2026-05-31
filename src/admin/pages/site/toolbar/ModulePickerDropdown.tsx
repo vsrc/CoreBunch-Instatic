@@ -19,7 +19,7 @@
 import { useRef, useState } from 'react'
 import { useEditorStore, selectActiveCanvasPage } from '@site/store/store'
 import { resolveInsertLocation } from '@site/store/insertLocation'
-import type { AnyModuleDefinition } from '@core/module-engine/types'
+import type { AnyModuleDefinition } from '@core/module-engine'
 import { AppGridPlusGlyphIcon } from 'pixel-art-icons/icons/app-grid-plus-glyph'
 import { Button } from '@ui/components/Button'
 import { ModulePickerMenu } from '@site/module-picker'

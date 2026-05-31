@@ -19,8 +19,8 @@ import type {
   PropertyControl,
   PropertyControlLayout,
   PropertySchema,
-} from '@core/module-engine/types'
-import { resolvePropertyControlCategory } from '@core/module-engine/propertySchema'
+} from '@core/module-engine'
+import { resolvePropertyControlCategory } from '@core/module-engine'
 import type { DynamicPropBinding } from '@core/page-tree'
 import { sanitizeRichtext } from '@core/sanitize'
 import { useEditorPermissions } from '@site/editorPermissionsContext'

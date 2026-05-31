@@ -15,7 +15,11 @@ describe('Self-hosted CMS pivot — static ZIP export removal', () => {
   })
 
   it('does not expose static ZIP export from the publisher barrel', () => {
-    expect(existsSync(join(SRC_ROOT, 'core/publisher/index.ts'))).toBe(false)
+    // The publisher barrel is the engine's canonical entrypoint, but it must
+    // not re-expose the removed static ZIP export surface (export.ts / JSZip).
+    const barrel = read(join(SRC_ROOT, 'core/publisher/index.ts'))
+    expect(barrel).not.toMatch(/from '\.\/export'/)
+    expect(barrel).not.toMatch(/\b(JSZip|toJsx|exportSite|exportZip|publishZip)\b/)
   })
 
   it('does not keep JSZip as an application dependency', () => {

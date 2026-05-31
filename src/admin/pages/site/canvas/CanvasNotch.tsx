@@ -1,5 +1,5 @@
 import { type ReactNode, type SyntheticEvent } from "react";
-import { registry } from "@core/module-engine/registry";
+import { registry } from "@core/module-engine";
 import { useInsertModule } from "@site/hooks/useInsertModule";
 import { ModulePickerDropdown } from "@site/toolbar/ModulePickerDropdown";
 import { ModuleIcon } from "@site/ui/ModuleIcon";

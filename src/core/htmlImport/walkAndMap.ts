@@ -30,7 +30,7 @@
 
 import type { PageNode } from '@core/page-tree'
 import { createNode } from '@core/page-tree'
-import { registry } from '@core/module-engine/registry'
+import { registry } from '@core/module-engine'
 import { HTML_TO_MODULE_RULES } from './rules'
 import type { ImportRule } from './rules'
 import { parseHtml } from './parseHtml'

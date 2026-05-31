@@ -1,9 +1,8 @@
 import { describe, it, expect, beforeEach } from 'bun:test'
-import { ModuleDefinition } from '@core/module-engine/types'
 import { SquareSolidIcon } from 'pixel-art-icons/icons/square-solid'
 
 // We import the class directly for test isolation (not the global singleton)
-import { registry as globalRegistry } from '@core/module-engine/registry'
+import { ModuleDefinition, registry as globalRegistry } from '@core/module-engine'
 
 // Minimal valid module fixture
 function makeModule(id: string): ModuleDefinition {
@@ -24,7 +23,7 @@ function makeModule(id: string): ModuleDefinition {
 
 // We need a fresh registry per test — import the class directly
  
-const { registry: _unusedRegistry, ...registryModule } = await import('@core/module-engine/registry')
+const { registry: _unusedRegistry, ...registryModule } = await import('@core/module-engine')
 
 // Dynamically re-construct registry for isolation
 class TestRegistry {

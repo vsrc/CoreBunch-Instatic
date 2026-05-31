@@ -21,7 +21,7 @@ import React from 'react'
 import { render, screen, cleanup, fireEvent, act } from '@testing-library/react'
 import { PropertiesPanel } from '@site/panels/PropertiesPanel/PropertiesPanel'
 import { useEditorStore } from '@site/store/store'
-import { registry } from '@core/module-engine/registry'
+import { registry } from '@core/module-engine'
 import { makeSite, makePage, makeNode } from '../fixtures'
 // Register all base modules so registry.get() works during tests
 import '@modules/base/index'

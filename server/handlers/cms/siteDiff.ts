@@ -28,7 +28,7 @@
  * the incoming document is treated as a structural change in its entirety —
  * a content-only caller cannot bootstrap a site from nothing.
  */
-import { resolvePropertyControlCategory } from '@core/module-engine/propertySchema'
+import { resolvePropertyControlCategory } from '@core/module-engine'
 import type { CoreCapability } from '../../auth/capabilities'
 import type {
   StyleRule,

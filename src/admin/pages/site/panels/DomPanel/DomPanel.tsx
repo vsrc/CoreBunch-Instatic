@@ -39,7 +39,7 @@ import { createPortal } from 'react-dom'
 import { useEditorStore, selectActiveCanvasPage } from '@site/store/store'
 import { flattenSubtree } from '@core/page-tree/selectors'
 import { getAncestorIds } from '@site/hooks/useTreeWalkOrder'
-import { registry } from '@core/module-engine/registry'
+import { registry } from '@core/module-engine'
 import {
   getNodeDisplayName,
   getNodeHtmlTag,

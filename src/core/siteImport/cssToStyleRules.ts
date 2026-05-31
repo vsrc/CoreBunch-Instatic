@@ -37,7 +37,7 @@
  * order is kept as the FIRST occurrence.
  */
 
-import { isEmittableProperty } from '@core/publisher/classCss'
+import { isEmittableProperty } from '@core/publisher'
 import type { StyleRuleKind, Condition, ConditionDef } from '@core/page-tree'
 import { conditionId, makeConditionDef } from '@core/page-tree'
 import { formatVariant } from '@core/fonts/variants'

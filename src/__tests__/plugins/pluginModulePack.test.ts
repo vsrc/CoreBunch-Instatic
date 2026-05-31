@@ -10,7 +10,7 @@ import {
   validatePluginModuleId,
   PluginModuleValidationError,
 } from '@core/plugins/moduleAdapter'
-import { registry } from '@core/module-engine/registry'
+import { registry } from '@core/module-engine'
 import type { PluginManifest } from '@core/plugin-sdk'
 
 const sampleManifest: PluginManifest = {

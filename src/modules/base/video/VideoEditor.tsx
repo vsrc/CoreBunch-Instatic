@@ -21,7 +21,7 @@
  */
 import React from 'react'
 import type { CSSProperties } from 'react'
-import type { ModuleComponentProps } from '@core/module-engine/types'
+import type { ModuleComponentProps } from '@core/module-engine'
 import { useCmsMediaAssetByPath } from '@admin/pages/media/hooks/useCmsMediaAssetByPath'
 import { buildVariantSrcset, pickVariantUrl } from '@admin/pages/media/utils/variants'
 import { CanvasModulePlaceholder } from '@ui/components/CanvasModulePlaceholder'

@@ -5,6 +5,7 @@ export type {
   RuntimePackageImportmap,
   SiteAssetScope,
   SiteDependencyLock,
+  SiteRuntimeConfig,
   SiteRuntimeDiagnostic,
   SiteScriptPlacement,
   SiteScriptRuntimeConfig,
