@@ -38,6 +38,9 @@ export const BINDING_COMPATIBILITY: Record<PropertyControlKind, readonly DataFie
   text:     ['text', 'longText', 'richText', 'url', 'email', 'select', 'multiSelect', 'relation', 'number', 'boolean', 'date', 'dateTime'],
   textarea: ['text', 'longText', 'richText'],
   richtext: ['richText', 'longText', 'text'],
+  // svg holds raw inline-SVG markup — edited in the code editor, never wired
+  // to a data field.
+  svg:      [],
   number:   ['number', 'boolean'],
   url:      ['url', 'text', 'email'],
   color:    ['select'],

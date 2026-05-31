@@ -143,6 +143,10 @@ export const PropertyControlSchema = Type.Recursive((Self) => Type.Union([
     { additionalProperties: false },
   ),
   Type.Object(
+    { ...PropertyControlBaseSchema, type: Type.Literal('svg') },
+    { additionalProperties: false },
+  ),
+  Type.Object(
     {
       ...PropertyControlBaseSchema,
       type: Type.Literal('group'),
@@ -183,6 +187,7 @@ const CONTENT_CONTROL_TYPES: ReadonlySet<PropertyControl['type']> = new Set([
   'text',
   'textarea',
   'richtext',
+  'svg',
   'url',
   'image',
   'media',

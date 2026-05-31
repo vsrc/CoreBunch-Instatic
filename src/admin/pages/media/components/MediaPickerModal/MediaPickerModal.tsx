@@ -23,7 +23,17 @@ import type { CmsMediaAsset } from '@core/persistence/cmsMedia'
 import { MediaSidebar, type MediaSidebarPanelId } from '../MediaSidebar/MediaSidebar'
 import { MediaCanvas } from '../MediaCanvas/MediaCanvas'
 import { useMediaWorkspace } from '../../hooks/useMediaWorkspace'
-import { bucketForMime } from '../../utils/filters'
+import { bucketForMime, isSvgMime } from '../../utils/filters'
+
+/** Modal heading / aria-label for the requested media kind. */
+function pickerTitle(kind: 'image' | 'video' | 'svg' | 'any'): string {
+  switch (kind) {
+    case 'image': return 'Select an image'
+    case 'video': return 'Select a video'
+    case 'svg': return 'Select an SVG'
+    default: return 'Select media'
+  }
+}
 import { blurHashToDataUrl, pickVariantUrl } from '../../utils/variants'
 import styles from './MediaPickerModal.module.css'
 
@@ -32,9 +42,10 @@ interface MediaPickerModalProps {
   onClose: () => void
   /**
    * Constrain the picker to a single media kind, or pass `'any'` to show
-   * all asset types without filtering.
+   * all asset types without filtering. `'svg'` narrows to SVG files only
+   * (used by the inline-SVG module's "From library").
    */
-  mediaKind: 'image' | 'video' | 'any'
+  mediaKind: 'image' | 'video' | 'svg' | 'any'
   /**
    * Public path of the currently-picked asset, if any. Used to seed the
    * picker's selection so re-opening the picker for an already-picked
@@ -78,7 +89,7 @@ function MediaPickerModalBody({
   // can't accidentally pick a video. useEffectEvent reads the latest
   // workspace.setFilterType without putting `workspace` in the dep array
   // (which would re-fire on every workspace state change).
-  const applyMediaKind = useEffectEvent((kind: 'image' | 'video' | 'any') => {
+  const applyMediaKind = useEffectEvent((kind: 'image' | 'video' | 'svg' | 'any') => {
     workspace.setFilterType(kind === 'any' ? 'all' : kind)
   })
   useEffect(() => {
@@ -113,7 +124,10 @@ function MediaPickerModalBody({
 
   const picked = workspace.selectedAsset
   const pickedMatchesKind = picked
-    ? mediaKind === 'any' || bucketForMime(picked.mimeType) === mediaKind
+    ? mediaKind === 'any' ||
+      (mediaKind === 'svg'
+        ? isSvgMime(picked.mimeType)
+        : bucketForMime(picked.mimeType) === mediaKind)
     : false
   const canCommit = picked !== null && pickedMatchesKind
 
@@ -137,19 +151,11 @@ function MediaPickerModalBody({
         className={styles.dialog}
         role="dialog"
         aria-modal="true"
-        aria-label={
-          mediaKind === 'image' ? 'Select an image'
-          : mediaKind === 'video' ? 'Select a video'
-          : 'Select media'
-        }
+        aria-label={pickerTitle(mediaKind)}
         data-testid="media-picker-modal"
       >
         <header className={styles.header}>
-          <h2 className={styles.title}>
-            {mediaKind === 'image' ? 'Select an image'
-              : mediaKind === 'video' ? 'Select a video'
-              : 'Select media'}
-          </h2>
+          <h2 className={styles.title}>{pickerTitle(mediaKind)}</h2>
           <Button
             variant="ghost"
             size="sm"
@@ -197,7 +203,7 @@ function MediaPickerModalBody({
 interface PickedSummaryProps {
   asset: CmsMediaAsset | null
   matchesKind: boolean
-  mediaKind: 'image' | 'video' | 'any'
+  mediaKind: 'image' | 'video' | 'svg' | 'any'
 }
 
 /**
@@ -216,7 +222,7 @@ function PickedSummary({ asset, matchesKind, mediaKind }: PickedSummaryProps) {
     : null
 
   if (!asset) {
-    const kindLabel = mediaKind === 'image' ? 'image' : mediaKind === 'video' ? 'video' : 'asset'
+    const kindLabel = mediaKind === 'image' ? 'image' : mediaKind === 'video' ? 'video' : mediaKind === 'svg' ? 'SVG' : 'asset'
     return (
       <p className={styles.pickedEmpty}>
         No {kindLabel} selected — pick one from the grid.
@@ -244,7 +250,7 @@ function PickedSummary({ asset, matchesKind, mediaKind }: PickedSummaryProps) {
         <span className={styles.pickedName}>{asset.filename}</span>
         {!matchesKind && mediaKind !== 'any' && (
           <span className={styles.pickedWrongKind} role="alert">
-            This is not {mediaKind === 'image' ? 'an image' : 'a video'} asset.
+            This is not {mediaKind === 'image' ? 'an image' : mediaKind === 'video' ? 'a video' : mediaKind === 'svg' ? 'an SVG' : 'a matching'} asset.
           </span>
         )}
       </span>

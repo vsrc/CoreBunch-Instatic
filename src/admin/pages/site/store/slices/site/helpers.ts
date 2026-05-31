@@ -332,11 +332,14 @@ export function buildSiteHelpers(
       const byName = indexStyleRulesByName(site.styleRules)
 
       const helpers: SuperImportHelpers = {
-        addPage({ title, slug, nodeFragment }: { title: string; slug: string; nodeFragment: ImportFragment }): string {
+        addPage({ id: pageId, title, slug, nodeFragment }: { id?: string; title: string; slug: string; nodeFragment: ImportFragment }): string {
           // addPage creates a fresh base.body root, normalises the slug, and
           // pushes the page onto site.pages. We then graft the fragment nodes
           // in as children of that root — same logical step as insertImportedNodes.
           const page = addPage(site as SiteDocument, title, slug)
+          // Honour a caller-supplied id so the importer can pre-mint page ids
+          // and rewrite internal links to `cms:page:<id>` before committing.
+          if (pageId) page.id = pageId
           for (const [id, node] of Object.entries(nodeFragment.nodes)) {
             // `node.inlineStyles` rides along on the spread — first-class field.
             page.nodes[id] = {

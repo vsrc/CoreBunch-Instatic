@@ -183,3 +183,59 @@ export function isRichtextPropKey(key: string): boolean {
   const k = key.toLowerCase()
   return k === 'richtext' || k === 'html' || k.endsWith('html') || k.endsWith('richtext')
 }
+
+// ---------------------------------------------------------------------------
+// SVG sanitisation
+// ---------------------------------------------------------------------------
+
+/**
+ * SVG profile — allows the SVG + SVG-filter element/attribute set, blocks all
+ * HTML (so `<foreignObject>` can't smuggle markup), scripts, and event
+ * handlers. Used by the `base.svg` module so imported / pasted inline SVG
+ * (logos, icons) round-trips and renders, while staying XSS-safe.
+ *
+ * `currentColor` and presentation attributes survive, so an SVG styled by a
+ * CSS class (`fill: currentColor`) keeps inheriting the page's text colour.
+ */
+const SVG_CONFIG: Config = {
+  USE_PROFILES: { svg: true, svgFilters: true },
+  // Defence in depth — DOMPurify's svg profile already excludes these, but be
+  // explicit: no HTML embedding, no script, no nested anchors carrying hrefs.
+  FORBID_TAGS: ['script', 'foreignObject', 'a'],
+  FORBID_ATTR: ['xlink:href', 'href'],
+  RETURN_DOM: false,
+  RETURN_DOM_FRAGMENT: false,
+}
+
+/**
+ * Sanitise an inline-SVG markup string for safe inclusion in published HTML
+ * and the editor canvas. Returns `''` when no DOMPurify runtime is available
+ * (one-off scripts) — the browser and the Bun publish server both configure
+ * one, so production paths always sanitise rather than drop.
+ *
+ * Call at every write path that stores an SVG prop (editor onChange, importer)
+ * AND at the publisher boundary (`escapeProps`), per the "never trust the UI"
+ * rule that governs richtext.
+ */
+export function sanitizeSvg(value: unknown): string {
+  const str = String(value ?? '')
+  if (!str.trim()) return ''
+
+  const purifier = getDOMPurify()
+  if (!purifier || typeof purifier.sanitize !== 'function') {
+    // No runtime: refuse to emit unsanitised markup. Stripping tags would
+    // empty the SVG anyway, so return nothing.
+    return ''
+  }
+
+  return String(purifier.sanitize(str, SVG_CONFIG))
+}
+
+/**
+ * Check whether a module schema prop key holds inline-SVG markup.
+ * Mirrors `isSvgKey()` in the publisher's `escapeProps.ts`.
+ */
+export function isSvgPropKey(key: string): boolean {
+  const k = key.toLowerCase()
+  return k === 'svg' || k.endsWith('svg')
+}

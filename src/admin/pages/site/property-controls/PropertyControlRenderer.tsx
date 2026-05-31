@@ -34,6 +34,7 @@ import { ToggleControl } from './ToggleControl'
 import { ImageControl } from './ImageControl'
 import { MediaLibraryControl } from './MediaLibraryControl'
 import { UrlControl } from './UrlControl'
+import { SvgControl } from './SvgControl'
 import { DynamicBindingControl } from './DynamicBindingControl'
 import { cn } from '@ui/cn'
 import styles from './controls.module.css'
@@ -80,6 +81,7 @@ function defaultLayoutFor(controlType: PropertyControl['type']): PropertyControl
   switch (controlType) {
     case 'image':
     case 'media':
+    case 'svg':
     case 'textarea':
     case 'richtext':
       return 'stacked'
@@ -194,6 +196,10 @@ export function PropertyControlRenderer({
 
     case 'url':
       inner = <UrlControl {...shared} value={String(value ?? '')} />
+      break
+
+    case 'svg':
+      inner = <SvgControl {...shared} value={String(value ?? '')} />
       break
 
     case 'richtext':

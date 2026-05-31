@@ -22,6 +22,7 @@
  */
 
 import type { PageNode } from '@core/page-tree'
+import { isPageRef, resolvePageRef } from '@core/page-tree'
 import type { AnyModuleDefinition } from '@core/module-engine'
 import { validateNodeProps } from '@core/module-engine'
 import { resolveProps } from '@core/page-tree/selectors'
@@ -47,6 +48,28 @@ import type { RenderContext, RenderResolvedMedia } from './renderContext'
  * before the prefetch ran, or the editor canvas preview that doesn't run
  * the prefetch.
  */
+/**
+ * Resolve any string prop that is an internal page reference
+ * (`cms:page:<id>`) to the target page's current public path. Generic over all
+ * props so any module's URL-shaped prop (link/button `href`, …) resolves
+ * without each render() needing site access. Non-ref values pass through
+ * untouched; a ref to a missing page becomes `#`.
+ */
+function resolvePageRefProps(
+  props: Record<string, unknown>,
+  pages: RenderContext['site']['pages'],
+): Record<string, unknown> {
+  let out: Record<string, unknown> | null = null
+  for (const [key, value] of Object.entries(props)) {
+    if (!isPageRef(value)) continue
+    const resolved = resolvePageRef(value, pages)
+    if (resolved === null) continue
+    if (!out) out = { ...props }
+    out[key] = resolved
+  }
+  return out ?? props
+}
+
 function attachResolvedMediaByKey(
   safeProps: Record<string, unknown>,
   def: AnyModuleDefinition,
@@ -113,7 +136,12 @@ function renderStandardNode(
   // their base value because HTML is a single document) and apply dynamic
   // template bindings.
   const effectiveProps = resolveProps(node, ctx.breakpointId, def.schema)
-  const resolvedProps = resolveDynamicProps(effectiveProps, node.dynamicBindings, ctx.templateContext)
+  const dynamicProps = resolveDynamicProps(effectiveProps, node.dynamicBindings, ctx.templateContext)
+
+  // Resolve internal page references (`cms:page:<id>`) to the target page's
+  // CURRENT public path, so links survive slug renames. Runs before validation
+  // / escaping so the resolved URL flows through the normal href pipeline.
+  const resolvedProps = resolvePageRefProps(dynamicProps, ctx.site.pages)
 
   // Coerce/default-fill authored props against the module's TypeBox schema
   // (soft boundary — never throws; unknown injected keys survive the merge).

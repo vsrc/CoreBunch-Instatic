@@ -221,6 +221,18 @@ describe('base.container — render() specifics', () => {
     expect(html).not.toContain('data-canvas-empty-container')
   })
 
+  it('renders a void custom tag (br) as a single tag, not <br></br>', () => {
+    const { html } = renderModule(ContainerModule, { tag: 'custom', customTag: 'br' }, [])
+    expect(html).toBe('<br>')
+    // </br> would be reparsed by the HTML tokenizer as a SECOND <br>.
+    expect(html).not.toContain('</br>')
+  })
+
+  it('renders a void custom tag (hr) with no closing tag', () => {
+    const { html } = renderModule(ContainerModule, { tag: 'custom', customTag: 'hr' }, [])
+    expect(html).toBe('<hr>')
+  })
+
   it('renders safely when persisted props are missing tag', () => {
     const Component = ContainerModule.component
 

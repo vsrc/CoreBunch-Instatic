@@ -39,6 +39,17 @@ export { conditionId, conditionLabel, sameCondition, makeConditionDef, parseCond
 export { parsePage } from './page'
 export { parseSiteDocument } from './siteDocument'
 
+// Slug → public path + internal page-reference links.
+export { pagePublicPath, isHomePage, findHomePage } from './slugs'
+export {
+  PAGE_REF_PREFIX,
+  makePageRef,
+  isPageRef,
+  parsePageRef,
+  resolvePageRef,
+} from './pageRef'
+export type { ParsedPageRef } from './pageRef'
+
 // Re-export visualComponent parser for the persistence layer.
 // (Single canonical location: `@core/visualComponents/schemas`.)
 export { parseVisualComponent } from '@core/visualComponents'

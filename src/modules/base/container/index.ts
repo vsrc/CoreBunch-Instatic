@@ -19,6 +19,17 @@ import {
 import { Type, Value, type Static } from '@core/utils/typeboxHelpers'
 import { ContainerEditor } from './ContainerEditor'
 
+/**
+ * HTML void elements — they have no closing tag and no children. Emitting
+ * `<br></br>` is a bug: the HTML parser reinterprets the end tag as a second
+ * start tag, so `<br></br>` becomes TWO `<br>`s. Void tags must render as a
+ * single self-contained start tag.
+ */
+const VOID_ELEMENTS = new Set([
+  'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input',
+  'link', 'meta', 'param', 'source', 'track', 'wbr',
+])
+
 const ContainerPropsSchema = Type.Object({
   tag: Type.String({ default: 'div' }),
   customTag: Type.String({ default: '' }),
@@ -51,6 +62,11 @@ export const ContainerModule: ModuleDefinition<ContainerProps> = {
 
   render: (props, renderedChildren) => {
     const tag = resolveHtmlTag(props.tag, props.customTag)
+    // Void elements (br, hr, img, …) take no closing tag — `<br></br>` would
+    // be parsed as two <br>s.
+    if (VOID_ELEMENTS.has(tag.toLowerCase())) {
+      return { html: `<${tag}>` }
+    }
     return {
       html: `<${tag}>${renderedChildren.join('')}</${tag}>`,
     }

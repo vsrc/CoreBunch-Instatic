@@ -37,6 +37,10 @@ export type { CssFileResult, AssetPlanResult } from './assetPlan'
 export { scopeCollidingClasses } from './scopeClasses'
 export type { ScopeClassesResult } from './scopeClasses'
 
+// ── Phase 2 — internal link rewriting (→ dynamic page refs) ──────────────────
+
+export { rewriteInternalLinks } from './linkRewrite'
+
 // ── Phase 2 — URL rewriting ───────────────────────────────────────────────────
 
 export { applyAssetRewrites } from './applyAssetRewrites'

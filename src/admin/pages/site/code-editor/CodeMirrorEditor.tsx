@@ -36,9 +36,9 @@ import { javascript } from '@codemirror/lang-javascript'
 import { css } from '@codemirror/lang-css'
 import { json } from '@codemirror/lang-json'
 import { markdown } from '@codemirror/lang-markdown'
+import { html } from '@codemirror/lang-html'
 import { tags as t } from '@lezer/highlight'
 import type { Extension } from '@codemirror/state'
-import type { SiteFile, SiteFileType } from '@core/files/schemas'
 
 // ---------------------------------------------------------------------------
 // GitHub Dark-inspired CM6 theme — CSS custom properties only.
@@ -222,37 +222,37 @@ const readableSyntaxHighlighting = syntaxHighlighting(readableHighlightStyle)
 // ---------------------------------------------------------------------------
 
 /**
- * Returns the language-specific extension(s) for the given file type.
- * Maps SiteFileType → CM6 language extension list.
+ * The set of languages the editor can syntax-highlight. Callers map their
+ * source (a SiteFile's type/path, or an arbitrary code buffer like an inline
+ * SVG prop) to one of these — keeping the CM6 language imports inside this
+ * lazy-loaded chunk.
  */
-function getLanguageExtensions(type: SiteFileType, path: string): Extension[] {
-  switch (type) {
-    case 'component':
-      // JSX + TypeScript — component files are always TSX
+export type CodeLanguage =
+  | 'tsx'
+  | 'ts'
+  | 'css'
+  | 'json'
+  | 'markdown'
+  | 'html'
+  | 'text'
+
+/** Map a `CodeLanguage` to its CM6 language extension(s). */
+function getLanguageExtensions(language: CodeLanguage): Extension[] {
+  switch (language) {
+    case 'tsx':
       return [javascript({ jsx: true, typescript: true })]
-
-    case 'script':
-      // TypeScript without JSX
+    case 'ts':
       return [javascript({ typescript: true })]
-
-    case 'style':
+    case 'css':
       return [css()]
-
-    case 'config':
-      // Branch on extension: .json → JSON; .ts → TypeScript; else plain text
-      if (path.endsWith('.json')) return [json()]
-      if (path.endsWith('.ts') || path.endsWith('.mts')) {
-        return [javascript({ typescript: true })]
-      }
-      return [] // plain text
-
-    case 'doc':
+    case 'json':
+      return [json()]
+    case 'markdown':
       return [markdown()]
-
-    case 'asset':
-      // Binary — should not reach CodeMirrorEditor (ImagePreview handles it)
-      return []
-
+    case 'html':
+      // Used for inline SVG markup (SVG is HTML-compatible XML).
+      return [html()]
+    case 'text':
     default:
       return []
   }
@@ -263,11 +263,21 @@ function getLanguageExtensions(type: SiteFileType, path: string): Extension[] {
 // ---------------------------------------------------------------------------
 
 interface CodeMirrorEditorProps {
-  file: SiteFile
-  updateFileContent: (id: string, content: string) => void
+  /**
+   * Stable identity of the document being edited. Switching `docKey` tears
+   * down and remounts the CM6 view (flushing the prior buffer first). For a
+   * file this is the file id; for a node-prop buffer, `node:<id>:<prop>`.
+   */
+  docKey: string
+  /** Initial document text (only read on mount / docKey change). */
+  value: string
+  /** Which language extensions to load for highlighting. */
+  language: CodeLanguage
+  /** Debounced (250 ms) on every edit, and flushed immediately on docKey switch. */
+  onChange: (content: string) => void
 }
 
-export default function CodeMirrorEditor({ file, updateFileContent }: CodeMirrorEditorProps) {
+export default function CodeMirrorEditor({ docKey, value, language, onChange }: CodeMirrorEditorProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
 
   // Refs to hold pending debounce state. Using refs (not state) so that reads
@@ -276,41 +286,40 @@ export default function CodeMirrorEditor({ file, updateFileContent }: CodeMirror
   const pendingContentRef = useRef<string | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Always-current reference to updateFileContent — avoids stale closure inside
-  // the CM6 updateListener while keeping the main useEffect dep-free.
-  const updateFileContentRef = useRef(updateFileContent)
+  // Always-current reference to onChange — avoids stale closure inside the CM6
+  // updateListener while keeping the main useEffect dep-free.
+  const onChangeRef = useRef(onChange)
   useEffect(() => {
-    updateFileContentRef.current = updateFileContent
-  }, [updateFileContent])
+    onChangeRef.current = onChange
+  }, [onChange])
 
   // useCallback kept: stable identity for the [flush] useEffect dep array (exhaustive-deps).
-  // Flush pending content to the store immediately (called on file switch).
-  const flush = useCallback((fileId: string) => {
+  // Flush pending content to the store immediately (called on doc switch).
+  const flush = useCallback(() => {
     if (timerRef.current) {
       clearTimeout(timerRef.current)
       timerRef.current = null
     }
     if (pendingContentRef.current !== null) {
       // Flush-on-switch: persist pending edit before unmounting.
-      updateFileContentRef.current(fileId, pendingContentRef.current)
+      onChangeRef.current(pendingContentRef.current)
       pendingContentRef.current = null
     }
   }, [])
 
-  // Mount/destroy CM6 view when file.id changes (file switch).
+  // Mount/destroy CM6 view when docKey changes (document switch).
   //
-  // The mount captures the latest file content / type / path via
-  // useEffectEvent — re-running on every keystroke would destroy + recreate
-  // the EditorView and lose cursor position. The effect only re-runs on
-  // file.id transitions, and the cleanup's `flush()` is called with the
-  // stable currentFileId captured at mount time.
-  const mountView = useEffectEvent((container: HTMLDivElement, currentFileId: string) => {
+  // The mount captures the latest value / language via useEffectEvent —
+  // re-running on every keystroke would destroy + recreate the EditorView and
+  // lose cursor position. The effect only re-runs on docKey transitions, and
+  // the cleanup's `flush()` persists any pending edit captured at mount time.
+  const mountView = useEffectEvent((container: HTMLDivElement) => {
     return new EditorView({
       state: EditorState.create({
-        doc: file.content ?? '',
+        doc: value,
         extensions: [
           basicSetup,
-          ...getLanguageExtensions(file.type, file.path),
+          ...getLanguageExtensions(language),
           readableSyntaxHighlighting,
           achromatic,
           EditorView.updateListener.of((update) => {
@@ -320,7 +329,7 @@ export default function CodeMirrorEditor({ file, updateFileContent }: CodeMirror
             if (timerRef.current) clearTimeout(timerRef.current)
             timerRef.current = setTimeout(() => {
               if (pendingContentRef.current !== null) {
-                updateFileContentRef.current(currentFileId, pendingContentRef.current)
+                onChangeRef.current(pendingContentRef.current)
                 pendingContentRef.current = null
               }
               timerRef.current = null
@@ -337,17 +346,16 @@ export default function CodeMirrorEditor({ file, updateFileContent }: CodeMirror
     const container = containerRef.current
     if (!container) return
 
-    const currentFileId = file.id
-    const view = mountView(container, currentFileId)
+    const view = mountView(container)
 
     return () => {
       // Flush-on-switch: persist any pending edit before destroying this view.
-      // This guarantees unsaved edits survive file switches even if the
+      // This guarantees unsaved edits survive doc switches even if the
       // debounce timer has not fired yet.
-      flush(currentFileId)
+      flush()
       view.destroy()
     }
-  }, [file.id, flush])
+  }, [docKey, flush])
 
   return (
     <div

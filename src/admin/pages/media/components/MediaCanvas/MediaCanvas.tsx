@@ -74,6 +74,7 @@ function writeStoredViewMode(mode: ViewMode) {
 const TYPE_FILTERS: FilterBarItem<MediaType>[] = [
   { value: 'all', label: 'All' },
   { value: 'image', label: 'Images' },
+  { value: 'svg', label: 'SVG' },
   { value: 'video', label: 'Videos' },
   { value: 'other', label: 'Other' },
 ]

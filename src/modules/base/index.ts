@@ -24,6 +24,7 @@ import './content'
 
 // Media modules
 import './image'
+import './svg'
 
 // Interactive modules
 import './button'

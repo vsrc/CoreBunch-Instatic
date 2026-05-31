@@ -72,9 +72,14 @@ export interface SiteImportTransaction {
    * `src/admin/pages/site/store/slices/site/nodeActions.ts` for the reference
    * implementation of the name→id linking step.
    *
-   * @returns The new page's generated id.
+   * @returns The new page's id. When `input.id` is provided it is used
+   *          verbatim (so the importer can pre-mint ids and rewrite internal
+   *          links to `cms:page:<id>` before committing); otherwise a fresh id
+   *          is generated.
    */
   addPage(input: {
+    /** Pre-minted page id. When omitted, the implementer generates one. */
+    id?: string
     title: string
     slug: string
     nodeFragment: ImportFragment

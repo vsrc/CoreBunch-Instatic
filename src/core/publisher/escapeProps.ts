@@ -22,7 +22,7 @@
  */
 
 import { escapeHtml, isSafeUrl } from './utils'
-import { sanitizeRichtext } from '@core/sanitize'
+import { sanitizeRichtext, sanitizeSvg } from '@core/sanitize'
 
 /**
  * URL-related prop key suffixes and exact keys.
@@ -39,6 +39,15 @@ const URL_PROP_SUFFIXES = ['url', 'href', 'src']
 const RICHTEXT_PROP_KEYS = new Set(['richtext', 'html'])
 const RICHTEXT_PROP_SUFFIXES = ['html', 'richtext']
 
+/**
+ * Inline-SVG prop keys — passed through `sanitizeSvg()` (DOMPurify SVG profile)
+ * rather than `escapeHtml()` so the `base.svg` module can emit raw `<svg>`
+ * markup. Escaping would turn `<svg>` into `&lt;svg&gt;`; richtext
+ * sanitisation would strip every SVG tag. SVG needs its own boundary.
+ */
+const SVG_PROP_KEYS = new Set(['svg'])
+const SVG_PROP_SUFFIXES = ['svg']
+
 function isUrlKey(key: string): boolean {
   const k = key.toLowerCase()
   if (URL_PROP_KEYS.has(k)) return true
@@ -49,6 +58,12 @@ function isRichtextKey(key: string): boolean {
   const k = key.toLowerCase()
   if (RICHTEXT_PROP_KEYS.has(k)) return true
   return RICHTEXT_PROP_SUFFIXES.some((s) => k.endsWith(s))
+}
+
+function isSvgKey(key: string): boolean {
+  const k = key.toLowerCase()
+  if (SVG_PROP_KEYS.has(k)) return true
+  return SVG_PROP_SUFFIXES.some((s) => k.endsWith(s))
 }
 
 /**
@@ -70,7 +85,12 @@ export function escapeProps(
       continue
     }
 
-    if (isRichtextKey(key)) {
+    if (isSvgKey(key)) {
+      // Inline SVG: sanitise with the SVG DOMPurify profile (defense-in-depth
+      // on top of the editor/importer write-time sanitisation). Passed through
+      // raw — NOT escapeHtml'd — so the module emits real `<svg>` markup.
+      escaped[key] = sanitizeSvg(value)
+    } else if (isRichtextKey(key)) {
       // Richtext: defense-in-depth sanitization via DOMPurify (Constraint #368).
       // DOMPurify runs at write time (editor/Properties Panel boundary); this is a
       // second pass at the publisher boundary so that corrupted or injected richtext

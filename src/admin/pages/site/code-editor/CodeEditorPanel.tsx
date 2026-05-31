@@ -35,7 +35,24 @@ import { ScriptSettingsPane } from './ScriptSettingsPane'
 import { StyleSettingsPane } from './StyleSettingsPane'
 import { EmptyState } from '@ui/components/EmptyState'
 import { cn } from '@ui/cn'
+import type { SiteFile } from '@core/files/schemas'
+import type { CodeLanguage } from './CodeMirrorEditor'
 import styles from './CodeEditorPanel.module.css'
+
+/** Map a SiteFile to the editor's highlighting language (no CM6 imports here). */
+function fileLanguage(file: SiteFile): CodeLanguage {
+  switch (file.type) {
+    case 'component': return 'tsx'
+    case 'script': return 'ts'
+    case 'style': return 'css'
+    case 'config':
+      if (file.path.endsWith('.json')) return 'json'
+      if (file.path.endsWith('.ts') || file.path.endsWith('.mts')) return 'ts'
+      return 'text'
+    case 'doc': return 'markdown'
+    default: return 'text'
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Lazy-load CodeMirrorEditor — code-splits the heavy CodeMirror 6 bundle
@@ -61,15 +78,27 @@ const PANEL_WIDTH = 800
 export function CodeEditorPanel() {
   // ── Store subscriptions ──────────────────────────────────────────────────
   const activeEditorFileId = useEditorStore((s) => s.activeEditorFileId)
+  const activeCodeBuffer = useEditorStore((s) => s.activeCodeBuffer)
   const codeEditorPanelOpen = useEditorStore((s) => s.codeEditorPanelOpen)
   const site = useEditorStore((s) => s.site)
   const closeEditor = useEditorStore((s) => s.closeEditor)
   const updateFileContent = useEditorStore((s) => s.updateFileContent)
+  const updateNodeProps = useEditorStore((s) => s.updateNodeProps)
 
   // Find the active file (null when no file is open or loading site)
   const activeFile = activeEditorFileId && site
     ? (site.files.find((f) => f.id === activeEditorFileId) ?? null)
     : null
+
+  // Current value of the active node-prop buffer (read live so the editor
+  // mounts with the node's markup). Looked up in the active page tree.
+  const bufferValue = useEditorStore((s) => {
+    const buf = s.activeCodeBuffer
+    if (!buf || !s.site) return ''
+    const page = s.site.pages.find((p) => p.id === s.activePageId)
+    const v = page?.nodes[buf.nodeId]?.props?.[buf.propKey]
+    return typeof v === 'string' ? v : ''
+  })
 
   // ── Draggable panel position ─────────────────────────────────────────────
   // Default: center-stage per UX Spec (Contribution 612 §4)
@@ -93,11 +122,12 @@ export function CodeEditorPanel() {
   //
   // `panelRef` is a stable ref identity (React guarantees) — listing it in
   // deps is a no-op but satisfies exhaustive-deps without an opt-out.
+  const activeDocKey = activeEditorFileId ?? (activeCodeBuffer ? `prop:${activeCodeBuffer.nodeId}:${activeCodeBuffer.propKey}` : null)
   const prevFileIdRef = useRef<string | null>(null)
   useEffect(() => {
     const prev = prevFileIdRef.current
-    prevFileIdRef.current = activeEditorFileId
-    if (prev === null && activeEditorFileId !== null && codeEditorPanelOpen) {
+    prevFileIdRef.current = activeDocKey
+    if (prev === null && activeDocKey !== null && codeEditorPanelOpen) {
       const handle = requestAnimationFrame(() => {
         const panel = panelRef.current
         if (!panel) return
@@ -111,11 +141,12 @@ export function CodeEditorPanel() {
       return () => cancelAnimationFrame(handle)
     }
     return undefined
-  }, [activeEditorFileId, codeEditorPanelOpen, panelRef])
+  }, [activeDocKey, codeEditorPanelOpen, panelRef])
 
   // ── Determine content mode ───────────────────────────────────────────────
-  // Image asset → ImagePreview; non-image asset → placeholder (in ImagePreview);
-  // text file → CodeMirrorEditor (lazy)
+  // A node-prop buffer (e.g. inline SVG) takes precedence; otherwise:
+  // image asset → ImagePreview; non-image asset → placeholder; text file →
+  // CodeMirrorEditor (lazy).
   const isAsset = activeFile?.type === 'asset'
   const isImageAsset = isAsset && (activeFile?.blob?.mimeType.startsWith('image/') ?? false)
   const isNonImageAsset = isAsset && !isImageAsset
@@ -123,11 +154,31 @@ export function CodeEditorPanel() {
   const isScriptFile = activeFile?.type === 'script'
   const isStyleFile = activeFile?.type === 'style'
 
-  // Panel title: show filename when a file is active
-  const panelTitle = activeFile
-    ? (activeFile.path.split('/').pop() ?? 'Code Editor')
-    : 'Code Editor'
-  const hasActivePreview = Boolean(activeFile)
+  // Editor props for the active document — either a node-prop buffer or a file.
+  const editorDoc = activeCodeBuffer
+    ? {
+        docKey: `prop:${activeCodeBuffer.nodeId}:${activeCodeBuffer.propKey}`,
+        value: bufferValue,
+        language: activeCodeBuffer.language,
+        onChange: (content: string) =>
+          updateNodeProps(activeCodeBuffer.nodeId, { [activeCodeBuffer.propKey]: content }),
+      }
+    : activeFile && isTextFile
+      ? {
+          docKey: activeFile.id,
+          value: activeFile.content ?? '',
+          language: fileLanguage(activeFile),
+          onChange: (content: string) => updateFileContent(activeFile.id, content),
+        }
+      : null
+
+  // Panel title: buffer title, else filename.
+  const panelTitle = activeCodeBuffer
+    ? activeCodeBuffer.title
+    : activeFile
+      ? (activeFile.path.split('/').pop() ?? 'Code Editor')
+      : 'Code Editor'
+  const hasActivePreview = Boolean(activeFile) || Boolean(activeCodeBuffer)
 
   return (
     <aside
@@ -152,28 +203,30 @@ export function CodeEditorPanel() {
 
         {/* ── Editor body ─────────────────────────────────────────────────── */}
         <div className={styles.editorBody}>
-          {!activeFile ? (
-            /* No file selected — show empty state */
+          {!hasActivePreview ? (
+            /* Nothing open — show empty state */
             <EmptyState
               variant="centered"
               title="Select a file to edit"
               description="Click any file in the Files panel to open it here."
             />
 
-          ) : isImageAsset || isNonImageAsset ? (
+          ) : activeFile && (isImageAsset || isNonImageAsset) ? (
             /* Asset file — ImagePreview handles both image and binary cases */
             <ImagePreview file={activeFile} />
 
-          ) : isTextFile ? (
-            /* Text file — lazy-load the heavy CodeMirror 6 bundle */
+          ) : editorDoc ? (
+            /* Text file OR node-prop buffer — lazy-load the CodeMirror 6 bundle */
             <div className={styles.editorWorkspace}>
-              {isScriptFile && <ScriptSettingsPane file={activeFile} />}
-              {isStyleFile && <StyleSettingsPane file={activeFile} />}
+              {isScriptFile && activeFile && <ScriptSettingsPane file={activeFile} />}
+              {isStyleFile && activeFile && <StyleSettingsPane file={activeFile} />}
               <div className={styles.editorSurface}>
                 <Suspense fallback={<CodeEditorSkeleton />}>
                   <CodeMirrorEditor
-                    file={activeFile}
-                    updateFileContent={updateFileContent}
+                    docKey={editorDoc.docKey}
+                    value={editorDoc.value}
+                    language={editorDoc.language}
+                    onChange={editorDoc.onChange}
                   />
                 </Suspense>
               </div>

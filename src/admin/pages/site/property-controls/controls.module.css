@@ -8,6 +8,82 @@
  * remain here.
  */
 
+/* ── UrlControl (URL / Page link modes) ──────────────────────────────────── */
+.urlControl {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+/* ── SvgControl (preview tile + open-in-code-editor) ─────────────────────── */
+.svgControl {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.svgPreview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 96px;
+  padding: 12px;
+  border-radius: var(--editor-radius);
+  /* A checkerboard neutral so SVGs of any colour stay visible — the panel
+     can't load the site's classes that normally tint the mark. */
+  background:
+    repeating-conic-gradient(var(--editor-surface) 0% 25%, var(--editor-surface-2) 0% 50%)
+      50% / 16px 16px;
+  color: var(--editor-text);
+  overflow: hidden;
+}
+
+.svgPreview[data-empty='true'] {
+  background: var(--editor-surface-2);
+  color: var(--editor-text-subtle);
+}
+
+/* Constrain whatever SVG is dropped in so it fits the tile, and give it a
+   visible colour: the preview has no access to the site CSS that would
+   normally set `fill`/size on `.brand-mark` & friends, so a no-fill icon
+   would render as invisible default-black. `fill: currentColor` (inherited
+   by child shapes lacking their own fill) makes it show in the panel text
+   colour. */
+.svgPreviewInner {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+  color: var(--editor-text);
+}
+
+.svgPreviewInner :global(svg) {
+  width: auto;
+  height: 72px;
+  max-width: 100%;
+  fill: currentColor;
+}
+
+.svgPreviewEmpty {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.svgActions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.svgError {
+  font-size: 12px;
+  color: var(--editor-danger);
+}
+
 /* ── ColorControl ────────────────────────────────────────────────────────── */
 .colorRow {
     display: flex;

@@ -35,6 +35,22 @@ export interface PanelState {
   width: number
 }
 
+/**
+ * A non-file code buffer opened in the CodeEditor panel — currently a single
+ * string prop on a page node (e.g. the inline-SVG markup on a `base.svg`).
+ * The editor reads the node's current prop value and writes edits back via
+ * `updateNodeProps(nodeId, { [propKey]: content })`, so no callback needs to
+ * live in store state.
+ */
+export interface PropCodeBuffer {
+  nodeId: string
+  propKey: string
+  /** Panel title, e.g. "Edit SVG". */
+  title: string
+  /** Highlighting language for the buffer. */
+  language: 'html' | 'css' | 'json' | 'ts' | 'tsx' | 'markdown' | 'text'
+}
+
 
 export interface UiSlice {
   // Panel visibility / layout
@@ -84,6 +100,10 @@ export interface UiSlice {
   // CodeEditor (Task #432) — ID of the file currently open in the code editor
   activeEditorFileId: string | null
 
+  // Non-file code buffer (e.g. an inline-SVG node prop) open in the editor.
+  // Mutually exclusive with activeEditorFileId.
+  activeCodeBuffer: PropCodeBuffer | null
+
   // Actions
   setDomTreePanel: (state: Partial<PanelState>) => void
   setPropertiesPanel: (state: Partial<PanelState>) => void
@@ -127,6 +147,8 @@ export interface UiSlice {
 
   /** Open a SiteFile in the CodeEditor panel. Sets activeEditorFileId and auto-shows the panel. */
   openInEditor: (fileId: string) => void
+  /** Open a node-prop code buffer (e.g. inline SVG) in the CodeEditor panel. */
+  openPropInEditor: (buffer: PropCodeBuffer) => void
   /** Clear activeEditorFileId and hide the panel (e.g. when the file is deleted or editor closed). */
   closeEditor: () => void
 
@@ -276,6 +298,7 @@ export const createUiSlice: EditorStoreSliceCreator<UiSlice> = (set, get) => ({
   activePluginPanelId: null,
   codeEditorPanelOpen: false,
   activeEditorFileId: null,
+  activeCodeBuffer: null,
   activeDocument: null,
   selectedSelectorClassId: null,
   highlightedSelectorClassId: null,
@@ -431,11 +454,16 @@ export const createUiSlice: EditorStoreSliceCreator<UiSlice> = (set, get) => ({
 
   openInEditor: (fileId) =>
     // Auto-show the panel whenever a file is opened (avoids a two-click UX).
-    set({ activeEditorFileId: fileId, codeEditorPanelOpen: true }),
+    // Clears any prop buffer — file and buffer modes are mutually exclusive.
+    set({ activeEditorFileId: fileId, activeCodeBuffer: null, codeEditorPanelOpen: true }),
+
+  openPropInEditor: (buffer) =>
+    // Open a node-prop buffer (e.g. inline SVG). Clears the active file.
+    set({ activeCodeBuffer: buffer, activeEditorFileId: null, codeEditorPanelOpen: true }),
 
   closeEditor: () =>
-    // Closing the editor hides the panel and clears the active file.
-    set({ activeEditorFileId: null, codeEditorPanelOpen: false }),
+    // Closing the editor hides the panel and clears both file + buffer.
+    set({ activeEditorFileId: null, activeCodeBuffer: null, codeEditorPanelOpen: false }),
 
   setActiveDocument: (doc) =>
     set((state) => {

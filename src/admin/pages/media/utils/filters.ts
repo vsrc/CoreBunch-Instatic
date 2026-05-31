@@ -9,7 +9,15 @@
 import type { CmsMediaAsset } from '@core/persistence/cmsMedia'
 
 export type MediaSort = 'newest' | 'oldest' | 'largest' | 'smallest' | 'name-asc' | 'name-desc'
-export type MediaType = 'all' | 'image' | 'video' | 'other'
+export type MediaType = 'all' | 'image' | 'video' | 'svg' | 'other'
+
+/** The single MIME type for SVG — its own filter even though it buckets as image. */
+export const SVG_MIME = 'image/svg+xml'
+
+/** Whether an asset is an inline-able SVG file. */
+export function isSvgMime(mimeType: string): boolean {
+  return mimeType === SVG_MIME
+}
 
 export interface MediaFilters {
   /** Filter by folder id. `undefined` → no folder filter (all assets). */
@@ -33,6 +41,9 @@ export function bucketForMime(mimeType: string): 'image' | 'video' | 'other' {
 
 function matchesType(asset: CmsMediaAsset, type: MediaType | undefined): boolean {
   if (!type || type === 'all') return true
+  // `svg` is a narrower view than `image` (SVGs still bucket as images, so the
+  // Images tab continues to include them).
+  if (type === 'svg') return isSvgMime(asset.mimeType)
   return bucketForMime(asset.mimeType) === type
 }
 
