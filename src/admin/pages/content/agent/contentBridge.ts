@@ -17,8 +17,9 @@
  * processor in `agentSlice.ts`.
  */
 
+import { getErrorMessage } from '@core/utils/errorMessage'
 import { Type, parseValue, type Static } from '@core/utils/typeboxHelpers'
-import type { AgentActionResult } from '@site/agent/types'
+import type { AgentActionResult } from '@site/agent'
 import { getContentBridgeHandle } from './contentBridgeHandle'
 
 // ---------------------------------------------------------------------------
@@ -114,7 +115,7 @@ export async function executeContentTool(
         }
     }
   } catch (err) {
-    const message = err instanceof Error ? err.message : `Tool ${toolName} failed.`
+    const message = getErrorMessage(err, `Tool ${toolName} failed.`)
     return { success: false, error: message }
   }
 }

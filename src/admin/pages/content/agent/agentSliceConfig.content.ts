@@ -16,7 +16,7 @@
  * tears the tree down on logout), so the closure can't go stale here.
  */
 
-import type { AgentSliceConfig } from '@site/agent/agentSlice'
+import type { AgentSliceConfig } from '@site/agent'
 import { executeContentTool } from './contentBridge'
 import { getContentBridgeHandle } from './contentBridgeHandle'
 

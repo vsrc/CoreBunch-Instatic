@@ -6,7 +6,7 @@
  */
 import { createContext, useContext } from 'react'
 import { useStore as useZustandStore } from 'zustand'
-import type { AgentSlice } from '@site/agent/agentSlice'
+import type { AgentSlice } from '@site/agent'
 
 /**
  * Zustand store API the AgentStoreProvider accepts. The store's state

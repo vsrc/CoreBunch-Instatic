@@ -2,11 +2,12 @@ import { describe, expect, it } from 'bun:test'
 import { useEditorStore } from '@site/store/store'
 import {
   processStreamEvent,
+  executeAgentTool,
   type AgentBridgeRuntime,
   type AgentTextStreamSink,
-} from '@site/agent/agentSlice'
-import { executeAgentTool } from '@site/agent/executor'
-import type { AgentMessage, AgentToolCall } from '@site/agent/types'
+  type AgentMessage,
+  type AgentToolCall,
+} from '@site/agent'
 import '@modules/base'
 
 // ---------------------------------------------------------------------------

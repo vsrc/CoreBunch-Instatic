@@ -22,7 +22,7 @@ import { subscribeWithSelector } from 'zustand/middleware'
 import {
   createAgentSlice,
   type AgentSlice,
-} from '@site/agent/agentSlice'
+} from '@site/agent'
 import { contentAgentSliceConfig } from './agentSliceConfig.content'
 
 export type ContentAgentStore = AgentSlice

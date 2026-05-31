@@ -12,13 +12,13 @@
  *   - keeps the original "no AI provider configured" copy with the site-
  *     editor wording the panel's NoCredentialBanner depends on.
  *
- * Lives in this folder (next to the legacy site-editor agent code) so the
- * site editor's store has a stable import path; doesn't escape into the
- * generic `@site/agent/agentSlice` module.
+ * Lives in this folder (next to the site-editor agent code) so the site
+ * editor's store has a stable import path; the scope-specific snapshot logic
+ * doesn't escape into the generic `createAgentSlice` factory.
  */
 
 import type { AgentSliceConfig } from './agentSlice'
-import { buildCurrentPageContext } from './agentSlice'
+import { buildCurrentPageContext } from './pageContext'
 import { executeAgentTool } from './executor'
 import { getAgentStoreApi } from './storeRef'
 import type { EditorStore } from '@site/store/types'

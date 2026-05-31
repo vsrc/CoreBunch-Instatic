@@ -24,8 +24,7 @@
 
 import { useRef, useEffect, memo } from 'react'
 import { useAgentStore } from '@admin/ai/useAgentStore'
-import { renderMarkdownToHtml } from '@site/agent/markdown'
-import type { AgentMessage, AgentToolCall } from '@site/agent/types'
+import { renderMarkdownToHtml, type AgentMessage, type AgentToolCall } from '@site/agent'
 import { TrashSolidIcon } from 'pixel-art-icons/icons/trash-solid'
 import { SquareSolidIcon } from 'pixel-art-icons/icons/square-solid'
 import { SendSolidIcon } from 'pixel-art-icons/icons/send-solid'

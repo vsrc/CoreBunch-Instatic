@@ -1,24 +1,14 @@
 /**
  * Agent store slice — drives the AI Assistant panel.
  *
- * The browser opens a streaming NDJSON request against AGENT_API_PATH (the
- * Vite proxy forwards to the local Bun agent server, which runs the Claude
- * Agent SDK with ambient Claude Code credentials — Constraint #385).
- *
- * Wire protocol (server → browser, NDJSON, one ServerStreamEvent per line):
- *   bridgeReady   first event; carries bridgeId for tool-result POSTs
- *   text          chunk of assistant text
- *   toolStatus    SDK tool-call lifecycle (read + write tools)
- *   toolRequest   server asks the browser to apply a write tool
- *   session       Claude Agent SDK session id (for follow-up resume)
- *   error         server-side terminal error
- *   done          stream finished cleanly
- *
- * When a `toolRequest` arrives, the browser dispatches it through the
- * executor (which validates inputs and mutates the Zustand store), then
- * POSTs the result to AGENT_TOOL_RESULT_PATH so the server-side MCP tool
- * handler can return the result to Claude. There is no separate <pb:actions>
- * DSL — every page mutation is a real MCP tool call.
+ * The browser opens a streaming NDJSON request against `/admin/api/ai/chat/
+ * ${scope}` (the Vite proxy forwards to the local Bun agent server, which runs
+ * the Claude Agent SDK with ambient Claude Code credentials — Constraint #385).
+ * The NDJSON wire protocol and its per-event handling live in `streamEvents.ts`;
+ * the HTTP plumbing (tool-result POSTs, conversation bootstrap) lives in
+ * `agentApi.ts`; the site-specific page snapshot lives in `pageContext.ts`.
+ * This module owns only the slice factory: state, actions, and the
+ * send/stream-read loop.
  *
  * Guideline #254 (Performance):
  *   Text deltas are batched via rAF buffer before committing to the store
@@ -26,48 +16,36 @@
  */
 
 import { nanoid } from 'nanoid'
-import type { EditorStore, EditorStoreSliceCreator } from '@site/store/types'
-import { registry } from '@core/module-engine'
-import type {
-  AnyModuleDefinition,
-  PropertyControl,
-  PropertySchema,
-} from '@core/module-engine'
-import { Type, type Static } from '@core/utils/typeboxHelpers'
-import type { Page } from '@core/page-tree'
-import {
-  AGENT_TOOL_RESULT_PATH,
-  AI_CONVERSATIONS_PATH,
-  AI_DEFAULTS_PATH,
-} from './agentConfig'
+import type { EditorStoreSliceCreator } from '@site/store/types'
 import { safeParseJson } from '@core/utils/jsonValidate'
-import { apiRequest, ApiError } from '@core/http'
+import { ApiError } from '@core/http'
 import {
   listConversations,
   getConversation,
   deleteConversation,
   updateConversationProvider,
   type ConversationView,
-  type ConversationDetail,
 } from '@admin/ai/api'
+import {
+  createConversationForScope,
+  fetchScopeDefault,
+  rehydrateMessages,
+} from './agentApi'
+import { processStreamEvent, ServerStreamEventSchema } from './streamEvents'
 import type {
   AgentActionResult,
-  AgentModuleContext,
-  AgentModulePropContext,
-  AgentModuleStyleContext,
+  AgentBridgeRuntime,
   AgentMessage,
-  AgentToolCall,
   AgentRequestBody,
+  AgentTextStreamSink,
+  AgentToolScope,
   ServerStreamEvent,
-  PageContext,
 } from './types'
 
 // ---------------------------------------------------------------------------
 // Scope-agnostic config — the site editor and the content workspace each
 // supply their own. See `createAgentSlice(config)` below.
 // ---------------------------------------------------------------------------
-
-export type AgentToolScope = 'site' | 'content' | 'data' | 'plugin'
 
 export interface AgentSliceConfig {
   /**
@@ -96,53 +74,6 @@ export interface AgentSliceConfig {
    */
   readonly noProviderMessage?: string
 }
-
-// ---------------------------------------------------------------------------
-// Stream-event schema
-//
-// Discriminated union mirrors ServerStreamEvent from ./types. Tool-input
-// payloads pass through as Unknown — the executor validates each call's input
-// at the dispatch boundary. The schema here catches malformed envelopes from
-// the server, which is the failure mode the streaming reader needs to defend
-// against.
-// ---------------------------------------------------------------------------
-
-const ServerStreamEventSchema = Type.Union([
-  Type.Object({ type: Type.Literal('text'), text: Type.String() }),
-  Type.Object({
-    type: Type.Literal('bridgeReady'),
-    bridgeId: Type.String(),
-  }),
-  Type.Object({
-    type: Type.Literal('toolRequest'),
-    requestId: Type.String(),
-    toolName: Type.String(),
-    input: Type.Unknown(),
-  }),
-  Type.Object({
-    type: Type.Literal('toolCall'),
-    toolCallId: Type.String(),
-    toolName: Type.String(),
-    input: Type.Unknown(),
-    status: Type.Literal('pending'),
-  }),
-  Type.Object({
-    type: Type.Literal('toolResult'),
-    toolCallId: Type.String(),
-    toolName: Type.String(),
-    ok: Type.Boolean(),
-    error: Type.Optional(Type.String()),
-  }),
-  Type.Object({ type: Type.Literal('session'), sessionId: Type.String() }),
-  Type.Object({
-    type: Type.Literal('usage'),
-    promptTokens: Type.Number(),
-    completionTokens: Type.Number(),
-    costUsd: Type.Optional(Type.Number()),
-  }),
-  Type.Object({ type: Type.Literal('done') }),
-  Type.Object({ type: Type.Literal('error'), message: Type.String() }),
-])
 
 // ---------------------------------------------------------------------------
 // Slice interface
@@ -216,8 +147,6 @@ export interface AgentSlice {
   setAgentProvider(credentialId: string, modelId: string): Promise<void>
 }
 
-type EditorStoreSet = Parameters<EditorStoreSliceCreator<AgentSlice>>[0]
-
 // Session-id is in-memory only. While the editor stays open, follow-up
 // messages reuse the SDK session id (Claude has continuity across the
 // thread). On page reload the message thread vanishes too, so starting
@@ -225,200 +154,6 @@ type EditorStoreSet = Parameters<EditorStoreSliceCreator<AgentSlice>>[0]
 // thread the user can no longer see. A future "saved conversations" UI
 // will persist threads + their session ids explicitly with a "new chat"
 // button to start fresh.
-
-// ---------------------------------------------------------------------------
-// Bridge runtime — set on `bridgeReady`, read on `toolRequest`
-// ---------------------------------------------------------------------------
-
-export interface AgentBridgeRuntime {
-  bridgeId: string | null
-}
-
-/**
- * Sink for assistant text deltas. `append` accumulates a delta; `flush`
- * drains accumulated text into the message's blocks immediately. The slice's
- * implementation rAF-batches `append` calls; the toolStatus handler calls
- * `flush` so any pending text lands BEFORE a tool-call block is appended,
- * preserving chronological order in the UI.
- */
-export interface AgentTextStreamSink {
-  append(assistantId: string, text: string): void
-  flush(): void
-}
-
-/**
- * Convert the legacy `AgentActionResult` (carries `success`, `nodeId`,
- * `snapshot`) into the new `AiToolOutput` shape (`{ ok, data?, error? }`).
- * The Phase 1 server expects the canonical shape; the executor returns the
- * legacy shape for now to minimise blast radius. Adapter lives here.
- */
-function toAiToolOutput(result: AgentActionResult): {
-  ok: boolean
-  data?: unknown
-  error?: string
-} {
-  if (!result.success) {
-    return { ok: false, error: result.error ?? 'Tool call failed.' }
-  }
-  // Pack the legacy ancillary fields into `data` so the driver can see them.
-  // Drivers translate `data` straight into the model's tool_result content.
-  const data: Record<string, unknown> = {}
-  if (result.nodeId !== undefined) data.nodeId = result.nodeId
-  if (result.snapshot !== undefined) data.snapshot = result.snapshot
-  return { ok: true, data }
-}
-
-async function postToolResult(
-  bridgeId: string,
-  requestId: string,
-  result: AgentActionResult,
-  signal: AbortSignal | null,
-): Promise<void> {
-  try {
-    const res = await fetch(AGENT_TOOL_RESULT_PATH, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        bridgeId,
-        requestId,
-        result: toAiToolOutput(result),
-      }),
-      signal: signal ?? undefined,
-    })
-    if (!res.ok) {
-      // 404 means the bridge is gone (stream closed before our POST landed) —
-      // expected race during abort. Anything else is a routing/config issue
-      // that would silently leave the agent loop hung server-side.
-      console.error(
-        `[AgentSlice] tool-result POST failed: ${res.status} ${res.statusText}`,
-        { bridgeId, requestId },
-      )
-    }
-  } catch (err) {
-    // Network failure or user abort. Server cleans up pending tool resolvers
-    // when its bridge is destroyed, so Claude's loop fails with a tool error
-    // there.
-    if (err instanceof Error && err.name === 'AbortError') return
-    console.error('[AgentSlice] Failed to post tool-result:', err)
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Conversation bootstrap
-//
-// On first send we POST to /admin/api/ai/conversations to create a row, then
-// reuse its id for every subsequent send in this session. The conversation
-// row carries `(credentialId, modelId)`; the chat handler reads them from
-// the row.
-//
-// If no site default exists yet, conversation creation will 400 — the panel
-// renders a "no credential configured" banner in that case.
-// ---------------------------------------------------------------------------
-
-/**
- * Translate persisted MessageRecord rows back into the in-memory AgentMessage
- * shape (text + toolCall blocks; tool-result messages are folded back into the
- * preceding tool-call block's `result` so the UI renders the same way fresh
- * messages would).
- */
-function rehydrateMessages(
-  records: ConversationDetail['messages'],
-): AgentMessage[] {
-  const out: AgentMessage[] = []
-  const toolCallIndex = new Map<string, AgentToolCall>() // toolCallId → block
-
-  for (const rec of records) {
-    if (rec.role === 'tool' && rec.toolCallId) {
-      // Fold into the matching tool-call block.
-      const existing = toolCallIndex.get(rec.toolCallId)
-      if (existing) {
-        const errText = rec.content
-          .filter((b): b is { kind: 'text'; text: string } => b.kind === 'text')
-          .map((b) => b.text)
-          .join(' ')
-          .trim()
-        const ok = errText === ''
-        existing.status = ok ? 'success' : 'error'
-        existing.result = { success: ok, error: ok ? undefined : errText }
-      }
-      continue
-    }
-
-    const msg: AgentMessage = {
-      id: rec.id,
-      role: rec.role === 'user' ? 'user' : 'assistant',
-      blocks: [],
-      timestamp: Date.parse(rec.createdAt) || Date.now(),
-    }
-
-    for (const block of rec.content) {
-      if (block.kind === 'text') {
-        msg.blocks.push({ kind: 'text', text: block.text })
-      } else if (block.kind === 'toolCall') {
-        const toolCall: AgentToolCall = {
-          id: nanoid(),
-          externalId: block.toolCallId,
-          actionType: block.toolName,
-          params: (block.input && typeof block.input === 'object'
-            ? (block.input as Record<string, unknown>)
-            : {}),
-          result: null,
-          status: 'pending',
-        }
-        msg.blocks.push({ kind: 'toolCall', toolCall })
-        toolCallIndex.set(block.toolCallId, toolCall)
-      }
-      // image blocks — skip in v1; could render via <img> later.
-    }
-    out.push(msg)
-  }
-
-  return out
-}
-
-const ScopeDefaultEntrySchema = Type.Object({
-  credentialId: Type.String(),
-  modelId: Type.String(),
-})
-type ScopeDefaultEntry = Static<typeof ScopeDefaultEntrySchema>
-
-const ScopeDefaultsResponseSchema = Type.Object(
-  { defaults: Type.Optional(Type.Record(Type.String(), ScopeDefaultEntrySchema)) },
-  { additionalProperties: true },
-)
-
-async function fetchScopeDefault(scope: AgentToolScope): Promise<ScopeDefaultEntry | null> {
-  // Soft fetch: any failure (no default set, network, bad shape) just means
-  // "no preselected credential/model" — the caller falls back to the picker.
-  try {
-    const body = await apiRequest(AI_DEFAULTS_PATH, { schema: ScopeDefaultsResponseSchema })
-    return body.defaults?.[scope] ?? null
-  } catch (err) {
-    console.error(`[AgentSlice] Failed to fetch ${scope} default:`, err)
-    return null
-  }
-}
-
-const CreatedConversationEnvelopeSchema = Type.Object(
-  { conversation: Type.Object({ id: Type.String() }) },
-  { additionalProperties: true },
-)
-type CreatedConversation = Static<typeof CreatedConversationEnvelopeSchema>['conversation']
-
-async function createConversationForScope(
-  scope: AgentToolScope,
-  credentialId: string,
-  modelId: string,
-  contextJson: string | undefined,
-): Promise<CreatedConversation> {
-  const body = await apiRequest(AI_CONVERSATIONS_PATH, {
-    method: 'POST',
-    body: { scope, credentialId, modelId, ...(contextJson ? { contextJson } : {}) },
-    schema: CreatedConversationEnvelopeSchema,
-    fallbackMessage: 'Conversation create failed',
-  })
-  return body.conversation
-}
 
 // ---------------------------------------------------------------------------
 // Implementation
@@ -494,9 +229,9 @@ export function createAgentSlice(
   }
 
   // Single text-stream sink passed into processStreamEvent. The sink's
-  // `flush()` is called from the toolStatus handler to drain any pending
-  // text deltas BEFORE a tool-call block is added — that's what keeps the
-  // visual order in the panel chronologically correct.
+  // `flush()` is called from the toolCall/toolResult handlers to drain any
+  // pending text deltas BEFORE a tool-call block is added — that's what keeps
+  // the visual order in the panel chronologically correct.
   const textSink: AgentTextStreamSink = {
     append: appendTextDelta,
     flush: flushPendingText,
@@ -781,376 +516,4 @@ export function createAgentSlice(
     },
   }
   }
-}
-
-// ---------------------------------------------------------------------------
-// Stream event processor
-// ---------------------------------------------------------------------------
-
-export async function processStreamEvent(
-  event: ServerStreamEvent,
-  assistantId: string,
-  textSink: AgentTextStreamSink,
-  set: EditorStoreSet,
-  bridge: AgentBridgeRuntime,
-  signal: AbortSignal | null,
-  dispatchTool: (toolName: string, input: unknown) => Promise<AgentActionResult>,
-): Promise<void> {
-  switch (event.type) {
-    case 'text': {
-      textSink.append(assistantId, event.text)
-      break
-    }
-
-    case 'bridgeReady': {
-      bridge.bridgeId = event.bridgeId
-      break
-    }
-
-    case 'toolRequest': {
-      // Defensive: the dispatcher already converts caught throws into
-      // `{ success: false, error }`, but if anything ever escapes (or if
-      // the bridge evolves) we still need to ALWAYS POST a result so the
-      // server's bridge resolver fires and the driver loop sees a tool
-      // error rather than hanging forever.
-      let result: AgentActionResult
-      try {
-        result = await dispatchTool(event.toolName, event.input)
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err)
-        console.error(`[AgentSlice] tool ${event.toolName} threw unexpectedly:`, err)
-        result = { success: false, error: `Browser exception: ${message}` }
-      }
-      if (!bridge.bridgeId) {
-        console.error('[AgentSlice] toolRequest received before bridgeReady')
-        break
-      }
-      await postToolResult(bridge.bridgeId, event.requestId, result, signal)
-      break
-    }
-
-    case 'toolCall': {
-      // Driver issued a tool call (status: pending). Drain any pending text
-      // deltas BEFORE adding the block so the chronological order
-      // text → tool → text is preserved.
-      textSink.flush()
-      set((state) => {
-        const msg = state.agentMessages.find((m) => m.id === assistantId)
-        if (!msg) return
-        const inputAsRecord = event.input && typeof event.input === 'object'
-          ? (event.input as Record<string, unknown>)
-          : null
-        const existing = msg.blocks.find(
-          (block): block is { kind: 'toolCall'; toolCall: AgentToolCall } =>
-            block.kind === 'toolCall' && block.toolCall.externalId === event.toolCallId,
-        )
-        if (existing) {
-          // Re-emitted (e.g. Anthropic's content_block_start then _stop):
-          // refresh the input but keep the pending status.
-          if (inputAsRecord) existing.toolCall.params = inputAsRecord
-          return
-        }
-        msg.blocks.push({
-          kind: 'toolCall',
-          toolCall: {
-            id: nanoid(),
-            externalId: event.toolCallId,
-            actionType: event.toolName,
-            params: inputAsRecord ?? {},
-            result: null,
-            status: 'pending',
-          },
-        })
-      })
-      break
-    }
-
-    case 'toolResult': {
-      // Paired with the preceding `toolCall` (matched by toolCallId).
-      // Flip its status to success/error + attach the result envelope so
-      // the UI can render any failure message inline with the badge.
-      textSink.flush()
-      set((state) => {
-        const msg = state.agentMessages.find((m) => m.id === assistantId)
-        if (!msg) return
-        const block = msg.blocks.find(
-          (b): b is { kind: 'toolCall'; toolCall: AgentToolCall } =>
-            b.kind === 'toolCall' && b.toolCall.externalId === event.toolCallId,
-        )
-        if (!block) return
-        block.toolCall.status = event.ok ? 'success' : 'error'
-        block.toolCall.result = {
-          success: event.ok,
-          error: event.ok ? undefined : event.error ?? 'Tool call failed.',
-        }
-      })
-      break
-    }
-
-    case 'usage': {
-      // Token + cost totals — persisted server-side automatically. Nothing
-      // to do in the UI for now (Phase 6 surfaces these in the audit page).
-      break
-    }
-
-    case 'session': {
-      set({
-        agentSessionId: event.sessionId,
-      })
-      break
-    }
-
-    case 'error': {
-      // Surface the server's error message verbatim — drivers already
-      // classify and shape these to be user-facing (auth/billing/quota
-      // shows actionable copy, raw stack traces are stripped at the driver
-      // boundary). The admin needs the actual reason, not a "Something
-      // went wrong" placeholder; this surface is admin-only (capability
-      // gated) so info-disclosure concerns don't apply.
-      console.error('[AgentSlice] Server error event:', event.message)
-      set({ agentError: event.message })
-      break
-    }
-
-    case 'done':
-    default:
-      break
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Page context builder
-// ---------------------------------------------------------------------------
-
-export function buildPageContext(
-  state: EditorStore,
-  activePage: Page | undefined,
-): PageContext {
-  if (!activePage || !state.site) {
-    return {
-      pageId: '',
-      pageTitle: 'Untitled',
-      rootNodeId: '',
-      pages: [],
-      activeBreakpointId: state.activeBreakpointId,
-      breakpoints: [],
-      nodes: [],
-      availableModules: [],
-      selectedNodeId: null,
-      classes: [],
-    }
-  }
-
-  const parentMap: Record<string, string | null> = {}
-  for (const node of Object.values(activePage.nodes)) {
-    for (const childId of node.children) {
-      parentMap[childId] = node.id
-    }
-    if (!parentMap[node.id]) parentMap[node.id] = null
-  }
-
-  const nodes = Object.values(activePage.nodes).map((node) => ({
-    id: node.id,
-    moduleId: node.moduleId,
-    label: node.label,
-    parentId: parentMap[node.id] ?? null,
-    children: node.children,
-    props: node.props,
-    breakpointOverrides: toSerializableBreakpointRecords(node.breakpointOverrides ?? {}),
-    classIds: node.classIds ?? [],
-  }))
-
-  const availableModules = registry
-    .list()
-    .filter((mod) => mod.id !== 'base.body')
-    .sort((a, b) => a.id.localeCompare(b.id))
-    .map(moduleDefinitionToAgentContext)
-
-  // The agent works in terms of width breakpoints; surface only the
-  // breakpoint-keyed subset of the unified contextStyles map (custom @media /
-  // @container / @supports conditions are not part of the agent's model yet).
-  const breakpointIds = new Set(state.site.breakpoints.map((bp) => bp.id))
-  const classes = Object.values(state.site.styleRules ?? {}).map((c) => {
-    const breakpointStyles: Record<string, Record<string, unknown>> = {}
-    for (const [contextId, bag] of Object.entries(c.contextStyles ?? {})) {
-      if (breakpointIds.has(contextId)) breakpointStyles[contextId] = bag
-    }
-    return {
-      id: c.id,
-      name: c.name,
-      styles: toSerializableRecord(c.styles ?? {}),
-      breakpointStyles: toSerializableBreakpointStyles(breakpointStyles),
-    }
-  })
-
-  const pages = state.site.pages.map((page) => ({
-    id: page.id,
-    title: page.title,
-    slug: page.slug,
-    active: page.id === activePage.id,
-    isHomepage: page.slug === 'index',
-  }))
-
-  return {
-    pageId: activePage.id,
-    pageTitle: activePage.title,
-    rootNodeId: activePage.rootNodeId,
-    pages,
-    activeBreakpointId: state.activeBreakpointId,
-    breakpoints: state.site.breakpoints.map((breakpoint) => ({
-      id: breakpoint.id,
-      label: breakpoint.label,
-      width: breakpoint.width,
-      icon: breakpoint.icon,
-    })),
-    nodes,
-    availableModules,
-    selectedNodeId: state.selectedNodeId,
-    classes,
-  }
-}
-
-/**
- * Convenience wrapper around `buildPageContext` — looks up the active
- * page on the store and forwards it. Exported so the site editor's
- * agent-slice config can drop it straight into `buildSnapshot`.
- */
-export function buildCurrentPageContext(get: () => EditorStore): PageContext {
-  const storeState = get()
-  const activePage = storeState.site?.pages.find(
-    (p) => p.id === storeState.activePageId,
-  ) ?? storeState.site?.pages[0]
-  return buildPageContext(storeState, activePage)
-}
-
-function moduleDefinitionToAgentContext(mod: AnyModuleDefinition): AgentModuleContext {
-  return {
-    id: mod.id,
-    name: mod.name,
-    description: mod.description,
-    category: mod.category,
-    canHaveChildren: mod.canHaveChildren,
-    defaults: toSerializableRecord(mod.defaults ?? {}),
-    props: schemaToAgentProps(mod.schema, mod.defaults ?? {}),
-    styles: genericAgentStyleHintsForModule(mod),
-  }
-}
-
-function genericAgentStyleHintsForModule(mod: AnyModuleDefinition): AgentModuleStyleContext[] {
-  if (mod.id === 'base.text' || mod.category.toLowerCase() === 'typography') {
-    return [
-      { key: 'fontFamily', type: 'text', label: 'Font family', defaultValue: 'inherit', cssProperties: ['fontFamily'] },
-      { key: 'fontSize', type: 'text', label: 'Font size', defaultValue: '16px', cssProperties: ['fontSize'] },
-      { key: 'fontWeight', type: 'select', label: 'Font weight', defaultValue: '400', cssProperties: ['fontWeight'], options: [
-        { label: 'Regular', value: '400' },
-        { label: 'Medium', value: '500' },
-        { label: 'Semi bold', value: '600' },
-        { label: 'Bold', value: '700' },
-        { label: 'Black', value: '900' },
-      ] },
-      { key: 'lineHeight', type: 'text', label: 'Line height', defaultValue: '1.4', cssProperties: ['lineHeight'] },
-      { key: 'letterSpacing', type: 'text', label: 'Letter spacing', defaultValue: '0px', cssProperties: ['letterSpacing'] },
-      { key: 'color', type: 'color', label: 'Text color', defaultValue: 'inherit', cssProperties: ['color'] },
-      { key: 'textAlign', type: 'select', label: 'Text align', defaultValue: 'left', cssProperties: ['textAlign'], options: [
-        { label: 'Left', value: 'left' },
-        { label: 'Center', value: 'center' },
-        { label: 'Right', value: 'right' },
-        { label: 'Justify', value: 'justify' },
-      ] },
-      { key: 'marginBottom', type: 'text', label: 'Bottom margin', defaultValue: '0px', cssProperties: ['marginBottom'] },
-    ]
-  }
-
-  return []
-}
-
-function schemaToAgentProps(
-  schema: PropertySchema,
-  defaults: Record<string, unknown>,
-): AgentModulePropContext[] {
-  const props: AgentModulePropContext[] = []
-
-  for (const [key, control] of Object.entries(schema)) {
-    if (control.type === 'group') {
-      props.push(...schemaToAgentProps(control.children, defaults))
-      continue
-    }
-    props.push(controlToAgentProp(key, control, defaults[key]))
-  }
-
-  return props
-}
-
-function controlToAgentProp(
-  key: string,
-  control: Exclude<PropertyControl, { type: 'group' }>,
-  defaultValue: unknown,
-): AgentModulePropContext {
-  const prop: AgentModulePropContext = {
-    key,
-    type: control.type,
-    label: control.label,
-    description: control.description,
-    defaultValue: toSerializableValue(defaultValue),
-  }
-
-  if (control.breakpointOverridable === true) {
-    prop.breakpointOverridable = true
-  }
-
-  if (control.type === 'select') {
-    prop.options = control.options.map((option) => ({
-      label: option.label,
-      value: toSerializableValue(option.value),
-    }))
-  }
-
-  return prop
-}
-
-function toSerializableRecord(record: Record<string, unknown>): Record<string, unknown> {
-  const result: Record<string, unknown> = {}
-  for (const [key, value] of Object.entries(record)) {
-    result[key] = toSerializableValue(value)
-  }
-  return result
-}
-
-function toSerializableBreakpointStyles(
-  breakpointStyles: Record<string, Record<string, unknown>>,
-): Record<string, Record<string, unknown>> {
-  return toSerializableBreakpointRecords(breakpointStyles)
-}
-
-function toSerializableBreakpointRecords(
-  breakpointStyles: Record<string, Partial<Record<string, unknown>>>,
-): Record<string, Record<string, unknown>> {
-  const result: Record<string, Record<string, unknown>> = {}
-  for (const [breakpointId, styles] of Object.entries(breakpointStyles)) {
-    result[breakpointId] = toSerializableRecord(styles)
-  }
-  return result
-}
-
-function toSerializableValue(value: unknown): unknown {
-  if (
-    value === null ||
-    typeof value === 'string' ||
-    typeof value === 'number' ||
-    typeof value === 'boolean'
-  ) {
-    return value
-  }
-
-  if (Array.isArray(value)) return value.map(toSerializableValue)
-
-  if (typeof value === 'object' && value) {
-    const result: Record<string, unknown> = {}
-    for (const [key, nestedValue] of Object.entries(value as Record<string, unknown>)) {
-      result[key] = toSerializableValue(nestedValue)
-    }
-    return result
-  }
-
-  return String(value)
 }

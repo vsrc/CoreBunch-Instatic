@@ -11,9 +11,6 @@
  * 'ai.tools.write')` gates would 401 every request.
  */
 
-/** Streaming chat endpoint — POSTs `{ conversationId, prompt, snapshot }`. */
-export const AGENT_API_PATH = '/admin/api/ai/chat/site' as const
-
 /**
  * Browser-bridge response endpoint. POSTed by the browser after applying a
  * write tool against the editor store; resolves the in-flight pending tool

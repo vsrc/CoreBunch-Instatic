@@ -17,6 +17,14 @@
 // with optional fields so the bridge protocol stays uniform — tools that
 // don't need a particular field simply omit it.
 
+/**
+ * Conversation scope shared by every agent surface. Used in URL paths
+ * (`/admin/api/ai/chat/${scope}`, `?scope=${scope}`), the conversation-create
+ * body, and the per-scope default lookup. Keep it aligned with
+ * `server/ai/runtime/types.ts → ToolScope`.
+ */
+export type AgentToolScope = 'site' | 'content' | 'data' | 'plugin'
+
 export interface AgentActionResult {
   success: boolean
   /** Set by createClass — the new class ID. */
@@ -353,4 +361,33 @@ export interface PageContext {
     styles?: Record<string, unknown>
     breakpointStyles?: Record<string, Record<string, unknown>>
   }>
+}
+
+// ---------------------------------------------------------------------------
+// Slice runtime helpers
+//
+// Browser-side runtime contracts shared between the agent slice factory
+// (agentSlice.ts) and the stream-event processor (streamEvents.ts). Kept here
+// so neither module has to import the other just for a type.
+// ---------------------------------------------------------------------------
+
+/**
+ * Bridge runtime — `bridgeId` is set on the `bridgeReady` event and read on
+ * every `toolRequest` so the browser can correlate tool-result POSTs with the
+ * server-side pending tool waiter.
+ */
+export interface AgentBridgeRuntime {
+  bridgeId: string | null
+}
+
+/**
+ * Sink for assistant text deltas. `append` accumulates a delta; `flush`
+ * drains accumulated text into the message's blocks immediately. The slice's
+ * implementation rAF-batches `append` calls; the toolCall/toolResult handlers
+ * call `flush` so any pending text lands BEFORE a tool-call block is appended,
+ * preserving chronological order in the UI.
+ */
+export interface AgentTextStreamSink {
+  append(assistantId: string, text: string): void
+  flush(): void
 }

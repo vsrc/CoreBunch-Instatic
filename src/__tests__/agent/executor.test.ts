@@ -12,7 +12,7 @@
 
 import { describe, it, expect } from 'bun:test'
 import { useEditorStore } from '@site/store/store'
-import { executeAgentTool } from '@site/agent/executor'
+import { executeAgentTool } from '@site/agent'
 import { classNamesForClassIds } from '@core/page-tree/classNames'
 import '@modules/base'
 
