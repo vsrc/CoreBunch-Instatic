@@ -48,6 +48,7 @@ src/admin/modals/SiteImport/
 │   └── ImportStep.tsx           — determinate progress surface + complete/failed states
 └── shared/
     ├── createSiteImportAdapter.ts  — wires adapter to editor store + media API
+    ├── ConflictRow.tsx             — single slug/class-name conflict row with resolution picker
     ├── ImportStepper.tsx           — shared four-stage progress rail (Review + Import)
     └── importProgress.ts           — RunProgress model used by ImportStep
 ```
