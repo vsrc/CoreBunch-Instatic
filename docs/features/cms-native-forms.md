@@ -79,4 +79,5 @@ No public form endpoint can be made unusable by a dedicated HTTP client that fet
 - Source of truth — form settings panel: `src/admin/pages/site/panels/PropertiesPanel/FormSettingsPanel.tsx`
 - Source of truth — settings analysis: `src/admin/pages/site/panels/PropertiesPanel/formSettingsAnalysis.ts`
 - Source of truth — naming utilities: `src/admin/pages/site/panels/PropertiesPanel/formSettingsNaming.ts`
+- Source of truth — target table restriction: `src/core/forms/targets.ts`
 - Source of truth — submission handler: `server/forms/handler.ts`

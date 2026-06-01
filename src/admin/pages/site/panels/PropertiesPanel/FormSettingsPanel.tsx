@@ -363,12 +363,11 @@ function FormTargetTableRow({
 }) {
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const targetTableId = analysis.form?.targetTableId ?? ''
-  const options = [
-    { label: 'Choose table', value: '' },
-    ...tables
-      .filter(isFormSubmissionTargetTable)
-      .map((table) => ({ label: table.name, value: table.id })),
-  ]
+  const options = [{ label: 'Choose table', value: '' }]
+  for (const table of tables) {
+    if (!isFormSubmissionTargetTable(table)) continue
+    options.push({ label: table.name, value: table.id })
+  }
   const canCreateTable = analysis.inferredFields.length > 0
 
   function handleTableChange(event: ChangeEvent<HTMLSelectElement>) {
