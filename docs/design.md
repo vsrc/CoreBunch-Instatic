@@ -140,7 +140,8 @@ White accent (still in the base layer — alpha variants of white):
   --editor-selection (= white at 0.08, used for selected rows / pressed states)
 
 Rail tints (categorical identity layer):
-  --rail-tint-mint, --rail-tint-lilac, --rail-tint-sky, --rail-tint-peach
+  --rail-tint-mint, --rail-tint-lilac, --rail-tint-sky, --rail-tint-peach,
+  --rail-tint-rose
 
 Semantic state (meaning layer):
   --editor-danger, --editor-danger-light, --editor-danger-lighter,
@@ -191,7 +192,7 @@ These five are the entire text palette. Add a new tone only by adding a new toke
 | Token                | Value | Use                                                          |
 |----------------------|-------|--------------------------------------------------------------|
 | `--editor-radius-sm` | 3px   | Tight chips, micro-badges, segmented control inner indicator |
-| `--editor-radius`    | 6px   | Default editor controls, toolbar buttons, ghost menu items   |
+| `--editor-radius`    | 12px  | Default editor controls, toolbar buttons, ghost menu items   |
 | `--panel-radius`     | 12px  | Floating overlay panels (Spotlight, modals, popovers)        |
 | `--card-radius`      | 16px  | Borderless tile cards (Widget, dashboard cells, module inserter tiles) |
 | `--input-radius`     | 1em   | Pill-shaped inputs, classes / property chips                 |
@@ -558,6 +559,7 @@ The HTML `title` attribute is banned for hover hints — gated by `no-native-tit
 - Gate tests:
   - `src/__tests__/architecture/css-token-policy.test.ts` — no hardcoded colors in admin / ui CSS modules
   - `src/__tests__/architecture/no-css-var-fallbacks.test.ts` — no `var(--name, fallback)` in admin / ui CSS modules
+  - `src/__tests__/architecture/scrollbar-chrome.test.ts` — scrollbar tokens declared in `globals.css`; both Firefox and WebKit/Blink implementations use them; properties panel uses `scrollbar-gutter: stable`
   - `src/__tests__/architecture/noTailwindUtilities.test.ts` — no Tailwind utility classes (covers all palette names)
   - `src/__tests__/architecture/no-tailwind-deps.test.ts` — no Tailwind ecosystem dependencies
   - `src/__tests__/architecture/button-primitive-usage.test.ts` — every button goes through `Button`

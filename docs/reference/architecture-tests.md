@@ -6,7 +6,7 @@ Catalog of every test in `src/__tests__/architecture/`. These are structural gat
 
 ## TL;DR
 
-- 92 tests across structural domains: SQL, JSON columns, migrations, CSS, icons, primitives, page tree, sandbox, agent, router, content storage, boundary validation, module size, etc.
+- 93 tests across structural domains: SQL, JSON columns, migrations, CSS, icons, primitives, page tree, sandbox, agent, router, content storage, boundary validation, module size, etc.
 - Naming convention: `<topic>.test.ts` (kebab-case) or `<group>-<topic>.test.ts`. A few legacy `task<N>-*` / `phase<N>-*` / `guideline<N>-*` ids exist — when the codebase has stabilized, those should be renamed by topic.
 - Run them all: `bun test src/__tests__/architecture/`.
 - Most are **import / source scans** — they parse the files in scope and assert / reject patterns. Some are unit-style (a small in-test database, a synthesized page tree).
@@ -74,6 +74,7 @@ See [docs/reference/typebox-patterns.md](typebox-patterns.md).
 | `no-css-var-fallbacks.test.ts`                | `var(--x, fallback)` is banned — every token must exist; fallbacks hide drift.   |
 | `noTailwindUtilities.test.ts`                 | No Tailwind utility class strings in `className=` in `src/admin/`, `src/modules/`, `src/ui/`. |
 | `no-tailwind-deps.test.ts`                    | No imports of `clsx`, `tailwind-merge`, `class-variance-authority`, `@radix-ui/*`, `tailwindcss`. No `@tailwind` / `@apply` directives. |
+| `scrollbar-chrome.test.ts`                    | Scrollbar tokens declared in `globals.css`; both Firefox (`scrollbar-color`) and WebKit/Blink (`::-webkit-scrollbar`) styled with those tokens; `StyleSurface.module.css` uses `scrollbar-gutter: stable` to keep the properties rail clear of overlaying scrollbars. |
 
 See [docs/design.md](../design.md), [docs/reference/design-tokens.md](design-tokens.md).
 

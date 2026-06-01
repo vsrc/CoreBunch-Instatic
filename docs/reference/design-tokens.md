@@ -104,12 +104,13 @@ Four colors used as per-category identity — widget category, panel rail, sideb
 
 | Token              | Hex       | Conventional category                                                  |
 |--------------------|-----------|------------------------------------------------------------------------|
-| `--rail-tint-mint` | `#8ee6c8` | "Saved / system / status"                                              |
-| `--rail-tint-lilac`| `#c8b6ff` | "Pages / structure"                                                    |
-| `--rail-tint-sky`  | `#9bdcff` | "Storage / data / configuration"                                       |
-| `--rail-tint-peach`| `#ffc7a8` | "Posts / media / activity"                                             |
+| `--rail-tint-mint` | `#8ee6c8` | "Saved / system / status"                                                  |
+| `--rail-tint-lilac`| `#c8b6ff` | "Pages / structure"                                                        |
+| `--rail-tint-sky`  | `#9bdcff` | "Storage / data / configuration"                                           |
+| `--rail-tint-peach`| `#ffc7a8` | "Posts / media / activity"                                                 |
+| `--rail-tint-rose` | `#ffb6cd` | Fifth-hue overflow — breakdowns that need 5 segments (e.g. Storage widget) |
 
-Used by `Widget` (`tint` prop), `PanelRail` (`data-accent="<tint>"`), and the storage breakdown chart. Don't introduce a fifth tint as a one-off — propose it as a new token.
+Used by `Widget` (`tint` prop), `PanelRail` (`data-accent="<tint>"`), and the storage breakdown chart. Adding a sixth tint requires a new token — don't inline a color.
 
 ---
 
@@ -144,6 +145,7 @@ Used by `Widget` (`tint` prop), `PanelRail` (`data-accent="<tint>"`), and the st
 | `--editor-success-text`        | `#d1fae5`                          | Success badge text                    |
 | `--editor-success-text-soft`   | `#a7f3d0`                          | Success hint text                     |
 | `--editor-success-bg`          | `rgba(52, 211, 153, 0.1)`          | Success pill surface                  |
+| `--editor-success-border`      | `rgba(52, 211, 153, 0.3)`          | Success pill / alert border           |
 
 ### Info
 
@@ -162,13 +164,15 @@ Used by `Widget` (`tint` prop), `PanelRail` (`data-accent="<tint>"`), and the st
 ## Canvas (selection / hover affordances)
 
 ```css
---canvas-selection-ring:        inset 0 0 0 1px #39ff14;   /* neon green */
---canvas-hover-ring:            inset 0 0 0 1px #ff2bd6;   /* neon pink */
+--canvas-selection-ring:        inset 0 0 0 1px #39ff14;   /* neon green — selected node */
+--canvas-hover-ring:            inset 0 0 0 1px #ff2bd6;   /* neon pink — hovered node */
+--canvas-selector-ring:         inset 0 0 0 1px #ff8800;   /* neon orange — selector-panel match sweep */
 --canvas-selection-ring-color:  #39ff14;
 --canvas-hover-ring-color:      #ff2bd6;
+--canvas-selector-ring-color:   #ff8800;
 ```
 
-Bare colour variants (`*-ring-color`) are for surfaces that need an `outline` / `border-color` / custom shadow geometry rather than the full inset-ring shorthand. Keep them in sync with the shorthand.
+Bare colour variants (`*-ring-color`) are for surfaces that need an `outline` / `border-color` / custom shadow geometry rather than the full inset-ring shorthand. Keep them in sync with the shorthands. The selector ring (`#ff8800`) is a third distinct identity so a "show me everything this selector touches" sweep reads differently from selection (green) and hover (pink).
 
 ### Canvas placeholder
 
@@ -209,9 +213,9 @@ Used inside CodeMirror only. Don't reach for these in editor chrome.
 | Token                | Value | Use                                                          |
 |----------------------|-------|--------------------------------------------------------------|
 | `--editor-radius-sm` | 3px   | Tight chips, micro-badges, segmented-control inner indicator |
-| `--editor-radius`    | 6px   | Default editor controls, toolbar buttons, ghost menu items   |
+| `--editor-radius`    | 12px  | Default editor controls, toolbar buttons, ghost menu items   |
 | `--panel-radius`     | 12px  | Floating overlay panels                                      |
-| (literal) 16px       | 16px  | Borderless tile cards (Widget). Not yet a named token — promote if a third surface adopts it. |
+| `--card-radius`      | 16px  | Borderless tile cards (Widget, dashboard cells, module inserter tiles) |
 | `--input-radius`     | 1em   | Pill-shaped inputs, class / property chips                   |
 | `--tooltip-radius`   | 6px   | Tooltips                                                     |
 
@@ -243,6 +247,16 @@ Use `--panel-shadow` directly when you need a floating-panel feel. Don't recompo
 ```
 
 Used by spotlight, popovers, modals — anything that floats above the editor with a blur backdrop.
+
+---
+
+## Inline code surface
+
+```css
+--code-bg: rgba(0, 0, 0, 0.3);
+```
+
+Used by the `Code` primitive for inline code chip backgrounds. Don't reuse for block-level code editors (that's CodeMirror, which uses the `--editor-syntax-*` tokens).
 
 ---
 
@@ -336,6 +350,7 @@ Spotlight has its own token group. Don't reuse outside Spotlight.
 | `--spotlight-confirm-bg`           | `rgba(239, 68, 68, 0.08)`              |
 | `--spotlight-skeleton-base`        | `rgba(255, 255, 255, 0.06)`            |
 | `--spotlight-skeleton-shimmer`     | `rgba(255, 255, 255, 0.12)`            |
+| `--editor-progress-shimmer`        | `rgba(255, 255, 255, 0.4)`             | Travelling highlight on determinate progress bars (Super Import) |
 
 ---
 
@@ -406,6 +421,6 @@ The two `!important` declarations here are the **only legitimate `!important` us
 - Source-of-truth file: `src/styles/globals.css`
 - Gate tests:
   - `src/__tests__/architecture/css-token-policy.test.ts`
-  - `src/__tests__/architecture/achromatic-color-policy.test.ts` (deleted as redundant; the broader Tailwind ban catches palette names)
   - `src/__tests__/architecture/noTailwindUtilities.test.ts`
   - `src/__tests__/architecture/no-css-var-fallbacks.test.ts`
+  - `src/__tests__/architecture/scrollbar-chrome.test.ts` — scrollbar tokens declared; both Firefox and WebKit/Blink styled; properties panel uses `scrollbar-gutter: stable`
