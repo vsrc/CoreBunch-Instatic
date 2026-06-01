@@ -285,8 +285,11 @@ function FormIdentityRows({
 
   return (
     <div className={styles.primaryControls}>
-      <div className={styles.section}>
-        <span className={styles.sectionLabel}>Mode</span>
+      <ControlRow
+        propKey="form-mode"
+        label="Mode"
+        layout="stacked"
+      >
         <SegmentedControl
           value={form.mode}
           options={FORM_MODE_OPTIONS}
@@ -296,7 +299,7 @@ function FormIdentityRows({
           aria-label="Form mode"
           data-testid="form-mode"
         />
-      </div>
+      </ControlRow>
       <ControlRow
         propKey="form-id"
         inputId={formIdInputId}
@@ -326,8 +329,11 @@ function PreviewStateRow({
   onChange: (state: FormPreviewState) => void
 }) {
   return (
-    <div className={styles.section}>
-      <span className={styles.sectionLabel}>Preview state</span>
+    <ControlRow
+      propKey="form-preview-state"
+      label="Preview state"
+      layout="stacked"
+    >
       <SegmentedControl
         value={value}
         options={FORM_PREVIEW_STATES}
@@ -337,7 +343,7 @@ function PreviewStateRow({
         aria-label="Preview state"
         data-testid="form-preview-state"
       />
-    </div>
+    </ControlRow>
   )
 }
 

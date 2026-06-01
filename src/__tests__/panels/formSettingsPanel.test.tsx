@@ -198,6 +198,8 @@ describe('FormSettingsPanelView', () => {
     const modeControl = screen.getByTestId('form-mode')
     const previewControl = screen.getByTestId('form-preview-state')
     expect(modeControl.compareDocumentPosition(previewControl) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(screen.getByText('Mode').tagName).toBe('LABEL')
+    expect(screen.getByText('Preview state').tagName).toBe('LABEL')
 
     fireEvent.click(screen.getByRole('button', { name: 'Custom action' }))
     expect(patches).toContainEqual({ mode: 'custom' })
