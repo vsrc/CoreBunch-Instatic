@@ -296,7 +296,123 @@ describe('base.button — <button> elements', () => {
 })
 
 // ---------------------------------------------------------------------------
-// 5. <ul> / <ol> → base.container (builtin tag) + recurse into <li> children
+// 5. Form elements → base form primitives
+// ---------------------------------------------------------------------------
+
+describe('base form primitives — semantic form elements', () => {
+  it('imports a contact form as first-class form, label, input, textarea, and submit modules', () => {
+    const result = imported(`
+      <form id="contact" action="/contact" method="post">
+        <label for="email">Email address</label>
+        <input id="email" name="email" type="email" required placeholder="you@example.com" minlength="5">
+        <textarea id="message" name="message" required maxlength="500">Hello</textarea>
+        <button type="submit">Send</button>
+      </form>
+    `)
+
+    const form = result.nodes[result.rootIds[0]!]!
+    expect(form.moduleId).toBe('base.form')
+    expect(form.props.mode).toBe('custom')
+    expect(form.props.formId).toBe('contact')
+    expect(form.props.action).toBe('/contact')
+    expect(form.props.method).toBe('post')
+    expect(form.children).toHaveLength(4)
+
+    const label = result.nodes[form.children[0]!]!
+    expect(label.moduleId).toBe('base.label')
+    expect(label.props.text).toBe('Email address')
+    expect(label.props.targetMode).toBe('explicit')
+    expect(label.props.targetId).toBe('email')
+
+    const input = result.nodes[form.children[1]!]!
+    expect(input.moduleId).toBe('base.input')
+    expect(input.props.inputType).toBe('email')
+    expect(input.props.fieldId).toBe('email')
+    expect(input.props.name).toBe('email')
+    expect(input.props.id).toBe('email')
+    expect(input.props.placeholder).toBe('you@example.com')
+    expect(input.props.required).toBe(true)
+    expect(input.props.minLength).toBe(5)
+
+    const textarea = result.nodes[form.children[2]!]!
+    expect(textarea.moduleId).toBe('base.textarea')
+    expect(textarea.props.fieldId).toBe('message')
+    expect(textarea.props.value).toBe('Hello')
+    expect(textarea.props.required).toBe(true)
+    expect(textarea.props.maxLength).toBe(500)
+
+    const submit = result.nodes[form.children[3]!]!
+    expect(submit.moduleId).toBe('base.submit')
+    expect(submit.props.label).toBe('Send')
+  })
+
+  it('imports checkbox, radio, select, optgroup, option, and input-submit elements as form modules', () => {
+    const result = imported(`
+      <form name="signup">
+        <input type="checkbox" name="consent" value="yes" checked required>
+        <input type="radio" name="plan" value="pro" checked>
+        <select id="country" name="country" required multiple>
+          <optgroup label="Europe">
+            <option value="cz" selected>Czechia</option>
+          </optgroup>
+        </select>
+        <input type="submit" value="Join">
+      </form>
+    `)
+
+    const form = result.nodes[result.rootIds[0]!]!
+    expect(form.moduleId).toBe('base.form')
+    expect(form.props.formId).toBe('signup')
+    expect(form.children).toHaveLength(4)
+
+    const checkbox = result.nodes[form.children[0]!]!
+    expect(checkbox.moduleId).toBe('base.checkbox')
+    expect(checkbox.props.fieldId).toBe('consent')
+    expect(checkbox.props.value).toBe('yes')
+    expect(checkbox.props.checked).toBe(true)
+    expect(checkbox.props.required).toBe(true)
+
+    const radio = result.nodes[form.children[1]!]!
+    expect(radio.moduleId).toBe('base.radio')
+    expect(radio.props.fieldId).toBe('plan')
+    expect(radio.props.value).toBe('pro')
+    expect(radio.props.checked).toBe(true)
+
+    const select = result.nodes[form.children[2]!]!
+    expect(select.moduleId).toBe('base.select')
+    expect(select.props.fieldId).toBe('country')
+    expect(select.props.required).toBe(true)
+    expect(select.props.multiple).toBe(true)
+
+    const group = result.nodes[select.children[0]!]!
+    expect(group.moduleId).toBe('base.option-group')
+    expect(group.props.label).toBe('Europe')
+
+    const option = result.nodes[group.children[0]!]!
+    expect(option.moduleId).toBe('base.option')
+    expect(option.props.value).toBe('cz')
+    expect(option.props.label).toBe('Czechia')
+    expect(option.props.selected).toBe(true)
+
+    const submit = result.nodes[form.children[3]!]!
+    expect(submit.moduleId).toBe('base.submit')
+    expect(submit.props.label).toBe('Join')
+  })
+
+  it('keeps a wrapping label as a container so nested controls are not dropped', () => {
+    const result = imported('<form><label>Email <input name="email" type="email"></label></form>')
+    const form = result.nodes[result.rootIds[0]!]!
+    const labelContainer = result.nodes[form.children[0]!]!
+
+    expect(labelContainer.moduleId).toBe('base.container')
+    expect(labelContainer.props.customTag).toBe('label')
+    expect(labelContainer.children).toHaveLength(2)
+    expect(result.nodes[labelContainer.children[1]!]!.moduleId).toBe('base.input')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 6. <ul> / <ol> → base.container (builtin tag) + recurse into <li> children
 // ---------------------------------------------------------------------------
 
 describe('base.container — <ul> and <ol> (builtin tags)', () => {
@@ -479,14 +595,6 @@ describe('void elements — childless base.container with customTag', () => {
   // HTML void elements to base.container with tag:'custom' + the actual tag
   // name as customTag. recurse is NOT set, so these nodes have no children.
 
-  it('<input> → base.container tag:"custom", customTag:"input", no children', () => {
-    const node = single('<input>')
-    expect(node.moduleId).toBe('base.container')
-    expect(node.props.tag).toBe('custom')
-    expect(node.props.customTag).toBe('input')
-    expect(node.children).toHaveLength(0)
-  })
-
   it('<br> → base.container tag:"custom", customTag:"br", no children', () => {
     const node = single('<br>')
     expect(node.moduleId).toBe('base.container')
@@ -536,7 +644,7 @@ describe('void elements — childless base.container with customTag', () => {
   })
 
   it('void elements mixed with normal elements produce one node each, all childless', () => {
-    const result = imported('<br><hr><input>')
+    const result = imported('<br><hr><wbr>')
     expect(result.rootIds).toHaveLength(3)
     for (const id of result.rootIds) {
       const node = result.nodes[id]!
@@ -547,15 +655,15 @@ describe('void elements — childless base.container with customTag', () => {
   })
 
   it('void element inside a container does not pull children out of the container', () => {
-    // <div> contains <input> and <p>. The input must be childless.
-    const result = imported('<div><input><p>After input</p></div>')
+    // <div> contains <br> and <p>. The br must be childless.
+    const result = imported('<div><br><p>After break</p></div>')
     const divId = result.rootIds[0]!
     const divNode = result.nodes[divId]!
     expect(divNode.children).toHaveLength(2)
 
-    const inputNode = result.nodes[divNode.children[0]!]!
-    expect(inputNode.props.customTag).toBe('input')
-    expect(inputNode.children).toHaveLength(0)
+    const brNode = result.nodes[divNode.children[0]!]!
+    expect(brNode.props.customTag).toBe('br')
+    expect(brNode.children).toHaveLength(0)
 
     const pNode = result.nodes[divNode.children[1]!]!
     expect(pNode.moduleId).toBe('base.text')
@@ -581,13 +689,6 @@ describe('catch-all guarantee — exotic / unknown tags', () => {
     expect(node.props.customTag).toBe('table')
   })
 
-  it('<form> → base.container tag:"custom", customTag:"form"', () => {
-    const node = single('<form></form>')
-    expect(node.moduleId).toBe('base.container')
-    expect(node.props.tag).toBe('custom')
-    expect(node.props.customTag).toBe('form')
-  })
-
   it('<details> → base.container tag:"custom", customTag:"details"', () => {
     const node = single('<details></details>')
     expect(node.moduleId).toBe('base.container')
@@ -604,7 +705,7 @@ describe('catch-all guarantee — exotic / unknown tags', () => {
 
   it('every element produces exactly one node (no falls-through)', () => {
     // Three exotic tags → exactly three nodes
-    const result = imported('<dialog>D</dialog><table></table><form></form>')
+    const result = imported('<dialog>D</dialog><table></table><details></details>')
     expect(result.rootIds).toHaveLength(3)
     for (const id of result.rootIds) {
       const node = result.nodes[id]!

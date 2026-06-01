@@ -43,6 +43,7 @@ src/modules/base/
 ├── video/               — base.video
 ├── list/                — base.list
 ├── loop/                — base.loop
+├── forms/               — base.form and form-control primitives
 ├── visualComponentRef/  — base.visual-component-ref
 ├── slotOutlet/          — base.slot-outlet (VC author side)
 ├── slotInstance/        — base.slot-instance (VC consumer side)
@@ -134,6 +135,7 @@ schema: PropertySchema = {
 | `multiSelect` | Multi-select pills                                        | `string[]`                                       |
 | `color`       | `<ColorInput>`                                            | `string` (hex / token name)                      |
 | `link`        | URL + target + rel composite                              | `LinkValue` object                               |
+| `dataTable`   | Data table picker                                         | table id string                                  |
 | `image`       | Media picker                                              | media id or URL                                  |
 | `media`       | Media picker (any media type)                             | media id                                         |
 | `spacing`     | 4-axis spacing control (margin / padding box)             | `SpacingValue` object                            |
@@ -400,6 +402,7 @@ Modules that need broader context can opt in to `ctx: RenderContext`. Most modul
 - [docs/features/publisher.md](publisher.md) — how the walker calls `module.render()`
 - [docs/features/visual-components.md](visual-components.md) — `base.visual-component-ref`, `base.slot-outlet`, `base.slot-instance`
 - [docs/features/loops.md](loops.md) — `base.loop`
+- [docs/features/cms-native-forms.md](cms-native-forms.md) — `base.form` and form-control primitives
 - [docs/features/plugin-system.md](plugin-system.md) — plugin modules + module packs
 - [docs/features/html-import.md](html-import.md) — HTML string → `PageNode` importer; uses `base.text`, `base.button`, `base.image`, `base.container`
 - [docs/reference/module-engine.md](../reference/module-engine.md) — focused cookbook for adding a module

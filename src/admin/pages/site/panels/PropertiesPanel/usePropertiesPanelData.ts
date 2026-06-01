@@ -87,6 +87,7 @@ export interface PropertiesPanelData {
 
   // ─── Prop change handlers ──────────────────────────────────────────────
   handleChange: (propKey: string, value: unknown) => void
+  handlePatch: (patch: Record<string, unknown>) => void
   handleSetDynamicBinding: (propKey: string, binding: DynamicPropBinding) => void
   handleClearDynamicBinding: (propKey: string) => void
 }
@@ -197,6 +198,12 @@ export function usePropertiesPanelData(): PropertiesPanelData {
     setStatusMessage(`${propKey} updated`)
   }
 
+  const handlePatch = (patch: Record<string, unknown>) => {
+    if (!selectedNodeId) return
+    updateNodeProps(selectedNodeId, patch)
+    setStatusMessage('Form settings updated')
+  }
+
   const handleSetDynamicBinding = (propKey: string, binding: DynamicPropBinding) => {
     if (!selectedNodeId) return
     setNodeDynamicBinding(selectedNodeId, propKey, binding)
@@ -252,6 +259,7 @@ export function usePropertiesPanelData(): PropertiesPanelData {
     renameNode,
 
     handleChange,
+    handlePatch,
     handleSetDynamicBinding,
     handleClearDynamicBinding,
   }

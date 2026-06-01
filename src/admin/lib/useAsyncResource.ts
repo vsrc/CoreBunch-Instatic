@@ -47,7 +47,7 @@
  *     (`useDashboardLayout`), or a status fetch that seeds an action state
  *     machine (`PublishButton`).
  */
-import { useCallback, useEffect, useState, type DependencyList } from 'react'
+import { useCallback, useEffect, useEffectEvent, useState, type DependencyList } from 'react'
 import { isAbortError } from '@core/http'
 
 export interface AsyncResource<T> {
@@ -72,6 +72,10 @@ export interface UseAsyncResourceOptions {
   swallowErrors?: boolean
 }
 
+function dependencyListsEqual(a: DependencyList, b: DependencyList): boolean {
+  return a.length === b.length && a.every((value, index) => Object.is(value, b[index]))
+}
+
 export function useAsyncResource<T>(
   loader: (signal: AbortSignal) => Promise<T>,
   deps: DependencyList,
@@ -82,45 +86,52 @@ export function useAsyncResource<T>(
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [reloadCount, setReloadCount] = useState(0)
+  const [dependencyTracker, setDependencyTracker] = useState(() => ({
+    deps: [...deps],
+    version: 0,
+  }))
+  let dependencyVersion = dependencyTracker.version
+
+  if (!dependencyListsEqual(dependencyTracker.deps, deps)) {
+    dependencyVersion = dependencyTracker.version + 1
+    setDependencyTracker({ deps: [...deps], version: dependencyVersion })
+  }
 
   // Exception #1 (react-hooks/exhaustive-deps): consumers routinely place
   // `refresh` in their own dependency arrays, so it needs a stable identity the
   // static lint can see; the compiler's runtime memoization is invisible there.
   const refresh = useCallback(() => setReloadCount((n) => n + 1), [])
 
+  const runLoad = useEffectEvent(async (
+    signal: AbortSignal,
+    isCancelled: () => boolean,
+  ) => {
+    setLoading(true)
+    setError(null)
+    try {
+      const result = await loader(signal)
+      if (!isCancelled()) setData(result)
+    } catch (err) {
+      if (isCancelled() || isAbortError(err)) return
+      if (!swallowErrors) {
+        setError(err instanceof Error ? err.message : fallbackError)
+      }
+    } finally {
+      if (!isCancelled()) setLoading(false)
+    }
+  })
+
   useEffect(() => {
     const controller = new AbortController()
     let cancelled = false
-    // All setState calls live inside the async IIFE (not lexically in the
-    // effect body) to satisfy react-hooks/set-state-in-effect — the same
-    // idiom the hand-rolled loaders this hook replaces all used.
-    void (async () => {
-      setLoading(true)
-      setError(null)
-      try {
-        const result = await loader(controller.signal)
-        if (!cancelled) setData(result)
-      } catch (err) {
-        if (cancelled || isAbortError(err)) return
-        if (!swallowErrors) {
-          setError(err instanceof Error ? err.message : fallbackError)
-        }
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    })()
+    // Keep setState calls out of the lexical effect body; react-hooks/set-state-in-effect
+    // treats the async boundary as the intentional load callback.
+    void (async () => runLoad(controller.signal, () => cancelled))()
     return () => {
       cancelled = true
       controller.abort()
     }
-    // `deps` is caller-controlled (the loader closes over exactly these values),
-    // so only deps + the refresh nonce drive re-runs. loader/options are read
-    // from the render in which `deps` last changed — exactly the closure that
-    // matches those deps. exhaustive-deps can't statically analyse the spread
-    // (and would have us add `loader`, which would re-fetch every render), so
-    // the rule is disabled for this one intentional array.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [...deps, reloadCount])
+  }, [dependencyVersion, reloadCount])
 
   return { data, loading, error, refresh }
 }

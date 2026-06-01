@@ -32,6 +32,7 @@ import {
   collectFrontendInjections,
   injectFrontendAssets,
 } from './frontendInjections'
+import { injectFormRuntime } from '../forms/formRuntime'
 import type { RendererOutput } from './publicRenderer'
 
 export async function applyPublishedHtmlPipeline(
@@ -44,7 +45,8 @@ export async function applyPublishedHtmlPipeline(
   })
   const injections = await collectFrontendInjections(db)
   const withInjections = injectFrontendAssets(rendered.html, injections)
-  const filtered = await hookBus.applyFilter('publish.html', withInjections, {
+  const withFormRuntime = injectFormRuntime(withInjections, rendered.pageId)
+  const filtered = await hookBus.applyFilter('publish.html', withFormRuntime, {
     siteId: rendered.siteId,
     pageId: rendered.pageId,
     slug: rendered.slug,

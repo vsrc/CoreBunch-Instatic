@@ -46,6 +46,7 @@ export const BINDING_COMPATIBILITY: Record<PropertyControlKind, readonly DataFie
   color:    ['select'],
   toggle:   ['boolean'],
   select:   ['select'],
+  dataTable: [],
   image:    ['media'],
   media:    ['media'],
   // Structural (document-level) types: not scalar-bindable, listed here for

@@ -144,6 +144,25 @@ describe('PropertyControlRenderer — type dispatch', () => {
     expect(html).toContain('id="ctrl-title"')
   })
 
+  it('text → can normalize identifier values while typing', () => {
+    const changes: Array<[string, unknown]> = []
+
+    render(
+      <PropertyControlRenderer
+        propKey="formId"
+        control={{ type: 'text', label: 'Form ID', normalize: 'identifier' }}
+        value=""
+        onChange={(key, value) => changes.push([key, value])}
+      />,
+    )
+
+    fireEvent.change(screen.getByLabelText('Form ID'), {
+      target: { value: 'Contact Form "Main"' },
+    })
+
+    expect(changes).toEqual([['formId', 'Contact-Form-Main']])
+  })
+
   it('textarea → renders <textarea>', () => {
     const html = renderControl({ type: 'textarea', label: 'Body' }, 'body', 'Some text')
     expect(html).toContain('<textarea')

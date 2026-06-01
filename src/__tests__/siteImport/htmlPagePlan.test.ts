@@ -147,6 +147,24 @@ describe('makeHtmlPagePlan', () => {
     expect(Object.keys(pagePlan.nodeFragment.nodes).length).toBeGreaterThan(0)
   })
 
+  it('uses the shared HTML importer so Super Import creates first-class form modules', () => {
+    const html = `<html><body>
+      <form id="lead">
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" required>
+        <input type="submit" value="Send">
+      </form>
+    </body></html>`
+    const { pagePlan } = makeHtmlPagePlan('lead.html', html, fileMap)
+    const form = pagePlan.nodeFragment.nodes[pagePlan.nodeFragment.rootIds[0]!]!
+
+    expect(form.moduleId).toBe('base.form')
+    expect(form.children).toHaveLength(3)
+    expect(pagePlan.nodeFragment.nodes[form.children[0]!]!.moduleId).toBe('base.label')
+    expect(pagePlan.nodeFragment.nodes[form.children[1]!]!.moduleId).toBe('base.input')
+    expect(pagePlan.nodeFragment.nodes[form.children[2]!]!.moduleId).toBe('base.submit')
+  })
+
   it('sets source to the HTML file path', () => {
     const { pagePlan } = makeHtmlPagePlan('about.html', new TextDecoder().decode(fileMap.files['about.html']!.bytes), fileMap)
     expect(pagePlan.source).toBe('about.html')

@@ -35,7 +35,7 @@ src/admin/modals/ImportHtml/
 └── index.ts                   — barrel re-export
 
 src/admin/spotlight/commands/importHtml.ts  — Spotlight command editor.importHtml
-src/__tests__/htmlImport/mapping.test.ts    — 95 per-rule unit tests
+src/__tests__/htmlImport/mapping.test.ts    — per-rule unit tests
 ```
 
 ---
@@ -93,10 +93,17 @@ Callers splice the fragment into the page tree via `insertImportedNodes(parentId
 | `a` with class `btn` | `base.button` | `label` = `el.textContent`, `href`, `target` | No |
 | `a` (no `btn` class) | `base.link` | `text` = `el.textContent`, `href`, `target` | No |
 | `img` | `base.image` | `src` = `src` attribute only | No |
-| `button` | `base.button` | `label` = `el.textContent`, `disabled` | No |
+| `form` | `base.form` | `mode`, `formId`, CMS data attrs, custom `action` / `method` | Yes |
+| `label` | `base.label` unless wrapping elements, then `base.container` | `text`, `targetMode`, `targetId` | No for plain labels; yes for wrapper labels |
+| `input` | `base.input`, `base.checkbox`, `base.radio`, `base.submit`, or `base.button` | Native form attrs modeled by the target module | No |
+| `textarea` | `base.textarea` | `fieldId`, `name`, `id`, `placeholder`, `value`, validation attrs | No |
+| `select` | `base.select` | `fieldId`, `name`, `id`, `required`, `disabled`, `multiple` | Yes |
+| `optgroup` | `base.option-group` | `label`, `disabled` | Yes |
+| `option` | `base.option` | `value`, `label`, `selected`, `disabled` | No |
+| `button` | `base.button`, or `base.submit` when submit-type / inside a form without a type | `label`, `disabled` | No |
 | `ul`, `ol` | `base.container` | `tag` = tag name | Yes |
 | `div`, `section`, `article`, `main`, `header`, `footer`, `nav`, `aside` | `base.container` | `tag` = tag name | Yes |
-| `area`, `base`, `br`, `col`, `embed`, `hr`, `input`, `link`, `meta`, `param`, `source`, `track`, `wbr` (void elements) | `base.container` | `tag: 'custom'`, `customTag` = tag name | **No** |
+| `area`, `base`, `br`, `col`, `embed`, `hr`, `link`, `meta`, `param`, `source`, `track`, `wbr` (void elements) | `base.container` | `tag: 'custom'`, `customTag` = tag name | **No** |
 | `*` (catch-all) | `base.container` | `tag: 'custom'`, `customTag` = tag name | Yes |
 
 **Key details:**
@@ -105,8 +112,9 @@ Callers splice the fragment into the page tree via `insertImportedNodes(parentId
 - **Direct text inside a recursing container is preserved.** The walker iterates `childNodes` (not just `children`): element children route through the rules, and each significant text node becomes a synthesized `base.text(tag:'span')` child in document order. So `<div class="num">98%</div>` and `<li>Buy milk</li>` import as a container holding their text — not an empty container. Whitespace-only text (indentation between tags) is skipped; internal whitespace runs collapse to single spaces.
 - `base.link` uses the prop `text` (not `label`). `base.button` uses `label` (not `text`). These match the module source.
 - `base.image` captures `src` only. `alt` is not a per-instance prop — it comes from the media library asset.
-- **Void elements** (`<br>`, `<hr>`, `<input>`, etc.) have their own rule that sits before the catch-all. They map to `base.container` with `tag:'custom'` + the real tag name, but with `recurse:false` so the produced node has no children. The canvas renderer (`ContainerEditor`) also guards against passing children (including the empty-container placeholder) to void element tags, because React throws if you do so.
-- The catch-all (`*`) handles `li`, `figure`, `blockquote`, `form`, `table`, `dialog`, and anything else not listed. It uses `tag: 'custom'` + `customTag` so `resolveHtmlTag` in `base.container` emits the real element name. Using `tag: 'div'` + `customTag` would render `<div>` instead.
+- **Form elements import as form primitives.** Third-party `<form>` elements default to `base.form` in `custom` mode, so they do not become CMS submission endpoints until an author binds them to a data table. Published CMS-native forms can round-trip their `data-pb-*` form metadata. Plain labels become `base.label`; labels that wrap controls become a `base.container` with `customTag:'label'` so nested inputs are not dropped.
+- **Void elements** (`<br>`, `<hr>`, etc.) have their own rule that sits before the catch-all. They map to `base.container` with `tag:'custom'` + the real tag name, but with `recurse:false` so the produced node has no children. `<input>` is not part of this fallback anymore; it imports through the form-control rule. The canvas renderer (`ContainerEditor`) also guards against passing children (including the empty-container placeholder) to void element tags, because React throws if you do so.
+- The catch-all (`*`) handles `li`, `figure`, `blockquote`, `table`, `dialog`, and anything else not listed. It uses `tag: 'custom'` + `customTag` so `resolveHtmlTag` in `base.container` emits the real element name. Using `tag: 'div'` + `customTag` would render `<div>` instead.
 - The pure `walkAndMap` step copies element class *names* onto `node.classIds` (`Array.from(el.classList)`) — it is registry-agnostic and infers no styles. The store action that splices the fragment in (`insertImportedNodes`) then converts those names to real class ids (see [Class linking](#class-linking-name--id)).
 
 ---
@@ -139,7 +147,7 @@ The importer is "approximate by construction". Several inputs do not survive the
 | HTML attributes not modeled by the matched module (`id`, `data-*`, ARIA attrs, etc.) | Dropped — except `class` names, which become real registry classes linked by id (see [Class linking](#class-linking-name--id)) | The module schema is the source of truth for props |
 | Exact inline whitespace around mixed content (`<div>Hello <em>world</em></div>`) | Approximated | Each text run becomes a `base.text(span)` child with whitespace collapsed to single spaces and the ends trimmed; the text itself is **preserved**, only exact spacing is normalized |
 | Whitespace-only text (newlines/indentation between tags) | Dropped | It carries no content — collapsing it would add empty text nodes to every pretty-printed snippet |
-| Void elements (`<br>`, `<hr>`, `<input>`, etc.) | Imported as a childless `base.container` node with `tag:'custom'` and the real tag name as `customTag`. No children, no empty-container placeholder. | React throws if children are rendered inside void element tags; the dedicated void-element rule (before the catch-all) sets `recurse:false` and the canvas renderer skips children entirely for void tags. |
+| Void elements (`<br>`, `<hr>`, etc.) | Imported as a childless `base.container` node with `tag:'custom'` and the real tag name as `customTag`. No children, no empty-container placeholder. `<input>` imports as a form primitive instead. | React throws if children are rendered inside void element tags; the dedicated void-element rule (before the catch-all) sets `recurse:false` and the canvas renderer skips children entirely for void tags. |
 
 These losses are deliberate. The importer is a structural bootstrap, not a fidelity snapshot.
 

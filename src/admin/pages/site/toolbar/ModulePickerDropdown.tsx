@@ -23,7 +23,9 @@ import type { AnyModuleDefinition } from '@core/module-engine'
 import { AppGridPlusGlyphIcon } from 'pixel-art-icons/icons/app-grid-plus-glyph'
 import { Button } from '@ui/components/Button'
 import { ModulePickerMenu } from '@site/module-picker'
+import type { FormPreset } from '@site/module-picker'
 import { useInsertModule } from '@site/hooks/useInsertModule'
+import { useInsertFormPreset } from '@site/hooks/useInsertFormPreset'
 
 interface ModulePickerDropdownProps {
   triggerClassName?: string
@@ -43,6 +45,7 @@ export function ModulePickerDropdown({
   const insertComponentRef = useEditorStore((s) => s.insertComponentRef)
   const selectedNodeId = useEditorStore((s) => s.selectedNodeId)
   const insertModule = useInsertModule()
+  const insertFormPreset = useInsertFormPreset()
 
   const handleOpen = () => setOpen(true)
   const handleClose = () => {
@@ -52,6 +55,10 @@ export function ModulePickerDropdown({
 
   const handleInsertModule = (mod: AnyModuleDefinition) => {
     if (insertModule(mod)) handleClose()
+  }
+
+  const handleInsertFormPreset = (preset: FormPreset) => {
+    if (insertFormPreset(preset)) handleClose()
   }
 
   const handleInsertVC = (vcId: string) => {
@@ -96,6 +103,7 @@ export function ModulePickerDropdown({
           anchorRef={triggerRef}
           onClose={handleClose}
           onSelectModule={handleInsertModule}
+          onSelectFormPreset={handleInsertFormPreset}
           onSelectVC={handleInsertVC}
         />
       )}

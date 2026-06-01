@@ -2,6 +2,7 @@ import type { EditorStore, EditorStoreSliceCreator } from '@site/store/types'
 import { clearCanvasSelectionDraft } from './selectionSlice'
 
 export type FocusedPanel = 'canvas' | 'domTree' | 'properties' | null
+export type FormPreviewState = 'default' | 'submitting' | 'success' | 'error'
 export type LeftSidebarPanelId =
   | 'site'
   | 'selectors'
@@ -68,6 +69,9 @@ export interface UiSlice {
   // Preview overlay — toggle from toolbar (Phase 7)
   previewOpen: boolean
 
+  // Editor-only form state preview, keyed by base.form node id.
+  formPreviewStates: Record<string, FormPreviewState>
+
   // Unsaved changes guard
   hasUnsavedChanges: boolean
 
@@ -117,6 +121,7 @@ export interface UiSlice {
 
   openPreview: () => void
   closePreview: () => void
+  setFormPreviewState: (formNodeId: string, state: FormPreviewState) => void
 
   setHasUnsavedChanges: (value: boolean) => void
 
@@ -285,6 +290,7 @@ export const createUiSlice: EditorStoreSliceCreator<UiSlice> = (set, get) => ({
   leftSidebarWidth: LEFT_SIDEBAR_DEFAULT_WIDTH,
   focusedPanel: 'canvas',
   previewOpen: false,
+  formPreviewStates: {},
   hasUnsavedChanges: false,
   insertPickerOpen: false,
   insertPickerParentId: null,
@@ -375,6 +381,15 @@ export const createUiSlice: EditorStoreSliceCreator<UiSlice> = (set, get) => ({
 
   openPreview: () => set({ previewOpen: true }),
   closePreview: () => set({ previewOpen: false }),
+
+  setFormPreviewState: (formNodeId, previewState) =>
+    set((state) => {
+      if (previewState === 'default') {
+        delete state.formPreviewStates[formNodeId]
+        return
+      }
+      state.formPreviewStates[formNodeId] = previewState
+    }),
 
   setHasUnsavedChanges: (value) => set({ hasUnsavedChanges: value }),
 

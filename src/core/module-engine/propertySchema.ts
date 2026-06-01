@@ -32,6 +32,8 @@ const PropertyControlLayoutSchema = Type.Union([
   Type.Literal('stacked'),
 ])
 
+const TextControlNormalizeSchema = Type.Literal('identifier')
+
 /**
  * Edit-permission category for a property control.
  *
@@ -79,6 +81,7 @@ export const PropertyControlSchema = Type.Recursive((Self) => Type.Union([
       ...PropertyControlBaseSchema,
       type: Type.Literal('text'),
       placeholder: Type.Optional(Type.String()),
+      normalize: Type.Optional(TextControlNormalizeSchema),
     },
     { additionalProperties: false },
   ),
@@ -139,6 +142,14 @@ export const PropertyControlSchema = Type.Recursive((Self) => Type.Union([
     { additionalProperties: false },
   ),
   Type.Object(
+    {
+      ...PropertyControlBaseSchema,
+      type: Type.Literal('dataTable'),
+      includeSystem: Type.Optional(Type.Boolean()),
+    },
+    { additionalProperties: false },
+  ),
+  Type.Object(
     { ...PropertyControlBaseSchema, type: Type.Literal('richtext') },
     { additionalProperties: false },
   ),
@@ -169,6 +180,7 @@ export const PropertySchemaSchema = Type.Unsafe<Record<string, PropertyControl>>
 
 export type PropertyCondition = Static<typeof PropertyConditionSchema>
 export type PropertyControlLayout = Static<typeof PropertyControlLayoutSchema>
+export type TextControlNormalize = Static<typeof TextControlNormalizeSchema>
 export type PropertyControlCategory = Static<typeof PropertyControlCategorySchema>
 export type PropertySchema = Static<typeof PropertySchemaSchema>
 

@@ -16,6 +16,19 @@
   width: 100%;
 }
 
+/* ── DataTableControl ────────────────────────────────────────────────────── */
+.dataTableControl {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.controlError {
+  font-size: 12px;
+  color: var(--editor-danger);
+}
+
 /* ── SvgControl (preview tile + open-in-code-editor) ─────────────────────── */
 .svgControl {
   display: flex;

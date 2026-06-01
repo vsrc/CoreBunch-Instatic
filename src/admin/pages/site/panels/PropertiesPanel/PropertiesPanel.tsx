@@ -117,10 +117,12 @@ export function PropertiesPanel({ variant = 'floating' }: PropertiesPanelProps) 
     resolvedPropsForBreakpoint: data.resolvedPropsForBreakpoint,
     overrideKeys: data.overrideKeys,
     activeDocument: data.activeDocument,
+    activePage: data.activePage,
     dynamicBindingsEnabled: data.dynamicBindingsEnabled,
     enclosingLoopSource: data.enclosingLoopSource,
     enclosingLoopTableId: data.enclosingLoopTableId,
     handleChange: data.handleChange,
+    handlePatch: data.handlePatch,
     onSetDynamicBinding: data.handleSetDynamicBinding,
     onClearDynamicBinding: data.handleClearDynamicBinding,
   })

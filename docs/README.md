@@ -33,6 +33,7 @@ docs/
 │   ├── agent.md                    ← AI agent integration
 │   ├── templates.md                ← entry templates + dynamic bindings
 │   ├── loops.md                    ← base.loop + loop sources
+│   ├── cms-native-forms.md         ← visual form primitives + data_rows submissions
 │   ├── media.md                    ← Media workspace + storage adapters
 │   ├── audit-log.md                ← audit_events catalog
 │   ├── site-transfer.md            ← export / import CMS bundles
@@ -150,6 +151,7 @@ Plans (`docs/plans/` and `docs/superpowers/`) describe in-flight work. Plans are
 | [features/agent.md](features/agent.md)                           | AI agent integration (Claude Agent SDK)                              |
 | [features/templates.md](features/templates.md)                   | Entry templates + dynamic bindings + token interpolation             |
 | [features/loops.md](features/loops.md)                           | `base.loop` + loop entity sources                                    |
+| [features/cms-native-forms.md](features/cms-native-forms.md)     | Visual form primitives, presets, secure public submissions           |
 | [features/media.md](features/media.md)                           | Media workspace, upload pipeline, storage adapters                  |
 | [features/audit-log.md](features/audit-log.md)                   | Audit event catalog + recording new actions                         |
 | [features/site-transfer.md](features/site-transfer.md)           | Export / import CMS bundle (JSON round-trip between instances)      |

@@ -62,6 +62,8 @@ export const NodeRenderer = memo(function NodeRenderer({ nodeId }: NodeRendererP
   const previewClassAssignment = useEditorStore(
     (s) => s.previewClassAssignment?.nodeId === nodeId ? s.previewClassAssignment : null,
   )
+  const editorFormPreviewState = useEditorStore((s) => resolveEditorFormPreviewState(s, nodeId))
+  const editorFormPreviewSuccessMessage = useEditorStore((s) => resolveEditorFormPreviewSuccessMessage(s, nodeId))
   const mcClassName = useEditorStore((s) => {
     const canvasNode = selectActiveCanvasPage(s)?.nodes[nodeId]
     const preview = s.previewClassAssignment?.nodeId === nodeId ? s.previewClassAssignment : null
@@ -159,10 +161,15 @@ export const NodeRenderer = memo(function NodeRenderer({ nodeId }: NodeRendererP
   // Pass the module schema so resolveProps drops breakpoint overrides for
   // non-responsive (content) keys — text/tag/src etc. must look identical
   // across every breakpoint frame, since published HTML is one document.
-  const effectiveProps = resolveDynamicProps(
+  const effectiveProps = addEditorFormPreviewProps(
+    node.moduleId,
+    resolveDynamicProps(
     resolveProps(node, breakpointId, definition.schema),
     node.dynamicBindings,
     templateContext,
+    ),
+    editorFormPreviewState,
+    editorFormPreviewSuccessMessage,
   )
 
   // Build className from classIds using the user-facing class names.
@@ -186,6 +193,27 @@ export const NodeRenderer = memo(function NodeRenderer({ nodeId }: NodeRendererP
     'aria-pressed': isSelected,
     ...(inlineStyle ? { style: inlineStyle } : {}),
     ...(isHovered && !isSelected ? { 'data-hovered': 'true' as const } : {}),
+    onPointerDownCapture: (e) => {
+      if (!shouldSuppressAuthoredFormControlEvent(e.target, e.currentTarget)) return
+      e.preventDefault()
+      e.stopPropagation()
+      latestSuppressedPointerTarget = e.currentTarget
+      handleNodeClick(nodeId, e as unknown as React.MouseEvent)
+    },
+    onMouseDownCapture: (e) => {
+      if (!shouldSuppressAuthoredFormControlEvent(e.target, e.currentTarget)) return
+      e.preventDefault()
+      e.stopPropagation()
+      if (latestSuppressedPointerTarget === e.currentTarget) {
+        latestSuppressedPointerTarget = null
+        return
+      }
+      handleNodeClick(nodeId, e as unknown as React.MouseEvent)
+    },
+    onFocusCapture: (e) => {
+      if (!shouldSuppressAuthoredFormControlEvent(e.target, e.currentTarget)) return
+      if (isFocusableElement(e.target)) e.target.blur()
+    },
     onClickCapture: (e) => {
       if (!isClosestCanvasNodeTarget(e.target, e.currentTarget)) return
       if (isCanvasEditorControlTarget(e.target, e.currentTarget)) return
@@ -358,6 +386,9 @@ function LoopIterationsPreview({ node, baseTemplateContext }: LoopIterationsPrev
 
 const CANVAS_EDITOR_CONTROL_SELECTOR = '[data-canvas-interactive="true"]'
 const CANVAS_NODE_SELECTOR = '[data-node-id]'
+const AUTHORED_FORM_CONTROL_SELECTOR = 'input, textarea, select, button, option, optgroup'
+const DEFAULT_FORM_SUCCESS_MESSAGE = 'Thanks. Your submission was received.'
+let latestSuppressedPointerTarget: EventTarget | null = null
 
 /**
  * Duck-type "is this an Element?" check that works across documents. The
@@ -410,4 +441,91 @@ function isCanvasEditorControlTarget(
 
   const interactive = target.closest(CANVAS_EDITOR_CONTROL_SELECTOR)
   return Boolean(interactive && currentTarget.contains(interactive))
+}
+
+function shouldSuppressAuthoredFormControlEvent(
+  target: EventTarget | null,
+  currentTarget: EventTarget | null,
+): boolean {
+  if (!isClosestCanvasNodeTarget(target, currentTarget)) return false
+  if (isCanvasEditorControlTarget(target, currentTarget)) return false
+  return isAuthoredFormControlTarget(target, currentTarget)
+}
+
+function isAuthoredFormControlTarget(
+  target: EventTarget | null,
+  currentTarget: EventTarget | null,
+): boolean {
+  if (!isElementLike(target) || !isElementLike(currentTarget)) return false
+  const control = target.closest(AUTHORED_FORM_CONTROL_SELECTOR)
+  return Boolean(control && currentTarget.contains(control))
+}
+
+function isFocusableElement(target: EventTarget | null): target is HTMLElement {
+  return isElementLike(target) && typeof (target as HTMLElement).blur === 'function'
+}
+
+function addEditorFormPreviewProps(
+  moduleId: string,
+  props: Record<string, unknown>,
+  previewState: FormPreviewState,
+  successMessage: string,
+): Record<string, unknown> {
+  if (previewState === 'default') return props
+  if (moduleId !== 'base.form' && moduleId !== 'base.form-message') return props
+  return {
+    ...props,
+    editorPreviewState: previewState,
+    editorPreviewSuccessMessage: successMessage,
+  }
+}
+
+type FormPreviewState = 'default' | 'submitting' | 'success' | 'error'
+
+function resolveEditorFormPreviewState(state: ReturnType<typeof useEditorStore.getState>, nodeId: string): FormPreviewState {
+  const page = selectActiveCanvasPage(state)
+  const node = page?.nodes[nodeId]
+  if (!page || !node) return 'default'
+  const formNode = node.moduleId === 'base.form'
+    ? node
+    : node.moduleId === 'base.form-message'
+      ? nearestFormNode(page, nodeId)
+      : null
+  if (!formNode) return 'default'
+  return state.formPreviewStates[formNode.id] ?? 'default'
+}
+
+function resolveEditorFormPreviewSuccessMessage(
+  state: ReturnType<typeof useEditorStore.getState>,
+  nodeId: string,
+): string {
+  const page = selectActiveCanvasPage(state)
+  const node = page?.nodes[nodeId]
+  if (!page || !node) return DEFAULT_FORM_SUCCESS_MESSAGE
+  const formNode = node.moduleId === 'base.form'
+    ? node
+    : node.moduleId === 'base.form-message'
+      ? nearestFormNode(page, nodeId)
+      : null
+  return formNode ? stringNodeProp(formNode, 'successMessage', DEFAULT_FORM_SUCCESS_MESSAGE) : DEFAULT_FORM_SUCCESS_MESSAGE
+}
+
+function nearestFormNode(page: { nodes: Record<string, PageNode> }, nodeId: string): PageNode | null {
+  const parentByNodeId = new Map<string, string>()
+  for (const node of Object.values(page.nodes)) {
+    for (const childId of node.children) parentByNodeId.set(childId, node.id)
+  }
+  let currentId = parentByNodeId.get(nodeId)
+  while (currentId) {
+    const current = page.nodes[currentId]
+    if (!current) return null
+    if (current.moduleId === 'base.form') return current
+    currentId = parentByNodeId.get(current.id)
+  }
+  return null
+}
+
+function stringNodeProp(node: PageNode, key: string, fallback: string): string {
+  const value = node.props[key]
+  return typeof value === 'string' && value.trim() ? value : fallback
 }

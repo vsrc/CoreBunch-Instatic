@@ -28,12 +28,15 @@ import type {
 } from '@core/module-engine'
 import type {
   DynamicPropBinding,
+  Page,
   PageNode,
 } from '@core/page-tree'
 import type { LoopEntitySource } from '@core/loops/types'
 import type { ActiveDocument } from '../../store/slices/uiSlice'
 import { LoopPropertiesView } from './LoopPropertiesView'
 import { ParamPromotableRow } from './ParamPromotableRow'
+import { FormSettingsPanel } from './FormSettingsPanel'
+import { isFormSettingsModule } from './formSettingsAnalysis'
 
 export interface ModuleTabContentArgs {
   selectedNode: PageNode | null
@@ -42,10 +45,12 @@ export interface ModuleTabContentArgs {
   resolvedPropsForBreakpoint: Record<string, unknown> | null
   overrideKeys: Set<string>
   activeDocument: ActiveDocument | null
+  activePage: Page | null
   dynamicBindingsEnabled: boolean
   enclosingLoopSource: LoopEntitySource | undefined
   enclosingLoopTableId: string | null
   handleChange: (propKey: string, value: unknown) => void
+  handlePatch: (patch: Record<string, unknown>) => void
   onSetDynamicBinding: (propKey: string, binding: DynamicPropBinding) => void
   onClearDynamicBinding: (propKey: string) => void
 }
@@ -58,10 +63,12 @@ export function renderModuleTabContent(args: ModuleTabContentArgs): React.ReactN
     resolvedPropsForBreakpoint,
     overrideKeys,
     activeDocument,
+    activePage,
     dynamicBindingsEnabled,
     enclosingLoopSource,
     enclosingLoopTableId,
     handleChange,
+    handlePatch,
     onSetDynamicBinding,
     onClearDynamicBinding,
   } = args
@@ -82,9 +89,21 @@ export function renderModuleTabContent(args: ModuleTabContentArgs): React.ReactN
 
   const inVisualComponent =
     activeDocument?.kind === 'visualComponent' && selectedNodeId !== null
+  const showFormSettings =
+    activePage !== null &&
+    selectedNodeId !== null &&
+    isFormSettingsModule(selectedNode.moduleId)
 
   return (
     <>
+      {showFormSettings && (
+        <FormSettingsPanel
+          page={activePage}
+          nodeId={selectedNodeId}
+          onPatchProps={handlePatch}
+        />
+      )}
+
       {Object.entries(definition.schema).map(([key, control]: [string, PropertyControl]) => {
         if (control.condition && !evaluateCondition(control.condition, resolvedPropsForBreakpoint)) {
           return null

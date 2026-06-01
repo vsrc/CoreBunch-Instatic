@@ -35,6 +35,7 @@ import { ImageControl } from './ImageControl'
 import { MediaLibraryControl } from './MediaLibraryControl'
 import { UrlControl } from './UrlControl'
 import { SvgControl } from './SvgControl'
+import { DataTableControl } from './DataTableControl'
 import { DynamicBindingControl } from './DynamicBindingControl'
 import { cn } from '@ui/cn'
 import styles from './controls.module.css'
@@ -140,6 +141,7 @@ export function PropertyControlRenderer({
           {...shared}
           value={String(value ?? '')}
           placeholder={control.placeholder}
+          normalize={control.normalize}
         />
       )
       break
@@ -196,6 +198,16 @@ export function PropertyControlRenderer({
 
     case 'url':
       inner = <UrlControl {...shared} value={String(value ?? '')} />
+      break
+
+    case 'dataTable':
+      inner = (
+        <DataTableControl
+          {...shared}
+          value={String(value ?? '')}
+          includeSystem={control.includeSystem}
+        />
+      )
       break
 
     case 'svg':

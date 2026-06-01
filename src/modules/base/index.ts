@@ -30,6 +30,9 @@ import './svg'
 import './button'
 import './link'
 
+// Form modules
+import './forms'
+
 // Media modules (extended)
 import './video'
 

@@ -26,12 +26,14 @@ import { registry } from '@core/module-engine'
 import type { AnyModuleDefinition } from '@core/module-engine'
 import type { VisualComponent } from '@core/visualComponents'
 import { BracesIcon } from 'pixel-art-icons/icons/braces'
+import { FileTextSolidIcon } from 'pixel-art-icons/icons/file-text-solid'
 import { SearchBar } from '@ui/components/SearchBar'
 import {
   ContextMenuItem,
   ContextMenuSeparator,
 } from '@ui/components/ContextMenu'
 import { ModuleIcon } from '@site/ui/ModuleIcon'
+import { FORM_PRESETS, type FormPreset } from './formPresets'
 import styles from './ModulePicker.module.css'
 
 const EMPTY_VCS: VisualComponent[] = []
@@ -39,6 +41,8 @@ const EMPTY_VCS: VisualComponent[] = []
 interface ModulePickerProps {
   /** Called when the user picks a base module. */
   onSelectModule: (mod: AnyModuleDefinition) => void
+  /** Called when the user picks a multi-node form preset. */
+  onSelectFormPreset: (preset: FormPreset) => void
   /** Called when the user picks a site Visual Component. */
   onSelectVC: (vcId: string) => void
   /** Auto-focus the search input on mount. Default: true. */
@@ -53,6 +57,7 @@ interface ModulePickerProps {
 
 export function ModulePicker({
   onSelectModule,
+  onSelectFormPreset,
   onSelectVC,
   autoFocusSearch = true,
   containerRef,
@@ -109,6 +114,14 @@ export function ModulePicker({
         )
         .filter((g) => g.length > 0)
 
+  const filteredFormPresets = !trimmedQuery
+    ? FORM_PRESETS
+    : FORM_PRESETS.filter((preset) =>
+        preset.name.toLowerCase().includes(trimmedQuery) ||
+        preset.description.toLowerCase().includes(trimmedQuery) ||
+        preset.id.toLowerCase().includes(trimmedQuery),
+      )
+
   const filteredVcs = !trimmedQuery
     ? visualComponents
     : visualComponents.filter((vc) =>
@@ -116,7 +129,9 @@ export function ModulePicker({
       )
 
   const isEmpty =
-    filteredModuleGroups.length === 0 && filteredVcs.length === 0
+    filteredFormPresets.length === 0 &&
+    filteredModuleGroups.length === 0 &&
+    filteredVcs.length === 0
 
   // ─── Keyboard navigation: ArrowDown from search jumps to first row ───────
   const handleSearchKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
@@ -129,7 +144,10 @@ export function ModulePicker({
 
   // Render groups separated by ContextMenuSeparator. VCs get their own group
   // at the end so they're visually distinguishable from base modules.
-  const groupCount = filteredModuleGroups.length + (filteredVcs.length > 0 ? 1 : 0)
+  const groupCount =
+    (filteredFormPresets.length > 0 ? 1 : 0) +
+    filteredModuleGroups.length +
+    (filteredVcs.length > 0 ? 1 : 0)
 
   return (
     <>
@@ -160,9 +178,27 @@ export function ModulePicker({
         </ContextMenuItem>
       )}
 
+      {filteredFormPresets.length > 0 && (
+        <>
+          {filteredFormPresets.map((preset) => (
+            <ContextMenuItem
+              key={preset.id}
+              data-form-preset-id={preset.id}
+              tooltip={preset.description}
+              onClick={() => onSelectFormPreset(preset)}
+            >
+              <span aria-hidden="true">
+                <FileTextSolidIcon size={13} />
+              </span>
+              {preset.name}
+            </ContextMenuItem>
+          ))}
+        </>
+      )}
+
       {filteredModuleGroups.map((group, groupIdx) => (
         <Fragment key={`g-${groupIdx}`}>
-          {groupIdx > 0 && <ContextMenuSeparator />}
+          {(groupIdx > 0 || filteredFormPresets.length > 0) && <ContextMenuSeparator />}
           {group.map((mod) => (
             <ContextMenuItem
               key={mod.id}

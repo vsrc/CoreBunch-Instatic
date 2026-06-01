@@ -19,6 +19,7 @@ export type {
   PropertySchema,
   PropertyControl,
   PropertyControlLayout,
+  TextControlNormalize,
   PropertyCondition,
 } from './propertySchema'
 

@@ -18,6 +18,7 @@ import type { AnyModuleDefinition } from '@core/module-engine'
 import { ContextMenu } from '@ui/components/ContextMenu'
 import type { FloatingAlign, FloatingSide } from '@ui/lib/floatingPosition'
 import { ModulePicker } from './ModulePicker'
+import type { FormPreset } from './formPresets'
 
 const PICKER_WIDTH = 280
 const PICKER_MAX_HEIGHT = 420
@@ -33,6 +34,7 @@ interface ModulePickerMenuProps {
   zIndex?: number
   onClose: () => void
   onSelectModule: (mod: AnyModuleDefinition) => void
+  onSelectFormPreset: (preset: FormPreset) => void
   onSelectVC: (vcId: string) => void
 }
 
@@ -43,6 +45,7 @@ export function ModulePickerMenu({
   zIndex = 1000,
   onClose,
   onSelectModule,
+  onSelectFormPreset,
   onSelectVC,
 }: ModulePickerMenuProps) {
   const menuRef = useRef<HTMLDivElement | null>(null)
@@ -66,6 +69,7 @@ export function ModulePickerMenu({
       <ModulePicker
         containerRef={menuRef}
         onSelectModule={onSelectModule}
+        onSelectFormPreset={onSelectFormPreset}
         onSelectVC={onSelectVC}
       />
     </ContextMenu>,

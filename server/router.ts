@@ -8,6 +8,8 @@ import { getSetupStatus } from './repositories/setup'
 import { getPublishedRuntimeAsset } from './repositories/runtimeAsset'
 import { handleLoopRequest, isLoopRuntimeAssetPath, serveLoopRuntimeAsset } from './handlers/cms/loop'
 import { handleHoleRequest, isHoleRuntimeAssetPath, serveHoleRuntimeAsset } from './handlers/cms/hole'
+import { handlePublicFormRequest } from './forms/handler'
+import { FORM_RUNTIME_PATH, serveFormRuntimeAsset } from './forms/formRuntime'
 import { isRuntimePackagePath, tryServeRuntimePackage } from './publish/runtime/packageServer'
 import { jsonResponse } from './http'
 import { hardenUploadResponse, serveAdminApp, serveStaticFile } from './static'
@@ -66,6 +68,8 @@ const routes: readonly RouteHandler[] = [
   tryServeLoop,
   tryServeHoleRuntimeAsset,
   tryServeHole,
+  tryServePublicFormRuntimeAsset,
+  tryServePublicForm,
   tryServeRuntimeAsset,
   tryServeRuntimePackageNamespace,
   tryServeSiteCssNamespace,
@@ -161,6 +165,16 @@ function tryServeHoleRuntimeAsset(req: Request, _runtime: ServerRuntime, _url: U
 function tryServeHole(req: Request, runtime: ServerRuntime, url: URL, pathname: string): Promise<Response> | null {
   if (!pathname.startsWith('/_pb/hole/')) return null
   return handleHoleRequest(req, url, { db: runtime.db })
+}
+
+function tryServePublicFormRuntimeAsset(req: Request, _runtime: ServerRuntime, _url: URL, pathname: string): Response | null {
+  if (req.method !== 'GET' || pathname !== FORM_RUNTIME_PATH) return null
+  return serveFormRuntimeAsset()
+}
+
+function tryServePublicForm(req: Request, runtime: ServerRuntime, url: URL, pathname: string): Promise<Response | null> | null {
+  if (!pathname.startsWith('/_pb/form/')) return null
+  return handlePublicFormRequest(req, runtime.db, url)
 }
 
 async function tryServeRuntimeAsset(req: Request, runtime: ServerRuntime, _url: URL, pathname: string): Promise<Response | null> {

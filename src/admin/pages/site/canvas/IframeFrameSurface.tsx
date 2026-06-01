@@ -78,6 +78,7 @@ import { EditorChromeInjector } from './EditorChromeInjector'
 import { RuntimeScriptInjector } from './RuntimeScriptInjector'
 import type { InjectableRuntimeScript } from './useRuntimeScriptBuild'
 import { useIframeCursorBridge } from './useIframeCursorBridge'
+import { useCanvasFormControlSuppression } from './useCanvasFormControlSuppression'
 import { CANVAS_VIEWPORT_HEIGHT, type CanvasViewport } from './resolveViewportUnits'
 import styles from './IframeFrameSurface.module.css'
 
@@ -170,6 +171,7 @@ export const IframeFrameSurface = forwardRef<IframeFrameSurfaceHandle, IframeFra
       const [iframeDoc, setIframeDoc] = useState<Document | null>(null)
 
     useIframeCursorBridge(iframeRef, iframeDoc, { onCursorMove, onCursorLeave })
+    useCanvasFormControlSuppression(iframeDoc, { breakpointId, enabled: !isLive })
 
     // Bridge the iframe handle out to the parent (selection overlay reads
     // `iframeElement` to translate inside-iframe rects into editor coordinates).

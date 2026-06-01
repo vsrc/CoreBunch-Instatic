@@ -13,6 +13,7 @@ The pipeline has two parts: a pure analysis function (`buildImportPlan`) that pr
 - `commitImportPlan(plan, adapter)` — uploads assets, then wraps all store writes in a single `adapter.commit` call → one Cmd+Z reverts the whole import.
 - Conflict resolution: auto-rename (default), overwrite, skip, or custom-rename — per page slug and per class name.
 - What imports: pages, `kind:'class'` and `kind:'ambient'` style rules, images/fonts/binaries, root CSS color tokens, `@font-face` families, JS files as site-wide scripts.
+- HTML forms import through the shared HTML importer as first-class form primitives (`base.form`, controls, labels, submit buttons), not as custom containers.
 - What cannot be modeled: `@keyframes`, `@supports`, `@container`, `@layer`, `@import` — surfaced as warnings, never silently dropped.
 - Headless: `src/core/siteImport/` carries no admin, React, or server imports (gated by `siteImport-headless.test.ts`).
 

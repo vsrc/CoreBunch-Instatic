@@ -116,6 +116,9 @@ export interface NodeWrapperProps {
    * publisher applies. Modules spread this onto their root element.
    */
   style?: Record<string, string | number>
+  onPointerDownCapture?: (e: SyntheticMouseEvent) => void
+  onMouseDownCapture?: (e: SyntheticMouseEvent) => void
+  onFocusCapture?: (e: SyntheticFocusEvent) => void
   onClickCapture?: (e: SyntheticMouseEvent) => void
   onClick?: (e: SyntheticMouseEvent) => void
   onDoubleClickCapture?: (e: SyntheticMouseEvent) => void
@@ -139,6 +142,7 @@ type SyntheticMouseEvent = {
 type SyntheticKeyboardEvent = SyntheticMouseEvent & {
   key: string
 }
+type SyntheticFocusEvent = SyntheticMouseEvent
 
 // ---------------------------------------------------------------------------
 // Module Definition — the canonical contract every module must satisfy
