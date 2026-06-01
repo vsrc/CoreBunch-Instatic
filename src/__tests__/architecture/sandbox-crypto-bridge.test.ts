@@ -67,9 +67,9 @@ describe('sandbox crypto bridge', () => {
   it('host dispatcher uses Bun-native crypto.subtle (no vendored package)', async () => {
     const dispatchSource = await read('server/plugins/host/apiDispatch.ts')
     const cryptoHandlerSource = await read('server/plugins/host/handlers/crypto.ts')
-    // The two case labels must exist in apiDispatch.ts.
-    expect(dispatchSource).toMatch(/case 'crypto\.digest'/)
-    expect(dispatchSource).toMatch(/case 'crypto\.signHmac'/)
+    // The two dispatch table entries must exist in apiDispatch.ts.
+    expect(dispatchSource).toContain("'crypto.digest':")
+    expect(dispatchSource).toContain("'crypto.signHmac':")
     // The handler must reach into the platform's native crypto.subtle.
     expect(cryptoHandlerSource).toContain('crypto.subtle.digest(')
     expect(cryptoHandlerSource).toContain('crypto.subtle.importKey(')

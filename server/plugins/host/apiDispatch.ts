@@ -2,11 +2,11 @@
  * Inbound api-call dispatch — routes each validated api-call from a plugin
  * worker to the appropriate host-side handler.
  *
- * Every case is a single-line delegate to its named handler function in
- * `handlers/`. The handler is responsible for permission checks, argument
- * coercion, and calling `replyApiOk` or `replyApiError` exactly once.
- * The outer try/catch converts any unhandled throw into a structured error
- * reply so correlation ids are never leaked.
+ * A typed handler table maps each target to its named handler function in
+ * `handlers/`. Each handler is responsible for permission checks, argument
+ * coercion, and calling `replyApiOk` exactly once. The outer try/catch
+ * converts any unhandled throw into a structured error reply so correlation
+ * ids are never leaked.
  *
  * SECURITY: Each handler that grants privileged access calls
  * `assertHostPluginPermission` as the kernel-of-correctness check. The
@@ -15,8 +15,10 @@
  */
 
 import type { ValidatedApiCall } from '../protocol/apiCallSchema'
+import type { DbClient } from '../../db/client'
 import { hostPlugins, getDbForApi } from './registry'
-import { replyApiError } from './workerPool'
+import { replyApiError } from './apiReplies'
+import type { HostPluginRecord } from './types'
 import { handleRoutesRegister } from './handlers/routes'
 import { handleHooksOn, handleHooksFilter, handleHooksEmit } from './handlers/hooks'
 import { handleLoopsRegisterSource } from './handlers/loops'
@@ -49,6 +51,61 @@ import {
   handleContentTreeReplace,
 } from './handlers/content'
 
+type ApiTarget = ValidatedApiCall['target']
+type HostApiHandler<TTarget extends ApiTarget> = (
+  msg: Extract<ValidatedApiCall, { target: TTarget }>,
+  entry: HostPluginRecord,
+  db: DbClient,
+) => Promise<void>
+type HostApiHandlerTable = { [Target in ApiTarget]: HostApiHandler<Target> }
+type AnyHostApiHandler = (
+  msg: ValidatedApiCall,
+  entry: HostPluginRecord,
+  db: DbClient,
+) => Promise<void>
+
+const apiHandlers = {
+  'cms.routes.register': handleRoutesRegister,
+  'cms.hooks.on': handleHooksOn,
+  'cms.hooks.filter': handleHooksFilter,
+  'cms.hooks.emit': handleHooksEmit,
+  'cms.loops.registerSource': handleLoopsRegisterSource,
+  'cms.storage.list': handleStorageList,
+  'cms.storage.create': handleStorageCreate,
+  'cms.storage.update': handleStorageUpdate,
+  'cms.storage.delete': handleStorageDelete,
+  'cms.settings.replace': handleSettingsReplace,
+  'network.fetch': handleNetworkFetch,
+  'network.abort': handleNetworkAbort,
+  'cms.schedule.register': handleScheduleRegister,
+  'cms.schedule.cancel': handleScheduleCancel,
+  'cms.media.registerStorageAdapter': handleMediaRegisterStorageAdapter,
+  'cms.media.registerUrlTransformer': handleMediaRegisterUrlTransformer,
+  'cms.media.registerVariantDelegate': handleMediaRegisterVariantDelegate,
+  'crypto.digest': handleCryptoDigest,
+  'crypto.signHmac': handleCryptoSignHmac,
+  'cms.content.tables.list': handleContentTablesList,
+  'cms.content.tables.get': handleContentTablesGet,
+  'cms.content.tables.create': handleContentTablesCreate,
+  'cms.content.entries.list': handleContentEntriesList,
+  'cms.content.entries.get': handleContentEntriesGet,
+  'cms.content.entries.getBySlug': handleContentEntriesGetBySlug,
+  'cms.content.entries.create': handleContentEntriesCreate,
+  'cms.content.entries.update': handleContentEntriesUpdate,
+  'cms.content.entries.delete': handleContentEntriesDelete,
+  'cms.content.entries.publish': handleContentEntriesPublish,
+  'cms.content.entries.moveTable': handleContentEntriesMoveTable,
+  'cms.content.entries.createMany': handleContentEntriesCreateMany,
+  'cms.content.entries.updateMany': handleContentEntriesUpdateMany,
+  'cms.content.entries.deleteMany': handleContentEntriesDeleteMany,
+  'cms.content.tree.read': handleContentTreeRead,
+  'cms.content.tree.mutate': handleContentTreeMutate,
+  'cms.content.tree.replace': handleContentTreeReplace,
+  'cms.content.search': handleContentSearch,
+  'cms.content.snapshot': handleContentSnapshot,
+  'cms.content.republishAll': handleContentRepublishAll,
+} satisfies HostApiHandlerTable
+
 export async function dispatchApiCall(msg: ValidatedApiCall): Promise<void> {
   const db = getDbForApi()
   if (!db) {
@@ -62,125 +119,8 @@ export async function dispatchApiCall(msg: ValidatedApiCall): Promise<void> {
   }
 
   try {
-    switch (msg.target) {
-      case 'cms.routes.register':
-        await handleRoutesRegister(msg, entry, db)
-        return
-      case 'cms.hooks.on':
-        await handleHooksOn(msg, entry, db)
-        return
-      case 'cms.hooks.filter':
-        await handleHooksFilter(msg, entry, db)
-        return
-      case 'cms.hooks.emit':
-        await handleHooksEmit(msg, entry, db)
-        return
-      case 'cms.loops.registerSource':
-        await handleLoopsRegisterSource(msg, entry, db)
-        return
-      case 'cms.storage.list':
-        await handleStorageList(msg, entry, db)
-        return
-      case 'cms.storage.create':
-        await handleStorageCreate(msg, entry, db)
-        return
-      case 'cms.storage.update':
-        await handleStorageUpdate(msg, entry, db)
-        return
-      case 'cms.storage.delete':
-        await handleStorageDelete(msg, entry, db)
-        return
-      case 'cms.settings.replace':
-        await handleSettingsReplace(msg, entry, db)
-        return
-      case 'network.fetch':
-        await handleNetworkFetch(msg, entry, db)
-        return
-      case 'network.abort':
-        await handleNetworkAbort(msg, entry, db)
-        return
-      case 'cms.schedule.register':
-        await handleScheduleRegister(msg, entry, db)
-        return
-      case 'cms.schedule.cancel':
-        await handleScheduleCancel(msg, entry, db)
-        return
-      case 'cms.media.registerStorageAdapter':
-        await handleMediaRegisterStorageAdapter(msg, entry, db)
-        return
-      case 'cms.media.registerUrlTransformer':
-        await handleMediaRegisterUrlTransformer(msg, entry, db)
-        return
-      case 'cms.media.registerVariantDelegate':
-        await handleMediaRegisterVariantDelegate(msg, entry, db)
-        return
-      case 'crypto.digest':
-        await handleCryptoDigest(msg, entry, db)
-        return
-      case 'crypto.signHmac':
-        await handleCryptoSignHmac(msg, entry, db)
-        return
-      case 'cms.content.tables.list':
-        await handleContentTablesList(msg, entry, db)
-        return
-      case 'cms.content.tables.get':
-        await handleContentTablesGet(msg, entry, db)
-        return
-      case 'cms.content.tables.create':
-        await handleContentTablesCreate(msg, entry, db)
-        return
-      case 'cms.content.entries.list':
-        await handleContentEntriesList(msg, entry, db)
-        return
-      case 'cms.content.entries.get':
-        await handleContentEntriesGet(msg, entry, db)
-        return
-      case 'cms.content.entries.getBySlug':
-        await handleContentEntriesGetBySlug(msg, entry, db)
-        return
-      case 'cms.content.entries.create':
-        await handleContentEntriesCreate(msg, entry, db)
-        return
-      case 'cms.content.entries.update':
-        await handleContentEntriesUpdate(msg, entry, db)
-        return
-      case 'cms.content.entries.delete':
-        await handleContentEntriesDelete(msg, entry, db)
-        return
-      case 'cms.content.entries.publish':
-        await handleContentEntriesPublish(msg, entry, db)
-        return
-      case 'cms.content.entries.moveTable':
-        await handleContentEntriesMoveTable(msg, entry, db)
-        return
-      case 'cms.content.entries.createMany':
-        await handleContentEntriesCreateMany(msg, entry, db)
-        return
-      case 'cms.content.entries.updateMany':
-        await handleContentEntriesUpdateMany(msg, entry, db)
-        return
-      case 'cms.content.entries.deleteMany':
-        await handleContentEntriesDeleteMany(msg, entry, db)
-        return
-      case 'cms.content.tree.read':
-        await handleContentTreeRead(msg, entry, db)
-        return
-      case 'cms.content.tree.mutate':
-        await handleContentTreeMutate(msg, entry, db)
-        return
-      case 'cms.content.tree.replace':
-        await handleContentTreeReplace(msg, entry, db)
-        return
-      case 'cms.content.search':
-        await handleContentSearch(msg, entry, db)
-        return
-      case 'cms.content.snapshot':
-        await handleContentSnapshot(msg, entry, db)
-        return
-      case 'cms.content.republishAll':
-        await handleContentRepublishAll(msg, entry, db)
-        return
-    }
+    const handler = apiHandlers[msg.target] as AnyHostApiHandler
+    await handler(msg, entry, db)
   } catch (err) {
     replyApiError(msg.pluginId, msg.correlationId, err instanceof Error ? err.message : String(err))
   }

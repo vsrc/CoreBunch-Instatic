@@ -12,7 +12,7 @@ import { hookBus } from '@core/plugins/hookBus'
 import { mediaStorageRegistry } from '@core/plugins/mediaStorageRegistry'
 import { mediaVariantDelegateRegistry } from '@core/plugins/mediaVariantDelegateRegistry'
 import { hostPlugins } from './registry'
-import { workers, pendingRequests } from './workerPool'
+import { workers, pendingRequests } from './workerState'
 import type { CrashRecoveryDecision, CrashRecoveryHandler } from './types'
 
 export type { CrashRecoveryDecision, CrashRecoveryHandler }

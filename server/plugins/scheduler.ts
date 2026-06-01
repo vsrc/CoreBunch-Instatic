@@ -9,8 +9,8 @@
  *
  *   2. **Registration** — `registerPluginSchedule(db, ...)` upserts the
  *      schedule row, computes `next_run_at` if missing, and marks the
- *      schedule as "claimed" by a live VM handler. Called from
- *      `pluginWorkerHost.ts:dispatchApiCall` when the plugin invokes
+ *      schedule as "claimed" by a live VM handler. Called from the
+ *      `host/apiDispatch.ts` schedule handler when the plugin invokes
  *      `api.cms.schedule.register({...})` during `activate()`.
  *
  *   3. **Tick** — every `TICK_INTERVAL_MS` (default 10s), select due

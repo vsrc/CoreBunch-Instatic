@@ -12,7 +12,7 @@ import { isCoreCapability } from '../../../auth/capabilities'
 import type { RouteRegistrationApiCall } from '../../protocol/apiCallSchema'
 import type { DbClient } from '../../../db/client'
 import { assertHostPluginPermission } from '../registry'
-import { replyApiOk } from '../workerPool'
+import { replyApiOk } from '../apiReplies'
 import type { HostPluginRecord, HostRouteAccess } from '../types'
 
 export async function handleRoutesRegister(

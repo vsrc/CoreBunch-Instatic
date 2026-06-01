@@ -15,7 +15,7 @@ import type { SourceFetchContext } from '@core/loops/types'
 import type { LoopSourceRegisterApiCall } from '../../protocol/apiCallSchema'
 import type { DbClient } from '../../../db/client'
 import { assertHostPluginPermission } from '../registry'
-import { replyApiOk } from '../workerPool'
+import { replyApiOk } from '../apiReplies'
 import { runLoopFetchInWorker } from '../rpc'
 import type { HostPluginRecord } from '../types'
 

@@ -8,28 +8,31 @@
  * rpc.ts respawns A's worker.
  *
  * Correlation ids (nanoid strings) tie each outbound request message to its
- * inbound result. `pendingRequests` is the shared map; it is exported so
- * `crashRecovery.ts` can reject all pending requests for a crashed plugin.
+ * inbound result. Shared worker state lives in `workerState.ts` so crash
+ * recovery, API replies, and this transport layer do not import each other.
  */
 
 import type { MainToWorkerMessage, WorkerToMainMessage } from '../protocol/messages'
 import { parseApiCall } from '../protocol/parser'
 import type { ValidatedApiCall } from '../protocol/apiCallSchema'
-import type { PendingRequest } from './types'
 import { handleWorkerCrash } from './crashRecovery'
-import { dispatchApiCall } from './apiDispatch'
+import { replyApiError } from './apiReplies'
+import { pendingRequests, workers } from './workerState'
 
-export const workers = new Map<string, Worker>()
-/** Shared correlation map — values track which pluginId issued the request
- *  so a worker crash can reject only that plugin's pending calls. */
-export const pendingRequests = new Map<string, PendingRequest>()
+type ApiCallDispatcher = (msg: ValidatedApiCall) => Promise<void> | void
+
+let apiCallDispatcher: ApiCallDispatcher | null = null
+
+export function setApiCallDispatcher(dispatcher: ApiCallDispatcher): void {
+  apiCallDispatcher = dispatcher
+}
 
 /**
  * Get the worker for a pluginId, spawning one if needed. Each spawn wires
  * its own message + error listeners so a crash in this worker only affects
  * pendings + state for THIS plugin id.
  */
-export function ensureWorkerFor(pluginId: string): Worker {
+function ensureWorkerFor(pluginId: string): Worker {
   const existing = workers.get(pluginId)
   if (existing) return existing
   const w = new Worker(new URL('../pluginWorker.ts', import.meta.url).href)
@@ -44,7 +47,7 @@ export function ensureWorkerFor(pluginId: string): Worker {
   return w
 }
 
-export function sendTo(pluginId: string, msg: MainToWorkerMessage): void {
+function sendTo(pluginId: string, msg: MainToWorkerMessage): void {
   ensureWorkerFor(pluginId).postMessage(msg)
 }
 
@@ -97,7 +100,27 @@ function rejectInvalidApiCall(workerPluginId: string, msg: unknown, err: unknown
   replyApiError(workerPluginId, correlationId, message)
 }
 
-export function handleWorkerMessage(workerPluginId: string, msg: unknown): void {
+function dispatchValidatedApiCall(apiCall: ValidatedApiCall): void {
+  if (!apiCallDispatcher) {
+    replyApiError(
+      apiCall.pluginId,
+      apiCall.correlationId,
+      'Plugin worker host API dispatcher is not configured',
+    )
+    return
+  }
+
+  try {
+    const result = apiCallDispatcher(apiCall)
+    void Promise.resolve(result).catch((err: unknown) => {
+      replyApiError(apiCall.pluginId, apiCall.correlationId, err instanceof Error ? err.message : String(err))
+    })
+  } catch (err) {
+    replyApiError(apiCall.pluginId, apiCall.correlationId, err instanceof Error ? err.message : String(err))
+  }
+}
+
+function handleWorkerMessage(workerPluginId: string, msg: unknown): void {
   switch (workerMessageKind(msg)) {
     case 'log':
       // Defense-in-depth: a worker can't impersonate another plugin's id in
@@ -123,7 +146,7 @@ export function handleWorkerMessage(workerPluginId: string, msg: unknown): void 
         )
         return
       }
-      void dispatchApiCall(apiCall)
+      dispatchValidatedApiCall(apiCall)
       return
     }
     default: {
@@ -135,22 +158,6 @@ export function handleWorkerMessage(workerPluginId: string, msg: unknown): void 
       pending.resolve(msg as WorkerToMainMessage)
     }
   }
-}
-
-export function replyApiOk(pluginId: string, correlationId: string, value?: unknown): void {
-  // Reply must go to the same worker that issued the api-call. With per-plugin
-  // workers we pick by pluginId; if that worker has been terminated (e.g. a
-  // crash race during the round-trip) we silently drop — the worker is gone
-  // and there's nobody to receive the reply.
-  const w = workers.get(pluginId)
-  if (!w) return
-  w.postMessage({ kind: 'api-reply', correlationId, ok: true, value })
-}
-
-export function replyApiError(pluginId: string, correlationId: string, message: string): void {
-  const w = workers.get(pluginId)
-  if (!w) return
-  w.postMessage({ kind: 'api-reply', correlationId, ok: false, error: message })
 }
 
 /**

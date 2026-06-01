@@ -98,12 +98,12 @@ describe('cms.content plugin API surface', () => {
     expect(source).toContain("'cms.content.republishAll'")
   })
 
-  it('apiDispatch.ts dispatches the content cases', async () => {
+  it('apiDispatch.ts dispatches the content targets', async () => {
     const source = await read('server/plugins/host/apiDispatch.ts')
-    expect(source).toContain("case 'cms.content.tables.list':")
-    expect(source).toContain("case 'cms.content.entries.create':")
-    expect(source).toContain("case 'cms.content.tree.mutate':")
-    expect(source).toContain("case 'cms.content.republishAll':")
+    expect(source).toContain("'cms.content.tables.list':")
+    expect(source).toContain("'cms.content.entries.create':")
+    expect(source).toContain("'cms.content.tree.mutate':")
+    expect(source).toContain("'cms.content.republishAll':")
   })
 
   it('legacy cms.pages.* surface is gone', async () => {

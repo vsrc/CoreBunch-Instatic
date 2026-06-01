@@ -14,7 +14,7 @@ import { disablePluginSchedule } from '../../../repositories/pluginSchedules'
 import type { ScheduleRegisterApiCall, ScheduleCancelApiCall } from '../../protocol/apiCallSchema'
 import type { DbClient } from '../../../db/client'
 import { assertHostPluginPermission } from '../registry'
-import { replyApiOk } from '../workerPool'
+import { replyApiOk } from '../apiReplies'
 import type { HostPluginRecord } from '../types'
 
 export async function handleScheduleRegister(

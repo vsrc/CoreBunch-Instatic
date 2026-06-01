@@ -75,7 +75,7 @@ import {
   assertHostPluginPermission,
 } from '../registry'
 import { buildContentTableIdLookup, pluginContentFieldsToDataFields } from '../contentFieldMapping'
-import { replyApiOk } from '../workerPool'
+import { replyApiOk } from '../apiReplies'
 import type { HostPluginRecord } from '../types'
 
 // ---------------------------------------------------------------------------

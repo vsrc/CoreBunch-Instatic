@@ -1,12 +1,12 @@
 /**
  * Plugin schedule registration + cadence math — extracted from `scheduler.ts`
- * so `pluginWorkerHost.ts` can import `registerPluginSchedule` statically
- * without forming a cycle with the tick loop.
+ * so the host API schedule handler can import `registerPluginSchedule`
+ * statically without forming a cycle with the tick loop.
  *
  * Why this lives apart from `scheduler.ts`:
- *   - `scheduler.ts` imports `runScheduleInWorker` from `pluginWorkerHost`
- *     to fire the registered handler on each tick.
- *   - `pluginWorkerHost.ts` calls `registerPluginSchedule` when a plugin's
+ *   - `scheduler.ts` imports `runScheduleInWorker` from `host/rpc` to fire
+ *     the registered handler on each tick.
+ *   - `host/handlers/schedule.ts` calls `registerPluginSchedule` when a plugin's
  *     `activate()` invokes `api.cms.schedule.register(...)`.
  *   - Keeping `registerPluginSchedule` in `scheduler.ts` would force one
  *     side of that edge to use a dynamic `await import(...)` — a band-aid

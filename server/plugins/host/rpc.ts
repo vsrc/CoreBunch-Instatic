@@ -18,7 +18,8 @@ import type { LoopFetchResult, LoopItem } from '@core/loops/types'
 import type { SerializedRequest, SerializedResponse, SerializedUser } from '../protocol/messages'
 import type { LoadPluginResult } from '../protocol/messages'
 import { hostPlugins } from './registry'
-import { requestFromWorker, workers } from './workerPool'
+import { requestFromWorker } from './workerPool'
+import { workers } from './workerState'
 import type { HostRouteAccess } from './types'
 
 export function normalizeRoutePath(path: string): string {

@@ -14,7 +14,7 @@ import { hookBus } from '@core/plugins/hookBus'
 import { setPluginSettings } from '../../../repositories/plugins'
 import type { SettingsReplaceApiCall } from '../../protocol/apiCallSchema'
 import type { DbClient } from '../../../db/client'
-import { replyApiOk } from '../workerPool'
+import { replyApiOk } from '../apiReplies'
 import type { HostPluginRecord } from '../types'
 
 export async function handleSettingsReplace(

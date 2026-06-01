@@ -106,14 +106,14 @@ describe('plugin sandbox invariants', () => {
 
   it('the network.outbound permission is fail-closed without an allowlist', async () => {
     // host/network.ts owns the allowlist check; host/handlers/network.ts owns
-    // the permission gate; host/apiDispatch.ts owns the dispatch case label.
+    // the permission gate; host/apiDispatch.ts owns the dispatch table entry.
     const networkSource = await read('server/plugins/host/network.ts')
     const dispatchSource = await read('server/plugins/host/apiDispatch.ts')
     const networkHandlerSource = await read('server/plugins/host/handlers/network.ts')
     expect(networkSource).toContain('hostMatchesAllowlist')
     expect(networkSource).toContain('networkAllowedHosts')
-    // The dispatch case label must be present in apiDispatch.ts.
-    expect(dispatchSource).toMatch(/case\s+'network\.fetch'/)
+    // The dispatch table entry must be present in apiDispatch.ts.
+    expect(dispatchSource).toContain("'network.fetch':")
     // The permission gate must be present in the handler.
     // Missing either gate would be a security bug.
     expect(networkHandlerSource).toContain("assertHostPluginPermission(entry, 'network.outbound')")

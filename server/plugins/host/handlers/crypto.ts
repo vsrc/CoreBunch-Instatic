@@ -12,7 +12,7 @@
 
 import type { CryptoDigestApiCall, CryptoSignHmacApiCall } from '../../protocol/apiCallSchema'
 import type { DbClient } from '../../../db/client'
-import { replyApiOk } from '../workerPool'
+import { replyApiOk } from '../apiReplies'
 import { bytesToBase64, base64ToFreshArrayBuffer } from '../network'
 import type { HostPluginRecord } from '../types'
 

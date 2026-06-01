@@ -10,7 +10,7 @@ import { hookBus } from '@core/plugins/hookBus'
 import type { HookOnApiCall, HookFilterApiCall, HookEmitApiCall } from '../../protocol/apiCallSchema'
 import type { DbClient } from '../../../db/client'
 import { assertHostPluginPermission } from '../registry'
-import { replyApiOk } from '../workerPool'
+import { replyApiOk } from '../apiReplies'
 import { runHookListenerInWorker, runHookFilterInWorker } from '../rpc'
 import type { HostPluginRecord } from '../types'
 

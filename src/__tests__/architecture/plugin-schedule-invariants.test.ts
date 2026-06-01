@@ -30,9 +30,9 @@ describe('plugin schedule invariants', () => {
   it('cms.schedule.register / cancel api targets are gated by the cms.schedule permission', async () => {
     const dispatchSource = await read('server/plugins/host/apiDispatch.ts')
     const scheduleHandlerSource = await read('server/plugins/host/handlers/schedule.ts')
-    // Both case labels must be present in apiDispatch.ts.
-    expect(dispatchSource).toContain("case 'cms.schedule.register'")
-    expect(dispatchSource).toContain("case 'cms.schedule.cancel'")
+    // Both dispatch table entries must be present in apiDispatch.ts.
+    expect(dispatchSource).toContain("'cms.schedule.register':")
+    expect(dispatchSource).toContain("'cms.schedule.cancel':")
     // Both handlers must call assertHostPluginPermission with the
     // 'cms.schedule' permission before any side effect.
     expect(scheduleHandlerSource).toContain("assertHostPluginPermission(entry, 'cms.schedule')")

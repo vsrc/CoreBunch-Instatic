@@ -25,7 +25,7 @@ import type {
 } from '../../protocol/apiCallSchema'
 import type { DbClient } from '../../../db/client'
 import { assertHostPluginPermission } from '../registry'
-import { replyApiOk } from '../workerPool'
+import { replyApiOk } from '../apiReplies'
 import { buildAdapterShim, runMediaUrlTransformerInWorker } from '../media'
 import type { HostPluginRecord } from '../types'
 

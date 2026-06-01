@@ -54,8 +54,11 @@ import {
   runRouteInWorker,
   unloadPluginInWorker,
 } from './host/rpc'
-import { resetPluginWorker } from './host/workerPool'
+import { dispatchApiCall } from './host/apiDispatch'
+import { resetPluginWorker, setApiCallDispatcher } from './host/workerPool'
 import { broadcastPluginEvent } from './eventBroadcaster'
+
+setApiCallDispatcher(dispatchApiCall)
 
 // Re-export for callers that orchestrate manual restart (resets the
 // per-plugin crash counter so the next failure starts a fresh budget).

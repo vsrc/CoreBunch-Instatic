@@ -17,7 +17,7 @@
 import type { NetworkFetchApiCall, NetworkAbortApiCall } from '../../protocol/apiCallSchema'
 import type { DbClient } from '../../../db/client'
 import { assertHostPluginPermission } from '../registry'
-import { replyApiOk } from '../workerPool'
+import { replyApiOk } from '../apiReplies'
 import { performGatedFetch } from '../network'
 import type { HostPluginRecord } from '../types'
 
