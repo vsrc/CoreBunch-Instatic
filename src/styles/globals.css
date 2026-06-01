@@ -96,6 +96,44 @@
        four — keeps the chip row visually balanced. */
     --rail-tint-rose: #ffb6cd;
 
+    /* ─── Tag pill accent tints (first meaningful character identity) ────── */
+    --tag-pill-tint-a: #8ee6c8;
+    --tag-pill-tint-b: #9bdcff;
+    --tag-pill-tint-c: #c8b6ff;
+    --tag-pill-tint-d: #ffc7a8;
+    --tag-pill-tint-e: #ffb6cd;
+    --tag-pill-tint-f: #b8f28b;
+    --tag-pill-tint-g: #f7df72;
+    --tag-pill-tint-h: #83e7ff;
+    --tag-pill-tint-i: #a7b8ff;
+    --tag-pill-tint-j: #f0a6ff;
+    --tag-pill-tint-k: #ff9f9f;
+    --tag-pill-tint-l: #b6f3d1;
+    --tag-pill-tint-m: #d7f58f;
+    --tag-pill-tint-n: #f6c177;
+    --tag-pill-tint-o: #8fc7ff;
+    --tag-pill-tint-p: #d6b4ff;
+    --tag-pill-tint-q: #ffb4ec;
+    --tag-pill-tint-r: #9ff0f0;
+    --tag-pill-tint-s: #c3f0a8;
+    --tag-pill-tint-t: #ffd980;
+    --tag-pill-tint-u: #b8d4ff;
+    --tag-pill-tint-v: #e0c3ff;
+    --tag-pill-tint-w: #ffcfbf;
+    --tag-pill-tint-x: #adf0c4;
+    --tag-pill-tint-y: #f2ee8f;
+    --tag-pill-tint-z: #c8e0ff;
+    --tag-pill-tint-0: #8ee6c8;
+    --tag-pill-tint-1: #c8b6ff;
+    --tag-pill-tint-2: #9bdcff;
+    --tag-pill-tint-3: #ffc7a8;
+    --tag-pill-tint-4: #ffb6cd;
+    --tag-pill-tint-5: #f7df72;
+    --tag-pill-tint-6: #83e7ff;
+    --tag-pill-tint-7: #f0a6ff;
+    --tag-pill-tint-8: #b8f28b;
+    --tag-pill-tint-9: #ff9f9f;
+
     /* ─── Chart default tint — the semantic token chart primitives
      *     (Bars, Sparkline, StackedBar) fall back to when no per-call
      *     tint is provided AND no Widget chrome is overriding via `--tint`.

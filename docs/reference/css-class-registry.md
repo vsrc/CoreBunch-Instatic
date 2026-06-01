@@ -84,8 +84,8 @@ Only `kind: 'class'` rules are assigned via `classIds`. Ambient rules (`kind: 'a
 
 The right Properties Panel exposes this through a unified selector picker:
 
-- assigned class-kind rules appear as removable pills and add / remove entries from `node.classIds`;
-- matching ambient rules appear as non-removable selector pills because they affect the selected element through CSS matching;
+- assigned class-kind rules appear as removable `TagPill` chips and add / remove entries from `node.classIds`;
+- matching ambient rules appear as non-removable `TagPill` chips because they affect the selected element through CSS matching;
 - non-matching ambient rules still appear in the dropdown, disabled with a "doesn't match this element" reason, so the user can see why the rule is not currently active.
 
 The picker decides ambient matches against the selected live canvas element as the selector subject (`element.matches(selector)`). A selector such as `.hero .title` appears when the selected element is `.title`, not when the selected element is the `.hero` ancestor. Supported trailing pseudo-state selectors (`:hover`, `:focus`, `:focus-visible`, `:active`) are surfaced as inactive matches by stripping the trailing pseudo and testing the base selector.

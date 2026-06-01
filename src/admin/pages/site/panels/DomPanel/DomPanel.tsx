@@ -51,8 +51,8 @@ import { useExpansionStore } from './DomTreeContext'
 import { DomTreeProvider } from './DomTreeProvider'
 import { DomPanelDndContext } from './DomPanelDndContext'
 import { useDomPanelDnd } from './useDomPanelDnd'
-import { TreeContainer, TreeIconSlot, TreeLabel, TreeMeta, TreeRow } from '@site/ui/Tree'
-import { pillAccent } from '@ui/pillAccent'
+import { TreeContainer, TreeIconSlot, TreeLabel, TreeRow } from '@site/ui/Tree'
+import { TagPill } from '@ui/components/TagPill'
 import { useEditorPreference } from '@site/preferences/editorPreferences'
 import { SearchBar } from '@ui/components/SearchBar'
 import { PanelHeader } from '@admin/shared/PanelHeader'
@@ -117,23 +117,23 @@ function SearchResults({ rows, showTag, showClasses, onSelect }: SearchResultsPr
         >
           <TreeIconSlot icon={getModuleIcon(moduleId)} iconSize={11} />
           {showTag && htmlTag && (
-            <TreeMeta
+            <TagPill
+              label={htmlTag}
+              size="xs"
+              monospace
               aria-hidden="true"
-              data-accent={pillAccent(htmlTag)}
               className={styles.searchTagPill}
-            >
-              {htmlTag}
-            </TreeMeta>
+            />
           )}
           <TreeLabel>{displayName}</TreeLabel>
           {showClasses && classChip && (
-            <TreeMeta
+            <TagPill
+              label={classChip}
+              size="xs"
+              monospace
               aria-hidden="true"
-              title={classChip}
               className={styles.searchClassChip}
-            >
-              {classChip}
-            </TreeMeta>
+            />
           )}
         </TreeRow>
       ))}

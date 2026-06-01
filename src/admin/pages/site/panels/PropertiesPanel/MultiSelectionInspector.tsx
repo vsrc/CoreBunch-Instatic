@@ -45,9 +45,8 @@ import {
   TreeRow,
   TreeLabel,
   TreeLabelGroup,
-  TreeMeta,
 } from '@site/ui/Tree'
-import { pillAccent } from '@ui/pillAccent'
+import { TagPill } from '@ui/components/TagPill'
 import { CopySolidIcon } from 'pixel-art-icons/icons/copy-solid'
 import { Copy2SolidIcon } from 'pixel-art-icons/icons/copy-2-solid'
 import { EraserSolidIcon } from 'pixel-art-icons/icons/eraser-solid'
@@ -214,11 +213,8 @@ export function MultiSelectionInspector({
       </div>
       <div className={styles.layerList} role="list">
         {/*
-          Each row uses the same primitives + chip styles as TreeNode in the
-          DOM panel: TreeRow as the visual contract, TreeMeta with
-          `data-accent={pillAccent(tag)}` for the gradient-tinted HTML tag
-          pill, and the chained-dot class chip after the label. The styles
-          object below picks up the tag/class CSS that mirrors TreeNode.module.css.
+          Each row uses the same primitives as the DOM panel: TreeRow for the
+          row contract and TagPill for the tinted tag/class summaries.
         */}
         {layers.map((layer) => (
           <TreeRow
@@ -229,23 +225,23 @@ export function MultiSelectionInspector({
           >
             <TreeLabelGroup>
               {layer.tag && (
-                <TreeMeta
+                <TagPill
+                  label={layer.tag}
+                  size="xs"
+                  monospace
                   aria-hidden="true"
-                  data-accent={pillAccent(layer.tag)}
                   className={styles.tagPill}
-                >
-                  {layer.tag}
-                </TreeMeta>
+                />
               )}
               <TreeLabel>{layer.label}</TreeLabel>
               {layer.classChip && (
-                <TreeMeta
+                <TagPill
+                  label={layer.classChip}
+                  size="xs"
+                  monospace
                   aria-hidden="true"
-                  title={layer.classChip}
                   className={styles.classChip}
-                >
-                  {layer.classChip}
-                </TreeMeta>
+                />
               )}
             </TreeLabelGroup>
             <Button

@@ -3,10 +3,9 @@ import { createPortal } from 'react-dom'
 import { Button } from '@ui/components/Button'
 import { ContextMenu, ContextMenuItem, ContextMenuSeparator } from '@ui/components/ContextMenu'
 import { Input } from '@ui/components/Input'
-import { CloseIcon } from 'pixel-art-icons/icons/close'
 import { CornerDownLeftIcon } from 'pixel-art-icons/icons/corner-down-left'
 import { cn } from '@ui/cn'
-import { pillAccent } from '@ui/pillAccent'
+import { TagPill } from '@ui/components/TagPill'
 import {
   generatedClassKindLabel,
   styleRuleSelector,
@@ -32,6 +31,7 @@ export function AssignedClassPill({
   onKeyboardContextMenu,
   onRemove,
 }: AssignedClassPillProps) {
+  const selectorLabel = styleRuleSelector(cls)
   const handleKeyDown = (e: KeyboardEvent<HTMLElement>) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault()
@@ -42,40 +42,19 @@ export function AssignedClassPill({
   }
 
   return (
-    <div
-      className={cn(styles.pill, isActive ? styles.pillActive : styles.pillInactive)}
-      data-accent={pillAccent(cls.name)}
+    <TagPill
+      label={selectorLabel}
+      active={isActive}
+      onClick={onToggle}
+      onMainKeyDown={handleKeyDown}
       onContextMenu={onContextMenu}
-    >
-      <Button
-        variant="ghost"
-        size="micro"
-        pressed={isActive}
-        className={styles.pillMainButton}
-        onClick={onToggle}
-        onKeyDown={handleKeyDown}
-        aria-label={`${isActive ? 'Deselect' : 'Edit'} class ${cls.name}`}
-        data-testid={`class-chip-${cls.name}`}
-      >
-        <span className={styles.pillName}>{cls.name}</span>
-      </Button>
-      <Button
-        variant="ghost"
-        size="micro"
-        iconOnly
-        onClick={(e) => {
-          e.stopPropagation()
-          onRemove()
-        }}
-        aria-label={`Remove class ${cls.name}`}
-        tooltip="Remove from this element"
-        dangerHover
-        className={styles.pillRemoveBtn}
-        data-testid={`class-chip-remove-${cls.name}`}
-      >
-        <CloseIcon size={10} color="currentColor" aria-hidden="true" />
-      </Button>
-    </div>
+      onRemove={onRemove}
+      mainAriaLabel={`${isActive ? 'Deselect' : 'Edit'} class ${selectorLabel}`}
+      removeAriaLabel={`Remove class ${selectorLabel}`}
+      removeTooltip="Remove from this element"
+      mainTestId={`class-chip-${cls.name}`}
+      removeTestId={`class-chip-remove-${cls.name}`}
+    />
   )
 }
 
@@ -96,36 +75,19 @@ export function AmbientSelectorPill({
   }
 
   return (
-    <div
-      className={cn(styles.pill, pill.active ? styles.pillActive : styles.pillInactive)}
-      data-accent={pillAccent(selectorLabel)}
-    >
-      <Button
-        variant="ghost"
-        size="micro"
-        pressed={pill.active}
-        className={styles.pillMainButton}
-        onClick={onToggle}
-        onKeyDown={handleKeyDown}
-        aria-label={`${pill.active ? 'Deselect' : 'Edit'} selector ${selectorLabel}`}
-        data-testid={`selector-chip-${pill.rule.id}`}
-      >
-        <span className={styles.pillName}>{selectorLabel}</span>
-        {suffix && <span className={styles.pseudoBadge}>{suffix}</span>}
-      </Button>
-      <Button
-        variant="ghost"
-        size="micro"
-        iconOnly
-        disabled
-        aria-label={`Remove selector ${selectorLabel}`}
-        tooltip="Ambient selectors are not assigned to this element"
-        className={styles.pillRemoveBtn}
-        data-testid={`selector-chip-remove-${pill.rule.id}`}
-      >
-        <CloseIcon size={10} color="currentColor" aria-hidden="true" />
-      </Button>
-    </div>
+    <TagPill
+      label={selectorLabel}
+      active={pill.active}
+      suffix={suffix}
+      onClick={onToggle}
+      onMainKeyDown={handleKeyDown}
+      removeDisabled
+      mainAriaLabel={`${pill.active ? 'Deselect' : 'Edit'} selector ${selectorLabel}`}
+      removeAriaLabel={`Remove selector ${selectorLabel}`}
+      removeTooltip="Ambient selectors are not assigned to this element"
+      mainTestId={`selector-chip-${pill.rule.id}`}
+      removeTestId={`selector-chip-remove-${pill.rule.id}`}
+    />
   )
 }
 
@@ -146,39 +108,19 @@ export function InlineStylePill({
   }
 
   return (
-    <div
-      className={cn(styles.pill, isActive ? styles.pillActive : styles.pillInactive)}
-      data-accent="inline"
-    >
-      <Button
-        variant="ghost"
-        size="micro"
-        pressed={isActive}
-        className={styles.pillMainButton}
-        onClick={onToggle}
-        onKeyDown={handleKeyDown}
-        aria-label={`${isActive ? 'Stop editing' : 'Edit'} inline styles`}
-        data-testid="inline-style-pill"
-      >
-        <span className={styles.pillName}>Inline</span>
-      </Button>
-      <Button
-        variant="ghost"
-        size="micro"
-        iconOnly
-        onClick={(e) => {
-          e.stopPropagation()
-          onRemove()
-        }}
-        aria-label="Clear inline styles"
-        tooltip="Clear inline styles"
-        dangerHover
-        className={styles.pillRemoveBtn}
-        data-testid="inline-style-pill-remove"
-      >
-        <CloseIcon size={10} color="currentColor" aria-hidden="true" />
-      </Button>
-    </div>
+    <TagPill
+      label="Inline"
+      active={isActive}
+      muted
+      onClick={onToggle}
+      onMainKeyDown={handleKeyDown}
+      onRemove={onRemove}
+      mainAriaLabel={`${isActive ? 'Stop editing' : 'Edit'} inline styles`}
+      removeAriaLabel="Clear inline styles"
+      removeTooltip="Clear inline styles"
+      mainTestId="inline-style-pill"
+      removeTestId="inline-style-pill-remove"
+    />
   )
 }
 

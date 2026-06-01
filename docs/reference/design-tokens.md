@@ -114,6 +114,16 @@ Used by `Widget` (`tint` prop), `PanelRail` (`data-accent="<tint>"`), and the st
 
 ---
 
+## Tag pill tints (automatic identity layer)
+
+`TagPill` maps the first meaningful alphanumeric character of its label to a
+stable token. Latin letters use `--tag-pill-tint-a` through
+`--tag-pill-tint-z`; digits use `--tag-pill-tint-0` through
+`--tag-pill-tint-9`. This keeps selector punctuation from driving the color
+while giving class names, HTML tags, and badges enough visual variety.
+
+---
+
 ## Semantic state (meaning layer)
 
 ### Danger / error

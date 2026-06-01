@@ -1,0 +1,127 @@
+/* TagPill — shared compact tinted badge / removable chip primitive. */
+
+.pill {
+    --tag-pill-tint: var(--tag-pill-tint-a);
+    --tag-pill-color: var(--editor-text-secondary);
+    --tag-pill-bg: var(--editor-surface-2);
+    --tag-pill-bg-hover: var(--editor-surface-3);
+    --tag-pill-bg-active: var(--editor-surface-4);
+    display: inline-flex;
+    max-width: 100%;
+    width: fit-content;
+    align-items: center;
+    gap: 4px;
+    overflow: hidden;
+    border-radius: var(--editor-radius);
+    background: linear-gradient(0deg, var(--tag-pill-bg), transparent);
+    color: var(--tag-pill-color);
+    font-weight: 620;
+    line-height: 1.4;
+    user-select: none;
+    transition:
+        background-color 120ms ease,
+        color 120ms ease;
+}
+
+.pill[data-size="xs"] {
+    min-height: 18px;
+    padding: 1px 6px;
+    font-size: 10px;
+}
+
+.pill[data-size="sm"] {
+    min-height: 20px;
+    padding: 0 8px;
+    font-size: 11px;
+}
+
+.pill[data-removable="true"] {
+    padding-right: 4px;
+}
+
+.pill[data-monospace="true"] {
+    font-family: var(--font-mono);
+}
+
+.pill[data-active="true"] {
+    background: var(--tag-pill-bg-active);
+    color: var(--tag-pill-color);
+    box-shadow: inset 0 1px 0 color-mix(in oklab, var(--editor-accent) 6%, transparent);
+}
+
+.pill[data-clickable="true"]:not([data-active="true"]):hover {
+    background: var(--tag-pill-bg-hover);
+}
+
+.pill:not([data-muted="true"]) {
+    --tag-pill-color: var(--tag-pill-tint);
+    --tag-pill-bg: color-mix(in oklab, var(--tag-pill-tint) 14%, transparent);
+    --tag-pill-bg-hover: color-mix(in oklab, var(--tag-pill-tint) 18%, transparent);
+    --tag-pill-bg-active: color-mix(in oklab, var(--tag-pill-tint) 30%, transparent);
+}
+
+.pill[data-muted="true"] {
+    --tag-pill-color: var(--editor-text);
+    --tag-pill-bg: var(--editor-bg-subtle);
+    --tag-pill-bg-hover: var(--editor-surface-3);
+    --tag-pill-bg-active: var(--editor-surface-4);
+}
+
+.staticContent,
+.mainButton.mainButton {
+    display: inline-flex;
+    min-width: 0;
+    max-width: 100%;
+    align-items: center;
+    gap: 4px;
+    color: inherit;
+}
+
+.staticContent {
+    overflow: hidden;
+}
+
+.mainButton.mainButton {
+    flex: 1 1 auto;
+    height: 18px;
+    justify-content: flex-start;
+    padding: 0;
+    background: transparent;
+    font-size: inherit;
+    font-weight: inherit;
+}
+
+.mainButton.mainButton:hover,
+.mainButton.mainButton:active,
+.mainButton.mainButton[aria-pressed="true"] {
+    background: transparent;
+    color: inherit;
+}
+
+.leading,
+.suffix {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+}
+
+.label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.suffix {
+    color: var(--editor-text-muted);
+    font-size: 10px;
+    font-weight: 650;
+}
+
+.removeButton.removeButton {
+    flex: 0 0 14px;
+    width: 14px;
+    height: 14px;
+    border-radius: var(--editor-radius-sm);
+    color: inherit;
+}

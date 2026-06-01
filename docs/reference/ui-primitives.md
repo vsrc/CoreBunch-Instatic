@@ -9,7 +9,7 @@ Every interactive control in `src/admin/` goes through one of these. Bare `<butt
 ## TL;DR
 
 - Import from `@ui/components/<Name>` — each primitive lives in its own folder with `Component.tsx`, `Component.module.css`, and `index.ts`.
-- The 28 primitives below cover every interactive control in the admin. If something's missing, add a new primitive (see "Adding a new primitive" below) — don't reach for a third-party library.
+- The 29 primitives below cover every interactive control in the admin. If something's missing, add a new primitive (see "Adding a new primitive" below) — don't reach for a third-party library.
 - Composition uses `cn` from `@ui/cn` — a 3-line in-house helper. **Never** `clsx` / `tailwind-merge` / `cva` / `@radix-ui/*` — gated by `no-tailwind-deps.test.ts`.
 - All colors / radii come from CSS custom properties in `src/styles/globals.css` — see [docs/reference/design-tokens.md](design-tokens.md).
 - Forbidden: Tailwind classes, hardcoded hex, inline `style` (except dynamic CSS custom properties), `!important`, native `title=` tooltips, native `alert()` / `confirm()`.
@@ -69,6 +69,7 @@ Every interactive control in `src/admin/` goes through one of these. Bare `<butt
 | Primitive                  | When to use                                                  | Key props                                                |
 |----------------------------|--------------------------------------------------------------|----------------------------------------------------------|
 | `DataTable`                | Tabular data with sorting + selection                        | `columns`, `rows`, `selection`, `onSelect`               |
+| `TagPill`                  | Compact tinted labels, selector chips, removable tag pills   | `label`, `active`, `muted`, `onClick`, `onRemove`        |
 | `Image`                    | Image with built-in blurhash fallback                        | `src`, `blurhash`, `alt`, `width`, `height`              |
 | `CanvasModulePlaceholder`  | Diagonal-stripe placeholder for empty modules on the canvas  | `label`                                                  |
 
@@ -185,6 +186,22 @@ import { Select } from '@ui/components/Select'
 ```
 
 For long lists or async options, use `SearchBar` + a custom dropdown built with `ContextMenu`. `Select` is for short fixed lists.
+
+---
+
+## `TagPill`
+
+Compact tinted labels and removable chips. The accent comes from the first meaningful alphanumeric character of `colorKey` or `label`, so `.hero`, `#hero`, and `hero` share a tint. Each Latin letter has its own token-backed tint; digits use their own stable slots.
+
+```tsx
+import { TagPill } from '@ui/components/TagPill'
+
+<TagPill label="div" size="xs" monospace />
+<TagPill label=".hero" active onClick={editClass} onRemove={removeClass} />
+<TagPill label="Owner account" muted />
+```
+
+Use `active` for selected/editing chips, `muted` when the label is informational rather than identity-colored, and `onRemove` for the inline close button. The remove action uses the shared `Button` primitive internally.
 
 ---
 

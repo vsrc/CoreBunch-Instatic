@@ -1,63 +1,14 @@
 /* TreeNode — single row in the DOM tree / Layers panel (Guideline #318/#357/#234) */
 /* Visual style ported from Task #425 cleanup — React DevTools-inspired compact tree */
 
-/* HTML tag pill — gradient-tinted chip placed BEFORE the label.
-   Mirrors the ClassPicker pill aesthetic (rail-tint accent + soft top-down
-   gradient + tinted text) but in a smaller, read-only form factor that fits
-   inside a 28px tree row. Per-accent CSS custom properties get set by the
-   `data-accent="…"` selector at the bottom of this rule block.
-
-   Stays at its intrinsic width so the pill is never truncated; the label
-   and class chip beside it do the truncating when space is tight. */
+/* Tag/class pill layout only; shared visuals live in TagPill. */
 .tagPill {
     flex-shrink: 0;
-    display: inline-flex;
-    align-items: center;
-    padding: 1px 6px;
-    border-radius: 6px;
-    --pill-bg: transparent;
-    --pill-color: var(--editor-text-muted);
-    background: linear-gradient(0deg, var(--pill-bg), transparent);
-    color: var(--pill-color);
-    font-family: monospace;
-    font-size: 10px;
-    font-weight: 620;
-    letter-spacing: 0.01em;
-    line-height: 1.4;
 }
 
-.tagPill[data-accent="mint"] {
-    --pill-color: var(--rail-tint-mint);
-    --pill-bg: rgba(142, 230, 200, 0.14);
-}
-
-.tagPill[data-accent="lilac"] {
-    --pill-color: var(--rail-tint-lilac);
-    --pill-bg: rgba(200, 182, 255, 0.14);
-}
-
-.tagPill[data-accent="sky"] {
-    --pill-color: var(--rail-tint-sky);
-    --pill-bg: rgba(155, 220, 255, 0.13);
-}
-
-.tagPill[data-accent="peach"] {
-    --pill-color: var(--rail-tint-peach);
-    --pill-bg: rgba(255, 199, 168, 0.13);
-}
-
-/* Class selector chip — chained-dot CSS selector style (".foo.bar") after the
-   label. Truncates with an ellipsis when the row narrows so the row's primary
-   info (tag + display name) stays readable. The chip is allowed to shrink
-   below its content width via `min-width: 0`. */
 .classChip {
     flex: 0 1 auto;
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    color: var(--editor-text-muted);
-    font-family: monospace;
 }
 
 /* ── Rename input ────────────────────────────────────────────────────────── */

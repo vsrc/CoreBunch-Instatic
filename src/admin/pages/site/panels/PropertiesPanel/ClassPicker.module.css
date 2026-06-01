@@ -11,136 +11,6 @@
     gap: 4px;
 }
 
-/* -------------------------------------------------------------------------
-   Chip base — local CSS custom properties follow the PanelRail pattern.
-   Accent variants override only the seven chip vars; states read them back.
-   -------------------------------------------------------------------------*/
-
-.pill {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    max-width: 100%;
-    min-height: 20px;
-    gap: 4px;
-    /* Asymmetric padding intentionally compensates for the trailing × button:
-       the icon is visually counted toward the right inset so the optical
-       distance from the chip edge to the text on the left matches the
-       distance from the chip edge to the × icon on the right. */
-    padding: 0 6px 0 8px;
-    padding-right: 4px;
-    border: 0;
-    border-radius: 8px;
-    cursor: pointer;
-    user-select: none;
-    transition:
-        background-color 120ms ease,
-        border-color 120ms ease,
-        color 120ms ease;
-    --pill-color: var(--editor-text-secondary);
-    --pill-glow: transparent;
-    --pill-border-rest: rgba(255, 255, 255, 0.2);
-    --pill-bg-hover: rgba(255, 255, 255, 0.06);
-    --pill-border-hover: rgba(255, 255, 255, 0.3);
-    --pill-bg-active: rgba(255, 255, 255, 0.12);
-    --pill-border-active: rgba(255, 255, 255, 0.5);
-}
-
-.pill[data-accent="mint"] {
-    --pill-color: var(--rail-tint-mint);
-    --pill-glow: rgba(142, 230, 200, 0.5);
-    --pill-border-rest: rgba(142, 230, 200, 0.35);
-    --pill-bg-hover: rgba(142, 230, 200, 0.14);
-    --pill-border-hover: rgba(142, 230, 200, 0.55);
-    --pill-bg-active: rgba(142, 230, 200, 0.3);
-    --pill-border-active: rgba(142, 230, 200, 0.85);
-}
-
-.pill[data-accent="lilac"] {
-    --pill-color: var(--rail-tint-lilac);
-    --pill-glow: rgba(200, 182, 255, 0.5);
-    --pill-border-rest: rgba(200, 182, 255, 0.35);
-    --pill-bg-hover: rgba(200, 182, 255, 0.14);
-    --pill-border-hover: rgba(200, 182, 255, 0.55);
-    --pill-bg-active: rgba(200, 182, 255, 0.3);
-    --pill-border-active: rgba(200, 182, 255, 0.85);
-}
-
-.pill[data-accent="sky"] {
-    --pill-color: var(--rail-tint-sky);
-    --pill-glow: rgba(155, 220, 255, 0.48);
-    --pill-border-rest: rgba(155, 220, 255, 0.33);
-    --pill-bg-hover: rgba(155, 220, 255, 0.13);
-    --pill-border-hover: rgba(155, 220, 255, 0.52);
-    --pill-bg-active: rgba(155, 220, 255, 0.28);
-    --pill-border-active: rgba(155, 220, 255, 0.82);
-}
-
-.pill[data-accent="peach"] {
-    --pill-color: var(--rail-tint-peach);
-    --pill-glow: rgba(255, 199, 168, 0.48);
-    --pill-border-rest: rgba(255, 199, 168, 0.33);
-    --pill-bg-hover: rgba(255, 199, 168, 0.13);
-    --pill-border-hover: rgba(255, 199, 168, 0.52);
-    --pill-bg-active: rgba(255, 199, 168, 0.28);
-    --pill-border-active: rgba(255, 199, 168, 0.82);
-}
-
-/* Inactive: tinted text + tinted border from rest — color is on by default */
-.pillInactive {
-    background: linear-gradient(0deg, var(--pill-bg-hover), transparent);
-    color: var(--pill-color);
-}
-
-/* Hover: strengthen bg and border; color stays (already the tint) */
-.pillInactive:hover {
-    background: var(--pill-bg-hover);
-}
-
-/* Active: saturated tinted bg + strong border + top sheen */
-.pillActive {
-    background: var(--pill-bg-active);
-    color: var(--pill-color);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
-}
-
-.pillName {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 11px;
-    font-weight: 620;
-}
-
-.pill button.pillMainButton {
-    flex: 1 1 auto;
-    min-width: 0;
-    height: 18px;
-    padding: 0 2px 0 0;
-    color: inherit;
-    font-size: inherit;
-    justify-content: flex-start;
-    background: transparent;
-}
-
-.pill button.pillMainButton:hover,
-.pill button.pillMainButton:active,
-.pill button.pillMainButton[aria-pressed="true"] {
-    color: inherit;
-    background: transparent;
-}
-
-/* × remove button — always-visible inline icon with stable width.
-   Overrides Button's `.size-micro.iconOnly { width: 18px }` (specificity 0,2,0)
-   with the compound `.pill button.pillRemoveBtn` selector (0,2,1). The chip
-   never changes width across hover/active/focus states. */
-.pill button.pillRemoveBtn {
-    width: 14px;
-    height: 14px;
-    border-radius: 4px;
-}
-
 /* Input + optional trailing action (e.g. the Componentize button).
    Single column by default; when a trailing action is present, the input
    takes the flexible space (minmax(0, 1fr)) and the action takes its
@@ -184,18 +54,11 @@
     text-transform: uppercase;
 }
 
-.pseudoBadge,
 .suggestionMeta {
     flex: 0 0 auto;
     color: var(--editor-text-muted);
     font-size: 10px;
     font-weight: 650;
-}
-
-.pseudoBadge {
-    padding: 1px 4px;
-    border-radius: var(--editor-radius-sm);
-    background: var(--editor-surface-4);
 }
 
 .errorText {

@@ -364,6 +364,7 @@ Every interactive control in the admin and editor goes through a primitive from 
 | `ControlRow`         | Standard label + control row in property panels.                            |
 | `ContextMenu`        | Right-click and `…` overflow menus.                                         |
 | `FilterBar`          | Compound filter row (type + folder + date + query).                         |
+| `TagPill`            | Compact tinted labels, selector chips, removable tag pills. It derives a token-backed tint from the first meaningful alphanumeric character. |
 | `FloatingActionBar`  | Multi-select bulk-action bar.                                               |
 | `EmptyState`         | Empty-list / empty-page placeholder.                                        |
 | `Dialog`             | Modal dialog with a title and content.                                      |

@@ -18,25 +18,10 @@
   border-radius: var(--input-radius);
 }
 
-.chip {
+.chipItem {
   display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  padding: 2px 4px 2px 6px;
-  background: var(--editor-surface-2);
-  border-radius: var(--editor-radius-sm);
-  font-size: 11px;
-  color: var(--editor-text);
-}
-
-.chipLabel {
-  line-height: 1.2;
-}
-
-.chipRemove {
-  width: 14px;
-  height: 14px;
-  flex: 0 0 14px;
+  min-width: 0;
+  list-style: none;
 }
 
 .inputLi {

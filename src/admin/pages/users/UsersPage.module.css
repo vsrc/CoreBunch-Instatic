@@ -83,44 +83,6 @@
     overflow-wrap: anywhere;
 }
 
-.badge,
-.badgeMuted {
-    display: inline-flex;
-    align-items: center;
-    width: fit-content;
-    min-height: 18px;
-    padding: 1px 6px;
-    border-radius: var(--editor-radius);
-    --badge-bg: var(--editor-surface-2);
-    --badge-color: var(--editor-text-muted);
-    background: linear-gradient(0deg, var(--badge-bg), transparent);
-    color: var(--badge-color);
-    font-size: 10px;
-    font-weight: 620;
-    line-height: 1.4;
-}
-
-.badgeMuted {
-    --badge-bg: var(--editor-bg-subtle);
-    --badge-color: var(--editor-text);
-}
-
-.badge[data-accent="mint"] {
-    --badge-color: var(--rail-tint-mint);
-}
-
-.badge[data-accent="lilac"] {
-    --badge-color: var(--rail-tint-lilac);
-}
-
-.badge[data-accent="sky"] {
-    --badge-color: var(--rail-tint-sky);
-}
-
-.badge[data-accent="peach"] {
-    --badge-color: var(--rail-tint-peach);
-}
-
 /* Role-edit capability picker.
 
    Layout: a single flow inside the Dialog body. No inner scroll — the

@@ -40,12 +40,11 @@ import {
   TreeIconSlot,
   TreeLabel,
   TreeLabelGroup,
-  TreeMeta,
   TreeRow,
   treeDropStyles,
 } from '@site/ui/Tree'
 import { ModuleIcon } from '@site/ui/ModuleIcon'
-import { pillAccent } from '@ui/pillAccent'
+import { TagPill } from '@ui/components/TagPill'
 import { useEditorPreference } from '@site/preferences/editorPreferences'
 import { useConfirmDelete } from '@admin/shared/dialogs/ConfirmDeleteDialog'
 import styles from './TreeNode.module.css'
@@ -361,13 +360,13 @@ export const TreeNode = memo(function TreeNode({ nodeId, depth, editable = true 
                 tag (visual-component-ref, slot, loop, etc.) or when the user
                 turns off the `layersShowTag` preference. */}
             {showTag && htmlTag && (
-              <TreeMeta
+              <TagPill
+                label={htmlTag}
+                size="xs"
+                monospace
                 aria-hidden="true"
-                data-accent={pillAccent(htmlTag)}
                 className={styles.tagPill}
-              >
-                {htmlTag}
-              </TreeMeta>
+              />
             )}
             <TreeLabel>
               {displayName}
@@ -378,13 +377,13 @@ export const TreeNode = memo(function TreeNode({ nodeId, depth, editable = true 
                 readable on narrow panels. Hidden when `layersShowClasses` is
                 turned off. */}
             {showClasses && classSelectorChip && (
-              <TreeMeta
+              <TagPill
+                label={classSelectorChip}
+                size="xs"
+                monospace
                 aria-hidden="true"
-                title={classSelectorChip}
                 className={styles.classChip}
-              >
-                {classSelectorChip}
-              </TreeMeta>
+              />
             )}
           </TreeLabelGroup>
         )}

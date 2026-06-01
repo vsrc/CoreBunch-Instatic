@@ -10,7 +10,7 @@
 import { useRef, useState, type KeyboardEvent } from 'react'
 import { Button } from '@ui/components/Button'
 import { Input } from '@ui/components/Input'
-import { CloseIcon } from 'pixel-art-icons/icons/close'
+import { TagPill } from '@ui/components/TagPill'
 import styles from './TagEditor.module.css'
 
 interface TagEditorProps {
@@ -78,20 +78,12 @@ export function TagEditor({
     <div className={styles.root} aria-label={ariaLabel}>
       <ul className={styles.chips} role="list" aria-label="Selected tags">
         {value.map((tag) => (
-          <li key={tag} className={styles.chip}>
-            <span className={styles.chipLabel}>{tag}</span>
-            {!disabled && (
-              <Button
-                variant="ghost"
-                size="xs"
-                iconOnly
-                aria-label={`Remove ${tag}`}
-                onClick={() => removeAt(tag)}
-                className={styles.chipRemove}
-              >
-                <CloseIcon size={10} />
-              </Button>
-            )}
+          <li key={tag} className={styles.chipItem}>
+            <TagPill
+              label={tag}
+              onRemove={disabled ? undefined : () => removeAt(tag)}
+              removeAriaLabel={`Remove ${tag}`}
+            />
           </li>
         ))}
         <li className={styles.inputLi}>
