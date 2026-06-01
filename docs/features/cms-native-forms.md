@@ -23,11 +23,9 @@ Primitives are the source of truth. A label is a `base.label` node, an input is 
 - `cms` submits to a selected data table.
 - `custom` renders a semantic form shell with `action` / `method` for external adapters or traditional form targets.
 
-The form target uses the `dataTable` property control, backed by `src/admin/pages/site/property-controls/DataTableControl.tsx`, so authors pick a table instead of typing an id.
+Form-related nodes get a contextual setup block rendered at the top of Module settings by `FormSettingsPanel` in `src/admin/pages/site/panels/PropertiesPanel/FormSettingsPanel.tsx`. The analysis that drives it lives in `src/admin/pages/site/panels/PropertiesPanel/formSettingsAnalysis.ts`. The block summarizes the nearest form, target table, bound field, inferred label/submit/message relationship, and warnings for missing tables, unbound controls, duplicate names, missing fields, controls outside forms, labels without targets, and submit buttons without forms.
 
-Form-related nodes also get a contextual setup block at the top of Module settings. The block summarizes the nearest form, target table, bound field, inferred label/submit/message relationship, and warnings for missing tables, unbound controls, duplicate names, missing fields, controls outside forms, labels without targets, and submit buttons without forms.
-
-For a selected CMS-native form, the setup block can choose an existing target table or create a new `data` table from the current form controls. Table creation opens a small dialog with an editable table name, prefilled from a human-readable form name; generated id suffixes are stripped from that suggestion so names stay author-facing. It then infers field ids, labels, types, required flags, and compatible validation defaults from the authored primitive nodes. If the selected table has fields that are not represented in the form, the block offers one-click insertion of label + compatible control primitives before the submit/message area.
+For a selected `base.form` node, the setup block promotes three props — mode, Form ID, and target table — out of the generic property-control list. `renderModuleTabContent.tsx` suppresses them from the schema-driven rows via `PROMOTED_FORM_PROPERTY_KEYS`; the setup block renders them instead as a segmented mode selector and a stacked Form ID input. The target table is a live-loaded select backed by the CMS tables API. Authors can also create a new `data` table from the current form controls: a dialog opens with an editable table name prefilled from a human-readable form name (generated id suffixes are stripped by `formSettingsNaming.ts` so names stay author-facing), then fields are inferred from the authored primitive nodes — ids, labels, types, required flags, and compatible validation defaults. If the selected table has fields not represented in the form, the block offers one-click insertion of label + compatible control primitives before the submit/message area.
 
 The `Form ID` property is a machine identifier, not the author-facing table or form name. Presets use clean ids such as `contact`, `contact-2`, and `newsletter` instead of long node ids. The editor normalizes typed spaces to identifier-safe separators, and the publisher/snapshot path normalizes the same way so form messages, external submit buttons, public tokens, and submission handlers all agree on one id.
 
@@ -77,3 +75,8 @@ No public form endpoint can be made unusable by a dedicated HTTP client that fet
 - [Modules](modules.md) — module definitions and the module picker
 - [Publisher](publisher.md) — HTML pipeline and runtime injection
 - [TypeBox patterns](../reference/typebox-patterns.md) — request/response validation
+- Source of truth — module definitions: `src/modules/base/forms/index.ts`
+- Source of truth — form settings panel: `src/admin/pages/site/panels/PropertiesPanel/FormSettingsPanel.tsx`
+- Source of truth — settings analysis: `src/admin/pages/site/panels/PropertiesPanel/formSettingsAnalysis.ts`
+- Source of truth — naming utilities: `src/admin/pages/site/panels/PropertiesPanel/formSettingsNaming.ts`
+- Source of truth — submission handler: `server/forms/handler.ts`
