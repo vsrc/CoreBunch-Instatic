@@ -43,6 +43,10 @@ src/core/publisher/
 └── utils.ts                        — escapeHtml, isSafeUrl
 
 server/publish/
+├── publicRouter.ts                 — gateway: Layer A disk fast-path → Layer B LRU → live resolver
+├── staticArtefact.ts               — two-slot symlink swap + read/write/purge artefacts (Layer A)
+├── renderCache.ts                  — in-memory LRU + publishVersion bump + single-flight (Layer B)
+├── holeRuntime.ts                  — HOLE_RUNTIME_JS source string (~668 B, served by hole handler)
 ├── publicRenderer.ts               — renderPublishedSnapshot, renderPublishedDataRowTemplate
 ├── publishedHtmlPipeline.ts        — post-process (sanitize + plugin filters + injections)
 ├── siteCssBundle.ts                — server-side hashing + file emission
@@ -264,8 +268,12 @@ Editing the CSP manually is **not** safe — it's a derived value. Edit the sour
 
 | File                                            | Role                                                                |
 |-------------------------------------------------|---------------------------------------------------------------------|
+| `server/publish/publicRouter.ts`                | Gateway: Layer A disk fast-path → Layer B LRU → live `resolvePublicRoute` + `renderPublicResolution`. |
+| `server/publish/staticArtefact.ts`              | Two-slot symlink swap (`swapSlot`), per-file atomic writes (`writeArtefact`, `updateArtefactInPlace`), and reads (`readArtefact`). Layer A. |
+| `server/publish/renderCache.ts`                 | In-memory LRU keyed by `(urlPath, queryString, publishVersion)`. `getOrRender` (single-flight) + `bumpPublishVersion`. Layer B. |
+| `server/publish/holeRuntime.ts`                 | `HOLE_RUNTIME_JS` — the ~668 B `IntersectionObserver` script included only on pages with holes. Layer C. |
 | `server/publish/publicRenderer.ts`              | `renderPublishedSnapshot`, `renderPublishedDataRowTemplate`. Calls `publishPage`. |
-| `server/publish/publishedHtmlPipeline.ts`       | Post-process: DOMPurify the final HTML, run plugin `publish.html` filter, splice in declarative tags from plugin manifests, inject runtime assets. |
+| `server/publish/publishedHtmlPipeline.ts`       | Post-process: DOMPurify the final HTML, run plugin `publish.html` filter, splice in declarative tags from plugin manifests, inject runtime assets. Runs at publish time only — never per-request. |
 | `server/publish/siteCssBundle.ts`               | Hash the three CSS strings, write `uploads/css/...` files.          |
 | `server/publish/republish.ts`                   | Bulk re-publish on settings change (touches every page).            |
 | `server/publish/publishScheduler.ts`            | Scheduled publish jobs (cron-style).                                |
@@ -275,6 +283,7 @@ Editing the CSP manually is **not** safe — it's a derived value. Edit the sour
 | `server/publish/loopPrefetch.ts`                | Fetch every loop source's items before render so the walker is purely synchronous. |
 | `server/publish/runtime/packageServer.ts`       | Serve per-site `bun install` workspace under `/_instatic/runtime/cache/`. |
 | `server/publish/loopRuntime.ts`                 | The loop runtime asset (small JS shim used by certain loop variants).|
+| `server/handlers/cms/hole.ts`                   | `GET /_instatic/hole-runtime.js` (serves `HOLE_RUNTIME_JS`) and `GET /_instatic/hole/<nodeId>` (renders a node subtree at request time for Layer C islands). |
 | `server/richtextSanitizer.ts`                   | Installs the server's happy-dom-backed DOMPurify runtime without global DOM objects. |
 
 ### `publishedHtmlPipeline.ts` — the plugin filter point

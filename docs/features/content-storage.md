@@ -212,7 +212,7 @@ The `PublishedPageSnapshot` in `data_row_versions.snapshot_json` is the canonica
 
 For postType rows, `publishDataRow` does the same but incrementally: writes the single row's artefact into the ACTIVE slot via `tmp + rename` (no full slot swap), bumps publishVersion, and removes the old slug's artefact if the slug changed.
 
-See [docs/features/publisher.md](publisher.md) and [docs/superpowers/plans/2026-05-25-publishing-architecture.md](../superpowers/plans/2026-05-25-publishing-architecture.md) for the full pipeline.
+See [docs/features/publisher.md](publisher.md) for the full pipeline.
 
 For **post-types**, each `data_table` has a **default entry template** (a `pages` row with `kind: 'page'` and a special `entryTemplateForTableId` link). When you publish a post, the renderer:
 

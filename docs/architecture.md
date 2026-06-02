@@ -283,7 +283,7 @@ See [docs/features/plugin-system.md](features/plugin-system.md) for the full fea
 The browser bundle is a single Vite-built React 19 SPA, mounted at `/admin`. Inside it:
 
 - `src/admin/` — the **admin shell**: routing, sessions, top-level navigation, the workspaces for content / media / plugins / users / dashboard, and the plugin host UI.
-- `src/admin/pages/site/` — the **visual editor**: the canvas, panels, toolbar, picker, property controls, and the editor store (Zustand + Immer). This is the visual editor itself.
+- `src/admin/pages/site/` — the **visual editor**: the canvas, panels, toolbar, picker, property controls, and the editor store (Zustand + Immer). This is the editor itself.
 
 The split exists because the editor is a self-contained app with its own state and lifecycle, but it shares the admin's auth, routing, and theming.
 
@@ -417,5 +417,4 @@ bun run lint             # eslint with cache
   - `src/admin/pages/site/store/siteSlice.ts` — `mutateActiveTree`
   - `src/core/publisher/` — publishing pipeline
   - `src/styles/globals.css` — design tokens
-  - `docs/superpowers/plans/2026-05-25-publishing-architecture.md` — full Layer A/B/C design spec
 - Gate tests: `src/__tests__/architecture/*.test.ts`

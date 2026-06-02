@@ -185,7 +185,7 @@ See [docs/features/media.md](../features/media.md).
 | `publish-bumps-cache-version.test.ts`         | Every publish / unpublish entry point (`publishDraftSite`, `publishDataRow`, `updateDataRowStatus`) calls `bumpPublishVersion()` from `renderCache.ts` so Layer B evicts on every state change visitors can see. |
 | `hole-runtime-asset-route.test.ts`            | The router registers `tryServeHoleRuntimeAsset` and `tryServeHole` BEFORE `tryServePublicRoute`. The `/_instatic/hole/*` namespace can never fall through to slug resolution. |
 
-See [docs/features/publisher.md](../features/publisher.md) and [docs/superpowers/plans/2026-05-25-publishing-architecture.md](../superpowers/plans/2026-05-25-publishing-architecture.md).
+See [docs/features/publisher.md](../features/publisher.md).
 
 ### Site import
 

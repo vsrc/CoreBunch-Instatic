@@ -413,7 +413,7 @@ Plus the hole endpoint at `server/handlers/cms/hole.ts` — registered in the ro
 
 Published pages are HTML + a single hashed CSS bundle per page. The ONLY first-party client script is the Layer C hole runtime, and it's injected ONLY on pages that contain at least one `<instatic-hole>`. Fully-static pages ship zero JS from us. Plugins can inject frontend assets explicitly via `frontendInjections.ts`.
 
-For the full design spec including invariants, atomic-publish protocol, and the auto-detection rules, see [docs/superpowers/plans/2026-05-25-publishing-architecture.md](superpowers/plans/2026-05-25-publishing-architecture.md).
+For the full design including invariants, atomic-publish protocol, and the auto-detection rules, see [docs/features/publisher.md](features/publisher.md).
 
 ---
 
