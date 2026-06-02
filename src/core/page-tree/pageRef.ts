@@ -18,9 +18,9 @@
 import type { Page } from './page'
 import { pagePublicPath } from './slugs'
 
-export const PAGE_REF_PREFIX = 'cms:page:'
+const PAGE_REF_PREFIX = 'cms:page:'
 
-export interface ParsedPageRef {
+interface ParsedPageRef {
   pageId: string
   /** Includes the leading `#`, or `''` when absent. */
   fragment: string

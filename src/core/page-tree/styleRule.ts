@@ -43,7 +43,7 @@ import { escapeCssIdentifier as escapeCssIdent } from './cssIdentifier'
 // StyleRuleSchema
 // ---------------------------------------------------------------------------
 
-export const StyleRuleKindSchema = Type.Union([Type.Literal('class'), Type.Literal('ambient')])
+const StyleRuleKindSchema = Type.Union([Type.Literal('class'), Type.Literal('ambient')])
 export type StyleRuleKind = Static<typeof StyleRuleKindSchema>
 
 export const StyleRuleSchema = Type.Object({

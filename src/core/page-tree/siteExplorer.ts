@@ -14,29 +14,21 @@ export const SITE_EXPLORER_SECTION_IDS = [
   'scripts',
 ] as const
 
-export const SiteExplorerSectionIdSchema = Type.Union([
-  Type.Literal('pages'),
-  Type.Literal('templates'),
-  Type.Literal('components'),
-  Type.Literal('styles'),
-  Type.Literal('scripts'),
-])
-
 export type SiteExplorerSectionId = (typeof SITE_EXPLORER_SECTION_IDS)[number]
 
-export const SiteExplorerFolderSchema = Type.Object({
+const SiteExplorerFolderSchema = Type.Object({
   id: Type.String(),
   name: Type.String(),
   order: Type.Number({ default: 0 }),
 })
 
-export const SiteExplorerItemPlacementSchema = Type.Object({
+const SiteExplorerItemPlacementSchema = Type.Object({
   id: Type.String(),
   parentFolderId: Type.Optional(Type.String()),
   order: Type.Number(),
 })
 
-export const SiteExplorerSectionSchema = Type.Object({
+const SiteExplorerSectionSchema = Type.Object({
   folders: Type.Array(SiteExplorerFolderSchema),
   items: Type.Array(SiteExplorerItemPlacementSchema),
 })
@@ -51,14 +43,14 @@ export const SiteExplorerOrganizationSchema = Type.Object({
 
 export type SiteExplorerFolder = Static<typeof SiteExplorerFolderSchema>
 export type SiteExplorerItemPlacement = Static<typeof SiteExplorerItemPlacementSchema>
-export type SiteExplorerSection = Static<typeof SiteExplorerSectionSchema>
+type SiteExplorerSection = Static<typeof SiteExplorerSectionSchema>
 export type SiteExplorerOrganization = Static<typeof SiteExplorerOrganizationSchema>
 
 type SiteExplorerRootEntry =
   | { kind: 'folder'; folder: SiteExplorerFolder; order: number }
   | { kind: 'item'; item: SiteExplorerItemPlacement; order: number }
 
-export interface SiteExplorerSources {
+interface SiteExplorerSources {
   pages: readonly Page[]
   visualComponents: readonly VisualComponent[]
   files: readonly SiteFile[]

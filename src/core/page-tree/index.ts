@@ -22,17 +22,11 @@ export {
 export { PageSchema } from './page'
 export {
   StyleRuleSchema,
-  StyleRuleKindSchema,
   classKindSelector,
   classifySelectorCreateInput,
   parseStyleRule,
 } from './styleRule'
-export { ConditionSchema, ConditionDefSchema } from './condition'
 export { SiteShellSchema } from './siteDocument'
-export {
-  SiteExplorerOrganizationSchema,
-  SiteExplorerSectionIdSchema,
-} from './siteExplorer'
 
 // Types — derived from schemas. Schemas are the source of truth.
 export type { Breakpoint } from './breakpoint'
@@ -49,8 +43,6 @@ export type { SiteShell, SiteDocument } from './siteDocument'
 export type {
   SiteExplorerFolder,
   SiteExplorerItemPlacement,
-  SiteExplorerOrganization,
-  SiteExplorerSection,
   SiteExplorerSectionId,
 } from './siteExplorer'
 
@@ -59,7 +51,7 @@ export { DEFAULT_BREAKPOINTS } from './breakpoint'
 export { DEFAULT_SITE_SETTINGS } from './siteSettings'
 
 // Condition helpers
-export { conditionId, conditionLabel, sameCondition, makeConditionDef, parseConditions } from './condition'
+export { conditionId, conditionLabel, makeConditionDef } from './condition'
 
 // Tolerant parsers — boundary helpers for persisted data.
 export { parsePage } from './page'
@@ -88,13 +80,11 @@ export {
   findHomePage,
 } from './slugs'
 export {
-  PAGE_REF_PREFIX,
   makePageRef,
   isPageRef,
   parsePageRef,
   resolvePageRef,
 } from './pageRef'
-export type { ParsedPageRef } from './pageRef'
 
 // Other re-exports unrelated to the schemas split
 export type { FontEntry } from '@core/fonts/schemas'
@@ -140,8 +130,6 @@ export {
   applyTreeOperation,
 } from './mutations'
 
-export type { ApplyTreeOperationResult } from './mutations'
-
 export { cloneScopedClassesForNodeMap } from './scopedClassClone'
 
 export {
@@ -160,7 +148,6 @@ export {
   assertValidCssClassName,
   styleRuleSelector,
   classNamesForClassIds,
-  escapeCssIdentifier,
 } from './classNames'
 export type { StyleRuleRegistry } from './classNames'
 
@@ -177,8 +164,5 @@ export { resolvePageTreeDropTarget } from './dnd'
 export type { PageTreeDropPosition, PageTreeDropTarget } from './dnd'
 
 export {
-  selectPageById,
-  selectPagesById,
   selectVisualComponentById,
-  selectVisualComponentsById,
 } from './siteSelectors'

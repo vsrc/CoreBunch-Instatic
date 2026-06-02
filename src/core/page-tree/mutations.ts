@@ -690,7 +690,7 @@ function ancestorChildOf(
 // Callers that need a pure read-only path must clone (`structuredClone`) the
 // tree before passing it in.
 
-export interface ApplyTreeOperationResult {
+interface ApplyTreeOperationResult {
   tree: NodeTree<PageNode>
   affectedNodeIds: string[]
 }

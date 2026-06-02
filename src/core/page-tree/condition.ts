@@ -36,7 +36,7 @@ import { asPlainObject } from './parseHelpers'
  *                  Emits `@container [name] (<query>)`.
  *   - `supports`:  a feature query. Emits `@supports (<query>)`.
  */
-export const ConditionSchema = Type.Union([
+const ConditionSchema = Type.Union([
   Type.Object({ kind: Type.Literal('media'), query: Type.String() }),
   Type.Object({
     kind: Type.Literal('container'),
@@ -90,20 +90,6 @@ export function conditionLabel(condition: Condition): string {
   }
 }
 
-/** Structural equality for two conditions. */
-export function sameCondition(a: Condition, b: Condition): boolean {
-  if (a.kind !== b.kind) return false
-  switch (a.kind) {
-    case 'media':
-    case 'supports':
-      return a.query === (b as Extract<Condition, { kind: 'media' | 'supports' }>).query
-    case 'container': {
-      const bb = b as Extract<Condition, { kind: 'container' }>
-      return a.query === bb.query && (a.name ?? '') === (bb.name ?? '')
-    }
-  }
-}
-
 /** Build a fully-formed `ConditionDef` from a condition (+ optional label). */
 export function makeConditionDef(condition: Condition, label?: string): ConditionDef {
   return {
@@ -118,7 +104,7 @@ export function makeConditionDef(condition: Condition, label?: string): Conditio
 // ---------------------------------------------------------------------------
 
 /** Parse a single condition, returning null on an unrecognised shape. */
-export function parseCondition(raw: unknown): Condition | null {
+function parseCondition(raw: unknown): Condition | null {
   const c = asPlainObject(raw)
   if (!c) return null
   if (c.kind === 'media' && typeof c.query === 'string') {
@@ -138,7 +124,7 @@ export function parseCondition(raw: unknown): Condition | null {
 }
 
 /** Parse a single ConditionDef, dropping it (null) when unusable. */
-export function parseConditionDef(raw: unknown): ConditionDef | null {
+function parseConditionDef(raw: unknown): ConditionDef | null {
   const r = asPlainObject(raw)
   if (!r) return null
   const condition = parseCondition(r.condition)

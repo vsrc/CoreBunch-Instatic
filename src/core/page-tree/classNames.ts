@@ -1,5 +1,4 @@
 import type { StyleRule } from './styleRule'
-import { escapeCssIdentifier } from './cssIdentifier'
 
 export type StyleRuleRegistry = Record<string, StyleRule> | null | undefined
 
@@ -64,6 +63,3 @@ export function classNamesForClassIds(
   }
   return names
 }
-
-// Re-exported so existing consumers don't have to switch imports.
-export { escapeCssIdentifier }
