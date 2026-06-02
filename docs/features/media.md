@@ -47,7 +47,8 @@ src/admin/pages/media/
 │   └── useDebouncedSave.ts             — generic debounced save helper
 └── utils/
     ├── filters.ts                      — type/date/folder filter predicates
-    ├── folderTree.ts                   — folder list ↔ tree conversion
+    ├── folderTree.ts                   — folder utilities: tree build, descent check, child listing
+    ├── mediaDragDrop.ts                — TypeBox-validated drag/drop payload helpers
     └── variants.ts                     — image variant URL helpers
 ```
 
@@ -91,7 +92,7 @@ The editor store does **not** grow new slices. The Media page is self-contained 
 
 - In **All files**, root folders render before root-level assets (assets with no folder assignment).
 - Inside a folder, immediate child folders render before assets, and a parent-folder item appears at the start of the grid/list.
-- Type filters other than `All` hide folder items so media-type filtering remains literal. Search still matches folder names when folders are visible.
+- Type filters other than `All` and active tag filters hide folder items so filtering remains literal. Search still matches folder names when folders are visible.
 
 Drag/drop uses a media-specific `DataTransfer` payload helper in `src/admin/pages/media/utils/mediaDragDrop.ts`. Canvas folder items, the parent-folder item, and regular folder rows in `MediaFolderPanel` all accept the same payloads:
 
