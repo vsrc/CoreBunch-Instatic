@@ -67,17 +67,19 @@ export function BroadcastComposer({ lists, broadcast, onClose, onSaved }: Broadc
             body: JSON.stringify(payload),
           })
       const body = (await res.json()) as { ok?: boolean; broadcast?: BroadcastRow; error?: string }
-      if (body.error) throw new Error(body.error)
-      if (body.broadcast) {
+      if (body.error) {
+        setError(body.error)
+      } else if (body.broadcast) {
         setCurrentId(body.broadcast.id)
         onSaved(body.broadcast)
+        setStatus('Draft saved.')
+      } else {
+        setStatus('Draft saved.')
       }
-      setStatus('Draft saved.')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Save failed')
-    } finally {
-      setSaving(false)
     }
+    setSaving(false)
   }
 
   async function handleSchedule() {
@@ -91,6 +93,7 @@ export function BroadcastComposer({ lists, broadcast, onClose, onSaved }: Broadc
     }
     setSaving(true)
     setError(null)
+    let shouldClose = false
     try {
       const res = await routes.fetch(`broadcasts/${currentId}`, {
         method: 'PATCH',
@@ -98,13 +101,18 @@ export function BroadcastComposer({ lists, broadcast, onClose, onSaved }: Broadc
         body: JSON.stringify({ scheduledAt: new Date(scheduledAt).toISOString() }),
       })
       const body = (await res.json()) as { ok?: boolean; error?: string }
-      if (body.error) throw new Error(body.error)
-      setStatus('Broadcast scheduled.')
-      onClose()
+      if (body.error) {
+        setError(body.error)
+      } else {
+        setStatus('Broadcast scheduled.')
+        shouldClose = true
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Schedule failed')
-    } finally {
-      setSaving(false)
+    }
+    setSaving(false)
+    if (shouldClose) {
+      onClose()
     }
   }
 
@@ -115,16 +123,22 @@ export function BroadcastComposer({ lists, broadcast, onClose, onSaved }: Broadc
     }
     setSending(true)
     setError(null)
+    let shouldClose = false
     try {
       const res = await routes.fetch(`broadcasts/${currentId}/send`, { method: 'POST' })
       const body = (await res.json()) as { ok?: boolean; recipientCount?: number; error?: string }
-      if (body.error) throw new Error(body.error)
-      setStatus(`Sent to ${body.recipientCount ?? 0} recipient(s).`)
-      onClose()
+      if (body.error) {
+        setError(body.error)
+      } else {
+        setStatus(`Sent to ${body.recipientCount ?? 0} recipient(s).`)
+        shouldClose = true
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Send failed')
-    } finally {
-      setSending(false)
+    }
+    setSending(false)
+    if (shouldClose) {
+      onClose()
     }
   }
 
@@ -146,14 +160,16 @@ export function BroadcastComposer({ lists, broadcast, onClose, onSaved }: Broadc
         body: JSON.stringify({ email: previewEmail.trim() }),
       })
       const body = (await res.json()) as { ok?: boolean; error?: string }
-      if (body.error) throw new Error(body.error)
-      setStatus(`Preview sent to ${previewEmail}.`)
-      setShowPreviewInput(false)
+      if (body.error) {
+        setError(body.error)
+      } else {
+        setStatus(`Preview sent to ${previewEmail}.`)
+        setShowPreviewInput(false)
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Preview send failed')
-    } finally {
-      setSaving(false)
     }
+    setSaving(false)
   }
 
   return (
