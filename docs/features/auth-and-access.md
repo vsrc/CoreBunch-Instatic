@@ -11,7 +11,7 @@ Every state-changing CMS request goes through one auth funnel: parse the session
 - **Sessions** are token-cookie based. Cookie name: `SESSION_COOKIE_NAME` (`instatic_admin_session`). Tokens are hashed before storage; the cookie carries the raw token.
 - **Capabilities** are the access model. 19 `CoreCapability` strings defined in `server/auth/capabilities.ts`. Roles are sets of capabilities. Handlers gate on capability, not role.
 - **`requireCapability(req, db, 'site.read')`** is the canonical handler entrypoint. Returns the `AuthUser` or a 401/403 `Response`.
-- **MFA (TOTP)** is per-user opt-in. Sessions for MFA-enrolled users are `pending_mfa` until verified, then become `active`. Failed MFA codes go through `mfaRateLimit`.
+- **MFA (TOTP)** is per-user opt-in. Sessions for MFA-enrolled users are `pending_mfa` until verified, then become `active`. Failed MFA codes go through `mfaRateLimit` AND increment the per-account lockout counter — the same counter the password step uses. A locked account is rejected at the MFA step before any code is checked.
 - **Step-up auth** gates sensitive actions (delete user, revoke another device, sign out all) unless the user disables it on Account -> Security. The default window is 15 minutes; users can configure 5, 15, 30, or 60 minutes.
 - **Lockout** kicks in after 5 failed logins. Exponential backoff capped at 24 hours.
 - **CSRF defense in depth.** State-changing methods must come from a matching `Origin`. `SameSite=Lax` covers the rest.
@@ -65,13 +65,18 @@ Set-Cookie: instatic_admin_session=<rawToken>; HttpOnly; Secure; SameSite=Lax; P
 (user enters MFA code if enrolled)
     │
     ▼
-POST /admin/api/cms/auth/mfa  { code }
+POST /admin/api/cms/auth/mfa/verify  { code }
     │
-    ├─→ verifyTotpCode(secret, code) or matchRecoveryCode
-    ├─→ rate-limited via mfaRateLimit
+    ├─→ evaluateLockState(user.lockedUntil) → if locked: 429 Retry-After
+    ├─→ rate-limited via mfaRateLimit (per-IP)
     │
     ▼
-sessions.pending_mfa := false
+verifyTotpCode(secret, code) or matchRecoveryCode
+    │
+    ├─→ fail → recordFailedLoginAttempt → evaluateFailedAttempt → may trigger lockout
+    │
+    ▼
+rotateSessionToken → mfaPassedAt := now
     │
     ▼
 session is now ACTIVE; subsequent /admin/api/cms/* requests succeed
@@ -287,13 +292,15 @@ From now on, login is two-step: password → `pending_mfa` session → TOTP code
 
 ### Rate-limiting
 
-`mfaRateLimit` — token bucket on `<userId>:mfa` (5 attempts / 15 minutes). Hitting the limit returns `429 Too Many Requests` and surfaces a `[mfa] rate-limited` log entry.
+`mfaRateLimit` — per-IP bucket (10 attempts / 10 minutes). The key is `clientIp(req) ?? 'unknown'`. Hitting the limit returns 429.
+
+In addition, failed codes feed the per-account lockout counter (see [Lockout](#lockout)). A correct code submitted after the account is locked is still rejected — the lockout check runs before code verification.
 
 ---
 
 ## Lockout
 
-`server/auth/lockout.ts` implements exponential backoff for failed logins.
+`server/auth/lockout.ts` implements exponential backoff for repeated authentication failures.
 
 ```text
 Failed attempts:  1   2   3   4   5    6      7       8      9        10
@@ -302,9 +309,11 @@ Lock duration:    -   -   -   -   15m  30m    1h      2h     4h       8h    ... 
 
 `LOCKOUT_THRESHOLD = 5` — locks kick in after 5 failed attempts.
 
-`evaluateFailedAttempt(...)` is called by the login handler on every failure and updates the `login_attempts` row for the email. `evaluateLockState(...)` is called before each login attempt — if locked, the handler returns 401 with a `Retry-After` header.
+**The lockout counter is shared across both authentication steps.** `evaluateFailedAttempt(...)` is called on every failed password attempt (in `handleLogin` and `handleStepUp`) AND on every failed MFA code (in `handleMfaVerify`). This means a distributed attacker who already holds the correct password cannot grind the TOTP step indefinitely — failed MFA codes eat the same budget as failed passwords.
 
-Lockouts are per-email, not per-IP. The IP rate limit (`loginPerIpRateLimit`) prevents distributed scans.
+`evaluateLockState(...)` is called before each attempt — at the password step in `handleLogin`, and at the MFA step in `handleMfaVerify` (before any code is evaluated). A locked account returns 429 with a `Retry-After` header.
+
+Lockouts are per-account (keyed on `users.id`), not per-IP. The IP rate limit (`loginPerIpRateLimit`) guards against a single address sweeping many accounts; the per-account lockout guards against the same account being attacked from many IPs.
 
 ---
 
@@ -312,11 +321,11 @@ Lockouts are per-email, not per-IP. The IP rate limit (`loginPerIpRateLimit`) pr
 
 `server/auth/rateLimit.ts` exports three pre-configured limiters:
 
-| Limiter                | Key            | Limit              | Window     |
-|------------------------|----------------|--------------------|------------|
-| `loginRateLimit`       | `<email>:login`| 10 attempts        | 15 minutes |
-| `loginPerIpRateLimit`  | `<ip>:login`   | 50 attempts        | 15 minutes |
-| `mfaRateLimit`         | `<userId>:mfa` | 5 attempts         | 15 minutes |
+| Limiter                | Key                      | Limit       | Window     |
+|------------------------|--------------------------|-------------|------------|
+| `loginRateLimit`       | `<ip>\|<email>` tuple    | 5 attempts  | 15 minutes |
+| `loginPerIpRateLimit`  | `<ip>`                   | 30 attempts | 10 minutes |
+| `mfaRateLimit`         | `<ip>`                   | 10 attempts | 10 minutes |
 
 `RateLimiter` is a token bucket. Use `RateLimiter.consume(key)` — returns `{ allowed, retryAfterMs }`.
 
@@ -433,6 +442,8 @@ if (userHasAnyCapability(user, SITE_WRITE_CAPABILITIES)) { /* … */ }
 | Returning `{ error: err.message }` from the login handler        | Return generic message — leaked details help credential stuffing |
 | Skipping `originAllowed(req)` on a state-changing endpoint       | The CMS dispatcher already runs the check; don't bypass it |
 | Bypassing `mfaRateLimit` for MFA verification                    | Always call `mfaRateLimit.consume(key)` first              |
+| Skipping `evaluateLockState` at the MFA step                     | A locked account must be rejected before any code is checked — the per-account lockout covers both the password and MFA steps |
+| Failing MFA without calling `evaluateFailedAttempt`              | Failed codes must feed the lockout counter — same as bad passwords |
 | Hand-rolling a session timeout in a handler                      | The `sessions` row's `expires_at` is the source of truth   |
 | Granting all capabilities to a "superuser" custom role           | Use the Owner role — that's its job. Custom roles should be scoped. |
 
