@@ -164,11 +164,13 @@ export async function handlePagesRoutes(req: Request, db: DbClient): Promise<Res
   }
 
   if (req.method === 'PUT') {
-    const user = await requireAnyCapability(req, db, SITE_WRITE_CAPABILITIES)
+    const user = await requireCapability(req, db, 'site.structure.edit')
     if (user instanceof Response) return user
 
-    const body = await readJsonObject(req)
-    // … validate body, mutate via repository, return jsonResponse(…)
+    const BodySchema = Type.Object({ pages: Type.Array(Type.Unknown()), /* … */ })
+    const body = await readValidatedBody(req, BodySchema)
+    if (!body) return badRequest('Invalid request body')
+    // … mutate via repository, return jsonResponse(…)
   }
 
   return methodNotAllowed()
@@ -192,12 +194,12 @@ Conventions:
 | Helper                           | Purpose                                                              |
 |----------------------------------|----------------------------------------------------------------------|
 | `jsonResponse(body, init?)`      | Returns a `Response` with `content-type: application/json`           |
-| `readJsonObject(req)`            | Reads + validates the body is a JSON **object** (not array / primitive). Returns `{}` on parse failure |
+| `readValidatedBody(req, schema)` | Parses the request body and validates it against a TypeBox schema. Returns the typed value on success, `null` on JSON parse failure or schema mismatch. Callers return `badRequest(msg)` on null. |
 | `methodNotAllowed()`             | `405` with `{ error: 'Method not allowed' }`                         |
 | `badRequest(message)`            | `400` with `{ error: message }`                                      |
 | `setCookieHeader(res, value)`    | Appends a `Set-Cookie` header                                        |
 
-`readJsonObject` is the canonical body parser: it guarantees callers can safely destructure with no runtime crash. Individual handlers narrow further with their own TypeBox schemas.
+`readValidatedBody` is the canonical body parser: it parses JSON and validates the shape against a TypeBox schema in one step, so handlers receive a fully typed value or return `badRequest` immediately.
 
 **Error envelope.** Every CMS handler error returns `{ error: string }` and is validated client-side by `ErrorEnvelopeSchema` in `src/core/http/apiClient.ts` (re-exported from `responseSchemas.ts`). The canonical client `apiRequest` (and `readEnvelope`) extract the message via `responseErrorMessage(res, fallback)` and throw an `ApiError` carrying the HTTP status.
 

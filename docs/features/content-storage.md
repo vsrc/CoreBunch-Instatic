@@ -161,7 +161,7 @@ All repository functions are dialect-naive ANSI SQL. JSON columns end in `_json`
 | File                                          | Owns                                                                    |
 |-----------------------------------------------|-------------------------------------------------------------------------|
 | `server/handlers/cms/data/`                   | Generic `/admin/api/cms/data/tables[/:id]` + `/admin/api/cms/data/rows[/:id]` endpoints |
-| `server/handlers/cms/pages.ts`                | `pages`-specific endpoints (batch upsert of the page roster from the editor) |
+| `server/handlers/cms/pages.ts`                | `pages`-specific endpoints (batch upsert of the page roster from the editor; uses an optimistic-concurrency `baselinePageIds` token so a saving client never deletes a page a sibling session created concurrently) |
 | `server/handlers/cms/components.ts`           | `components`-specific endpoints                                        |
 | `server/handlers/cms/publish.ts`              | Publish a row, write a version, emit `publish.before/.html/.after` hooks |
 

@@ -117,21 +117,16 @@ export type Foo = Static<typeof FooSchema>
 ### Validate a request body (server handler)
 
 ```ts
-import { Type, parseValue } from '@core/utils/typeboxHelpers'
-import { badRequest, jsonResponse, readJsonObject } from '../http'
+import { Type } from '@core/utils/typeboxHelpers'
+import { badRequest, jsonResponse, readValidatedBody } from '../http'
 
 const CreatePostSchema = Type.Object({
   title: Type.String({ minLength: 1, maxLength: 200 }),
   body:  Type.String(),
 })
 
-const raw = await readJsonObject(req)
-let body
-try {
-  body = parseValue(CreatePostSchema, raw)
-} catch (err) {
-  return badRequest(getErrorMessage(err, 'Invalid body'))
-}
+const body = await readValidatedBody(req, CreatePostSchema)
+if (!body) return badRequest('Invalid request body')
 // body is typed; proceed.
 ```
 
@@ -268,7 +263,7 @@ Common boundaries already wrapped — extend the same pattern when you add a new
 | HTTP request (client, canonical)           | `apiRequest(path, { schema, … })`                   | `src/core/http/apiClient.ts`            |
 | HTTP response from a held `Response`        | `readEnvelope(res, Schema, fallback)`               | `src/core/http/apiClient.ts`            |
 | HTTP body-validation primitive (no status semantics; `@core/http` internals, XHR, server-side external APIs) | `parseJsonResponse(res, Schema)` | `src/core/utils/jsonValidate.ts` |
-| Request body (server handler)              | `parseValue(Schema, await readJsonObject(req))`     | `server/http.ts` + per-handler          |
+| Request body (server handler)              | `readValidatedBody(req, Schema)` → typed value or `null` (return `badRequest` on null) | `server/http.ts` + per-handler |
 | `JSON.parse` of localStorage               | `parseJsonWithFallback(raw, Schema, default)`       | `src/core/utils/jsonValidate.ts`        |
 | `JSON.parse` of disk JSON                  | `safeParseJson(raw, Schema)`                        | `src/core/utils/jsonValidate.ts`        |
 | Plugin manifest                            | `parsePluginManifest(raw)`                          | `src/core/plugins/manifest.ts`          |
@@ -310,7 +305,7 @@ Common boundaries already wrapped — extend the same pattern when you add a new
   - `src/core/persistence/responseSchemas.ts` — shared CMS HTTP response schemas
   - `src/core/persistence/validate.ts` — `validateSite`, `validatePages`, `ValidatePagesOptions`, `SiteValidationError`
   - `src/core/plugins/manifest.ts` — `parsePluginManifest`
-  - `server/http.ts` — `readJsonObject`, `jsonResponse`, `badRequest`
+  - `server/http.ts` — `readValidatedBody`, `jsonResponse`, `badRequest`
   - `server/ai/drivers/typeboxToZod.ts`, `server/ai/drivers/anthropic.ts` — the only legitimate `zod` exemption (Anthropic driver translates TypeBox schemas to Zod for the SDK)
 - Gate tests:
   - `src/__tests__/architecture/boundary-validation.test.ts` — enforces the four HTTP / JSON-parse boundary rules (no `res.json() as`, no `JSON.parse as`, no raw `fetch(` in admin, no raw `req.json(` in server handlers)
