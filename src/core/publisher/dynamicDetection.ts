@@ -94,6 +94,7 @@ interface AnalysisNode {
   id: string
   moduleId: string
   props: Record<string, unknown>
+  children: string[]
   dynamicBindings?: Record<string, DynamicPropBinding>
 }
 
@@ -175,6 +176,46 @@ interface WalkResult {
  * VC → VC cycles terminate without infinite recursion. A cycle is treated
  * as dynamic (defensive — terminates cleanly).
  */
+/**
+ * True if the subtree under `loopNode` contains any request-dependent node
+ * (per Rules 1/2/2b/3, descending through nested loops and into referenced VC
+ * trees). Collects every page-tree descendant id into `bodyIds` so the caller
+ * can suppress them — when a static loop body is request-dependent the LOOP is
+ * the single hole, never the repeated children (ISS-021).
+ */
+function loopBodyIsRequestDependent(
+  loopNode: AnalysisNode,
+  nodes: Record<string, AnalysisNode>,
+  site: SiteDocument,
+  registry: IModuleRegistry,
+  activeVcStack: ReadonlySet<string>,
+  bodyIds: Set<string>,
+): boolean {
+  let dynamic = false
+  const visit = (curNodes: Record<string, AnalysisNode>, nodeId: string, seenVcs: ReadonlySet<string>, isPage: boolean): void => {
+    const node = curNodes[nodeId]
+    if (!node) return
+    if (isPage) bodyIds.add(node.id)
+    const def = registry.get(node.moduleId)
+    if (def?.dynamic || checkDynamicBindings(node) || checkInlineTokens(node) || checkLoopSource(node)) {
+      dynamic = true
+    }
+    if (node.moduleId === 'base.visual-component-ref') {
+      const componentId = typeof node.props.componentId === 'string' ? node.props.componentId.trim() : ''
+      if (componentId && !seenVcs.has(componentId)) {
+        const vc = selectVisualComponentById(site, componentId)
+        if (vc) {
+          const next = new Set(seenVcs).add(componentId)
+          visit(vc.tree.nodes as Record<string, AnalysisNode>, vc.tree.rootNodeId, next, /* isPage */ false)
+        }
+      }
+    }
+    for (const childId of node.children) visit(curNodes, childId, seenVcs, isPage)
+  }
+  for (const childId of loopNode.children) visit(nodes, childId, activeVcStack, true)
+  return dynamic
+}
+
 function walk(
   nodes: Record<string, AnalysisNode>,
   site: SiteDocument,
@@ -183,7 +224,32 @@ function walk(
   activeVcStack: Set<string>,
   isPageTree: boolean,
 ): void {
+  // Pre-pass: a static base.loop whose body contains a request-dependent node
+  // is promoted to a single hole (Rule 3.5), and its body descendant ids are
+  // suppressed so the flat iteration below doesn't emit a separate hole per
+  // iteration (ISS-021). Loops with a dynamic source are handled by Rule 3.
+  const suppressed = new Set<string>()
+  const promotedLoops = new Set<string>()
   for (const node of Object.values(nodes)) {
+    if (node.moduleId !== 'base.loop' || checkLoopSource(node)) continue
+    const bodyIds = new Set<string>()
+    if (loopBodyIsRequestDependent(node, nodes, site, registry, activeVcStack, bodyIds)) {
+      promotedLoops.add(node.id)
+      for (const id of bodyIds) suppressed.add(id)
+    }
+  }
+
+  for (const node of Object.values(nodes)) {
+    // Covered by an enclosing promoted loop hole — never a hole on its own.
+    if (suppressed.has(node.id)) continue
+
+    // ── Rule 3.5: static loop with a request-dependent body ─────────────
+    if (promotedLoops.has(node.id)) {
+      if (isPageTree) result.dynamicPageNodeIds.add(node.id)
+      result.reasons.push(`node "${node.id}": static loop body contains a request-dependent node`)
+      continue
+    }
+
     // ── Rule 1: module flagged dynamic ──────────────────────────────────
     const def = registry.get(node.moduleId)
     if (def?.dynamic) {
