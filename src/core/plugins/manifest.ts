@@ -1,8 +1,6 @@
 import { Type, Value, type Static } from '@core/utils/typeboxHelpers'
 import type {
-  InstalledPlugin,
   PluginAdminPage,
-  PluginAdminPageRoute,
   PluginManifest,
   PluginPermission,
   PluginPageContent,
@@ -15,6 +13,11 @@ import {
   PLUGIN_PERMISSION_VALUES,
   permissionLabel as sdkPermissionLabel,
 } from '@core/plugin-sdk'
+import { collectEnabledAdminPages, pluginAdminPageRoute } from './manifestAdminPages'
+
+// Admin-page route helpers live in a sibling module (responsibility split);
+// re-exported here so `@core/plugins/manifest` stays the public surface.
+export { collectEnabledAdminPages, pluginAdminPageRoute }
 
 const PLUGIN_ID_PATTERN = /^[a-z][a-z0-9-]*(?:\.[a-z][a-z0-9-]*)+$/
 /**
@@ -342,10 +345,6 @@ const manifestSchema = Type.Object({
 
 type ManifestRaw = Static<typeof manifestSchema>
 
-export function pluginAdminPageRoute(pluginId: string, pageId: string): string {
-  return `/admin/plugins/${pluginId}/${pageId}`
-}
-
 /**
  * Convert a raw TypeBox pattern-validation error into a human-readable
  * message. TypeBox's default is "Expected string to match '<pattern>'", which
@@ -665,40 +664,3 @@ export function validatePluginRecordData(
   return data
 }
 
-export function collectEnabledAdminPages(
-  plugins: Array<
-    Pick<InstalledPlugin, 'enabled' | 'manifest' | 'grantedPermissions'>
-    & Partial<Pick<InstalledPlugin, 'lifecycleStatus' | 'settings' | 'updatedAt'>>
-  >,
-): PluginAdminPageRoute[] {
-  return plugins
-    .filter((plugin) => plugin.enabled && plugin.lifecycleStatus !== 'error')
-    // `admin.navigation` is the gate for adding pages to the CMS sidebar — a
-    // plugin that didn't request the grant has no business mounting nav
-    // entries even if its manifest declared `adminPages` items.
-    .filter((plugin) => plugin.grantedPermissions?.includes('admin.navigation'))
-    .flatMap((plugin) =>
-      plugin.manifest.adminPages.map((page) => {
-        const content: PluginPageContent = page.content.kind === 'app'
-          ? {
-              ...page.content,
-              assetPath: page.content.assetPath ?? plugin.manifest.assetBasePath,
-            }
-          : page.content
-
-        return {
-          pluginId: plugin.manifest.id,
-          pluginName: plugin.manifest.name,
-          pluginVersion: plugin.manifest.version,
-          pluginUpdatedAt: plugin.updatedAt ?? '',
-          ...page,
-          content,
-          // The host parser always populates `route` via `pluginAdminPageRoute`;
-          // we re-narrow to a guaranteed string here for the runtime route type.
-          route: page.route ?? pluginAdminPageRoute(plugin.manifest.id, page.id),
-          pluginSettings: plugin.settings ?? {},
-          pluginSettingsSchema: plugin.manifest.settings,
-        }
-      }),
-    )
-}
