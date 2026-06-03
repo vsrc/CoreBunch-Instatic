@@ -300,6 +300,32 @@ async function getRowTableRouteInfo(
   }
 }
 
+/**
+ * Remove a data row's baked Layer-A artefact from the active slot. Called when
+ * a row leaves public visibility (unpublish, revert-to-draft, soft-delete) so
+ * the static file stops being served — Layer A reads the disk slot with no
+ * publishVersion awareness, so without this a retracted row stays public
+ * (ISS-039). The route is resolved WITHOUT the `deleted_at is null` filter so
+ * it still works after a soft delete. Best-effort: unresolved route or missing
+ * file is a no-op (removeArtefactInPlace never throws on a missing file).
+ */
+export async function removeDataRowArtefact(
+  db: DbClient,
+  uploadsDir: string,
+  rowId: string,
+  slug: string,
+): Promise<void> {
+  const { rows } = await db<{ route_base: string }>`
+    select data_tables.route_base
+    from data_rows
+    join data_tables on data_tables.id = data_rows.table_id
+    where data_rows.id = ${rowId}
+    limit 1
+  `
+  if (!rows[0]) return
+  await removeArtefactInPlace(uploadsDir, publicDataPath(rows[0].route_base, slug))
+}
+
 async function readPreviousPublishedRoute(
   db: DbClient,
   rowId: string,

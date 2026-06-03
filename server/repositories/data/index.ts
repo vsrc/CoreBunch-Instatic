@@ -48,6 +48,7 @@ export type { ListDataRowsFilterOptions, ListDataRowsWithFilterResult } from './
 
 export {
   publishDataRow,
+  removeDataRowArtefact,
   getPublishedDataRowByRoute,
   getDataRowRedirectByRoute,
 } from './publish'

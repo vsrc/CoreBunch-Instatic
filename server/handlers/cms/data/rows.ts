@@ -27,6 +27,7 @@ import {
   getDataTable,
   listDataAuthorOptions,
   publishDataRow,
+  removeDataRowArtefact,
   saveDataRowDraft,
   scheduleDataRowPublish,
   softDeleteDataRow,
@@ -149,6 +150,7 @@ async function handleRowItem(
   req: Request,
   db: DbClient,
   rowId: string,
+  options: CmsHandlerOptions,
 ): Promise<Response> {
   // GET reads (broader access); PATCH and DELETE mutate (editor-only).
   const user =
@@ -190,6 +192,13 @@ async function handleRowItem(
 
     const row = await softDeleteDataRow(db, rowId, user.id)
     if (!row) return rowNotFound()
+    // Prune the baked public artefact — a deleted row must stop being served
+    // by Layer A, which reads the disk slot with no DB awareness (ISS-039).
+    if (options.uploadsDir) {
+      await removeDataRowArtefact(db, options.uploadsDir, rowId, row.slug).catch((err) => {
+        console.error('[publish:row] failed to remove artefact for deleted row', rowId, err)
+      })
+    }
     await emitContentEntryDeleted(db, rowId, { kind: 'user', userId: user.id })
     await recordRowAuditEvent(db, user, req, 'data.row.delete', row)
     return jsonResponse({ row })
@@ -274,6 +283,7 @@ async function handleRowStatus(
   req: Request,
   db: DbClient,
   rowId: string,
+  options: CmsHandlerOptions,
 ): Promise<Response> {
   const user = await requireDataEditor(req, db)
   if (user instanceof Response) return user
@@ -287,6 +297,13 @@ async function handleRowStatus(
 
   const row = await updateDataRowStatus(db, rowId, body.status, user.id)
   if (!row) return rowNotFound()
+  // draft and unpublished both leave public visibility — prune the baked
+  // artefact so Layer A stops serving the retracted content (ISS-039).
+  if (options.uploadsDir) {
+    await removeDataRowArtefact(db, options.uploadsDir, rowId, row.slug).catch((err) => {
+      console.error('[publish:row] failed to remove artefact for retracted row', rowId, err)
+    })
+  }
   await recordRowAuditEvent(db, user, req, 'data.row.status', row, { status: body.status })
   return jsonResponse({ row })
 }
@@ -405,7 +422,7 @@ export async function handleDataRowRoutes(
 
   const statusMatch = pathname.match(ROW_STATUS_PATTERN)
   if (statusMatch) {
-    return handleRowStatus(req, db, decodeURIComponent(statusMatch[1]))
+    return handleRowStatus(req, db, decodeURIComponent(statusMatch[1]), options)
   }
 
   const authorMatch = pathname.match(ROW_AUTHOR_PATTERN)
@@ -425,7 +442,7 @@ export async function handleDataRowRoutes(
 
   const itemMatch = pathname.match(ROW_ITEM_PATTERN)
   if (itemMatch) {
-    return handleRowItem(req, db, decodeURIComponent(itemMatch[1]))
+    return handleRowItem(req, db, decodeURIComponent(itemMatch[1]), options)
   }
 
   return null
