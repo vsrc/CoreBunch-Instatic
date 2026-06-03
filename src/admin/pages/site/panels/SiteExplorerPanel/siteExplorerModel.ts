@@ -14,11 +14,6 @@ export interface SiteExplorerTreeItem<TTarget> {
   pinned?: boolean
   ariaLabel: string
   target: TTarget
-  canvasDrag?: {
-    id: string
-    componentId: string
-    ariaLabel: string
-  }
 }
 
 export interface SiteExplorerTreeFolder {

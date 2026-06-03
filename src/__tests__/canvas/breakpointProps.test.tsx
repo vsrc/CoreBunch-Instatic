@@ -2,16 +2,14 @@ import { describe, expect, it, beforeEach } from 'bun:test'
 import React from 'react'
 import { act, fireEvent, render, screen, cleanup } from '@testing-library/react'
 import { readFileSync } from 'fs'
-import { DndContext } from '@dnd-kit/core'
 import { useEditorStore } from '@site/store/store'
 import { BreakpointFrame } from '@site/canvas/BreakpointFrame'
 import { CanvasRoot } from '@site/canvas/CanvasRoot'
 import { getCanvasFrameDocument, queryCanvasNodeInFrame } from './iframeCanvasQuery'
 import '@modules/base'
 
-/** CanvasRoot uses useDroppable and must be rendered inside a DndContext. */
 function renderCanvas() {
-  return render(<DndContext><CanvasRoot /></DndContext>)
+  return render(<CanvasRoot />)
 }
 
 const BREAKPOINT_FRAME_CSS = new URL(
@@ -146,7 +144,7 @@ describe('canvas breakpoint rendering', () => {
       propertiesPanelMode: 'docked',
     } as Parameters<typeof useEditorStore.setState>[0])
 
-    const { rerender } = render(<DndContext><CanvasRoot /></DndContext>)
+    const { rerender } = render(<CanvasRoot />)
 
     const tabletFrame = document.querySelector('[data-breakpoint-id="tablet"]')?.parentElement
     const mobileFrame = document.querySelector('[data-breakpoint-id="mobile"]')?.parentElement
@@ -161,7 +159,7 @@ describe('canvas breakpoint rendering', () => {
         propertiesPanel: { collapsed: true, x: 0, y: 0, width: 360 },
       } as Parameters<typeof useEditorStore.setState>[0])
     })
-    rerender(<DndContext><CanvasRoot /></DndContext>)
+    rerender(<CanvasRoot />)
 
     expect(mobileFrame?.getAttribute('data-breakpoint-dimmed')).toBeNull()
     expect(desktopFrame?.getAttribute('data-breakpoint-dimmed')).toBeNull()

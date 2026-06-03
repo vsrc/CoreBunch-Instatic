@@ -1,15 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import React from 'react'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
-import { DndContext } from '@dnd-kit/core'
 import { useEditorStore } from '@site/store/store'
 import { CanvasRoot } from '@site/canvas/CanvasRoot'
 import { makeNode, makePage, makeSite } from '../fixtures'
 import '@modules/base'
 
-/** CanvasRoot uses useDroppable and must be rendered inside a DndContext. */
 function renderCanvas() {
-  return render(<DndContext><CanvasRoot /></DndContext>)
+  return render(<CanvasRoot />)
 }
 
 const originalFetch = globalThis.fetch

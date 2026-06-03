@@ -111,7 +111,7 @@ See [docs/reference/ui-primitives.md](ui-primitives.md).
 | `canvas-aware-selectors.test.ts`              | Canvas-related store selectors are subscribed correctly to canvas-state slices.  |
 | `admin-router-usage.test.ts`                  | Internal admin navigation uses `@admin/lib/routing`; raw `/admin` anchors and `react-router-dom` are banned. |
 | `framework-typography-spacing.test.ts`        | The site framework's typography / spacing tokens compile correctly.              |
-| `component-system-placement.test.ts`          | Every VC insertion flow (toolbar picker, site-explorer drag, context menu) routes through `insertComponentRef`; direct `insertNode`/`addNodeToVc` with `'base.visual-component-ref'` is forbidden in placement files. |
+| `component-system-placement.test.ts`          | Every VC insertion flow (toolbar picker, context menu) routes through `insertComponentRef`; Site Explorer must not expose a component-to-canvas drag source, and direct `insertNode`/`addNodeToVc` with `'base.visual-component-ref'` is forbidden in placement files. |
 | `task414-wrap-to-container.test.ts`           | Wrap-to-container action creates defaulted wrappers and preserves tree structure. |
 | `task427-preview-class-css.test.ts`           | Preview-class CSS injection matches publisher output.                            |
 | `error-boundary-coverage.test.ts`             | Every workspace page / major surface is wrapped in an `ErrorBoundary` with a unique `location` tag. |

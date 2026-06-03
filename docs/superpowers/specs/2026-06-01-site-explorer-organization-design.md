@@ -229,7 +229,7 @@ Reuse the same section renderer for Components, Styles, and Scripts.
 Acceptance:
 
 - Every Site Explorer category supports folders and ordering.
-- Component rows remain draggable onto the canvas with the existing `visualComponentRef` payload.
+- Component rows open and organize Visual Components in Site Explorer, without exposing a drag-to-canvas handle.
 - Style/script file opening and renaming behavior is unchanged.
 
 ### Phase 3: Polish and Live Verification

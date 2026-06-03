@@ -294,7 +294,7 @@ Organization is persisted in `site.explorer` on the site shell. Folders are deco
 | `moveExplorerItem(sectionId, itemId, parentFolderId, nextIndex)` | Moves an item to a folder or the root; the homepage cannot be moved |
 | `setPageAsHomepage(pageId)` | Promotes a page to `slug='index'`, demotes the previous homepage to a generated slug, pins the new homepage at the section root |
 
-**DnD architecture:** Organization drag-and-drop (`useSiteExplorerDnd`) uses `useDndMonitor` to hook into the outer `DndContext` that lives in `AdminCanvasLayout`. Component rows carry a separate `visualComponentRef` draggable payload for canvas drops; the explorer DnD hook ignores these payloads and only reacts to `siteExplorerItem` / `siteExplorerFolder` drags.
+**DnD architecture:** Organization drag-and-drop (`useSiteExplorerDnd`) uses `useDndMonitor` to hook into the outer `DndContext` that lives in `AdminCanvasLayout`. The explorer DnD hook only reacts to `siteExplorerItem` / `siteExplorerFolder` drags, which keeps Site Explorer focused on opening and organizing site artifacts rather than inserting components onto the canvas.
 
 **Section model:** `buildSiteExplorerTreeSection` in `siteExplorerModel.ts` converts the flat placement arrays from `site.explorer` into a typed tree model (`SiteExplorerTreeSectionModel`) that `SiteExplorerTreeSection` renders — pinned items come first, then root entries (folders and items) sorted by `order`, with each folder's items sorted within it.
 

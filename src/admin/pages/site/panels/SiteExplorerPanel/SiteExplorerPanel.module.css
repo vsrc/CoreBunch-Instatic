@@ -76,11 +76,6 @@
     color: inherit;
 }
 
-.componentDragHandle {
-    flex: 0 0 auto;
-    color: var(--editor-text-subtle);
-}
-
 .inlineRenameInput {
     flex: 1;
     min-width: 0;
@@ -275,10 +270,6 @@
     font-size: 10px;
     font-weight: 500;
     line-height: 1.2;
-}
-
-.draggingComponent {
-    opacity: 0.5;
 }
 
 /* Layout escape hatch — lets the section's "None yet" EmptyState span the full

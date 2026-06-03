@@ -430,11 +430,6 @@ export function SiteExplorerPanel({
         active: activeDocument?.kind === 'visualComponent' && activeDocument.vcId === component.id,
         ariaLabel: `Open component ${component.name}`,
         target: { kind: 'component', id: component.id, name: component.name },
-        canvasDrag: {
-          id: `site-explorer-vc-${component.id}`,
-          componentId: component.id,
-          ariaLabel: `Drag component ${component.name} to canvas`,
-        },
       })),
     )
     : null

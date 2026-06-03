@@ -1,7 +1,6 @@
 import { Fragment, useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import { useDraggable, useDroppable } from '@dnd-kit/core'
 import type { IconComponent } from 'pixel-art-icons/types'
-import { DragAndDropSolidIcon } from 'pixel-art-icons/icons/drag-and-drop-solid'
 import { FolderGlyphIcon } from 'pixel-art-icons/icons/folder-glyph'
 import { Button } from '@ui/components/Button'
 import { EmptyState } from '@ui/components/EmptyState'
@@ -524,7 +523,6 @@ function ExplorerItemRow<TTarget>({
           </TreeLabelGroup>
         </Button>
       )}
-      {item.canvasDrag && <ComponentCanvasDragHandle drag={item.canvasDrag} />}
     </TreeRow>
   )
 }
@@ -620,37 +618,4 @@ function isRootDropActive(
 ): boolean {
   if (dropTarget?.drop.kind !== 'siteExplorerRoot') return false
   return dropTarget.drop.sectionId === sectionId && dropTarget.drop.index === index
-}
-
-interface ComponentCanvasDragHandleProps {
-  drag: NonNullable<SiteExplorerTreeItem<unknown>['canvasDrag']>
-}
-
-function ComponentCanvasDragHandle({ drag }: ComponentCanvasDragHandleProps) {
-  const {
-    listeners,
-    setNodeRef,
-    isDragging,
-  } = useDraggable({
-    id: drag.id,
-    data: { kind: 'visualComponentRef', componentId: drag.componentId },
-  })
-
-  return (
-    <Button
-      ref={setNodeRef}
-      variant="ghost"
-      size="xs"
-      iconOnly
-      aria-label={drag.ariaLabel}
-      tooltip={drag.ariaLabel}
-      data-testid="site-explorer-component-drag-handle"
-      className={cn(styles.componentDragHandle, isDragging && styles.draggingComponent)}
-      onClick={(event) => event.stopPropagation()}
-      onPointerDownCapture={(event) => event.stopPropagation()}
-      {...listeners}
-    >
-      <DragAndDropSolidIcon size={12} />
-    </Button>
-  )
 }

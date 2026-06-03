@@ -23,7 +23,6 @@
  */
 
 import { lazy, Suspense, useRef } from 'react'
-import { useDroppable } from '@dnd-kit/core'
 import { useEditorStore, selectActiveCanvasPage, selectRightSidebarExpanded } from '@site/store/store'
 import type { Breakpoint } from '@core/page-tree'
 import { registry } from '@core/module-engine'
@@ -68,13 +67,6 @@ const VisualComponentModeControl = lazy(() =>
  */
 const EMPTY_BREAKPOINTS: Breakpoint[] = []
 
-/**
- * B2 — dnd-kit droppable ID for the canvas root.
- * The AdminCanvasLayout's canvas-level DndContext uses this to detect when a
- * visualComponentRef drag is released over the canvas.
- */
-export const CANVAS_ROOT_DROPPABLE_ID = 'canvas-root'
-
 interface CanvasRootProps {
   editable?: boolean
 }
@@ -82,19 +74,6 @@ interface CanvasRootProps {
 export function CanvasRoot({ editable = true }: CanvasRootProps) {
   const transformLayerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLDivElement>(null)
-
-  // B2 — Register canvas root as a drop target for visualComponentRef drags.
-  // The AdminCanvasLayout DndContext's onDragEnd checks event.over.id against CANVAS_ROOT_DROPPABLE_ID.
-  const { setNodeRef: setCanvasDropRef } = useDroppable({
-    id: CANVAS_ROOT_DROPPABLE_ID,
-    disabled: !editable,
-  })
-
-  // Merged callback ref: satisfies both useCanvas (canvasRef) and useDroppable (setCanvasDropRef).
-  const mergedCanvasRef = (el: HTMLDivElement | null) => {
-    canvasRef.current = el
-    setCanvasDropRef(el)
-  }
 
   // Store subscriptions
   const canvasPage = useEditorStore(selectActiveCanvasPage)
@@ -329,7 +308,7 @@ export function CanvasRoot({ editable = true }: CanvasRootProps) {
     <CanvasViewportActionsContext.Provider value={viewportActionsContextValue}>
       <CanvasSelectionContext.Provider value={selectionContextValue}>
         <div
-          ref={mergedCanvasRef}
+          ref={canvasRef}
           role="region"
           aria-label="Canvas — infinite editing surface"
           tabIndex={0}

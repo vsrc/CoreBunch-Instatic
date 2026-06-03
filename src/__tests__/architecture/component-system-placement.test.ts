@@ -11,20 +11,16 @@
  *
  * PLACEMENT FLOWS (Phase 4):
  * 1. ModulePickerDropdown.tsx — Components category click in the toolbar picker.
- * 2. SiteExplorerPanel.tsx + AdminCanvasLayout.tsx — drag from site-explorer onto the
- *    canvas; the explorer registers the drag source with the `visualComponentRef`
- *    payload kind, and AdminCanvasLayout's `onDragEnd` calls `insertComponentRef`.
- * 3. LayerNodeContextMenu.tsx — 'Insert module here' submenu click (which
+ * 2. LayerNodeContextMenu.tsx — 'Insert module here' submenu click (which
  *    embeds the compact ModulePicker; picking a Visual Component flows
  *    through this file via the onSelectVC callback).
  *
  * ENFORCED CONSTRAINTS:
  * G1 — ModulePickerDropdown must call insertComponentRef for VC insertion.
- * G2 — SiteExplorerPanel must register the drag payload with kind 'visualComponentRef'.
- * G3 — AdminCanvasLayout must call insertComponentRef inside the visualComponentRef drag handler.
- * G4 — LayerNodeContextMenu must call insertComponentRef for VC insertion.
- * G5 — No placement file may call insertNode with 'base.visual-component-ref' directly.
- * G6 — No placement file may call addNodeToVc with 'base.visual-component-ref' directly.
+ * G2 — SiteExplorerPanel must not expose a visualComponentRef drag source.
+ * G3 — LayerNodeContextMenu must call insertComponentRef for VC insertion.
+ * G4 — No placement file may call insertNode with 'base.visual-component-ref' directly.
+ * G5 — No placement file may call addNodeToVc with 'base.visual-component-ref' directly.
  */
 
 import { describe, test, expect } from 'bun:test'
@@ -53,11 +49,6 @@ const CONTEXT_MENU_PATH = resolve(
   PROJECT_ROOT,
   'src/admin/pages/site/panels/DomPanel/LayerNodeContextMenu.tsx',
 )
-const ADMIN_LAYOUT_PATH = resolve(
-  PROJECT_ROOT,
-  'src/admin/layouts/AdminCanvasLayout/AdminCanvasLayout.tsx',
-)
-
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -115,58 +106,34 @@ describe('G1 — ModulePickerDropdown calls insertComponentRef for VC insertion 
 })
 
 // ---------------------------------------------------------------------------
-// Gate 2 — SiteExplorerPanel must register the correct drag payload kind
+// Gate 2 — SiteExplorerPanel must not be a canvas insertion drag source.
 //
-// The explorer is the drag *source*. It does not call insertComponentRef
-// directly — that happens in AdminCanvasLayout's onDragEnd (Gate 3). However,
-// the drag payload MUST use kind 'visualComponentRef' so the handler can
-// identify and dispatch the insert correctly.
+// Visual Components are still insertable through explicit module-picking flows.
+// The Site Explorer is for opening and organizing site artifacts, so it must
+// not register a visualComponentRef drag payload or a component drag handle.
 // ---------------------------------------------------------------------------
 
-describe("G2 — SiteExplorerPanel drag source uses 'visualComponentRef' payload kind (Phase 4)", () => {
-  test("SiteExplorer tree drag payload kind must be 'visualComponentRef'", () => {
+describe('G2 — SiteExplorerPanel does not expose a visualComponentRef drag source', () => {
+  test('SiteExplorer tree must not register component-to-canvas drag payloads', () => {
     const src = readSource(EXPLORER_TREE_SECTION_PATH)
-    if (!src.includes("'visualComponentRef'")) {
+    if (src.includes("'visualComponentRef'") || src.includes('site-explorer-component-drag-handle')) {
       throw new Error(
-        "[Phase 4 / G2] Site Explorer drag payload does not use kind: 'visualComponentRef'.\n" +
-        "The DraggableComponentRow must register the dnd-kit draggable with:\n" +
-        "  data: { kind: 'visualComponentRef', componentId: component.id }\n" +
-        "Without this, AdminCanvasLayout's onDragEnd cannot identify the drag as a VC insertion.\n" +
+        '[Phase 4 / G2] Site Explorer exposes component-to-canvas dragging.\n' +
+        'Component rows may open and organize Visual Components, but they must not register\n' +
+        "a drag payload with kind: 'visualComponentRef' or render the canvas drag handle.\n" +
         'File: src/admin/pages/site/panels/SiteExplorerPanel/SiteExplorerTreeSection.tsx',
       )
     }
-    expect(src).toContain("'visualComponentRef'")
+    expect(src).not.toContain("'visualComponentRef'")
+    expect(src).not.toContain('site-explorer-component-drag-handle')
   })
 })
 
 // ---------------------------------------------------------------------------
-// Gate 3 — AdminCanvasLayout onDragEnd must call insertComponentRef
-//
-// AdminCanvasLayout is the DndContext host for canvas-level VC drops. Its
-// handleCanvasDragEnd handler is the single insertion point for the
-// SiteExplorerPanel drag flow. It must delegate to insertComponentRef.
+// Gate 3 — LayerNodeContextMenu must use insertComponentRef
 // ---------------------------------------------------------------------------
 
-describe('G3 — AdminCanvasLayout onDragEnd calls insertComponentRef for visualComponentRef drops (Phase 4)', () => {
-  test('AdminCanvasLayout.tsx must reference insertComponentRef inside the drag handler', () => {
-    const src = readSource(ADMIN_LAYOUT_PATH)
-    if (!src.includes('insertComponentRef')) {
-      throw new Error(
-        '[Phase 4 / G3] AdminCanvasLayout.tsx does not reference insertComponentRef.\n' +
-        "The handleCanvasDragEnd function must call state.insertComponentRef(parentId, componentId)\n" +
-        "after resolving the drop target from the 'visualComponentRef' drag payload.\n" +
-        'File: src/admin/layouts/AdminCanvasLayout/AdminCanvasLayout.tsx',
-      )
-    }
-    expect(src).toContain('insertComponentRef')
-  })
-})
-
-// ---------------------------------------------------------------------------
-// Gate 4 — LayerNodeContextMenu must use insertComponentRef
-// ---------------------------------------------------------------------------
-
-describe("G4 — LayerNodeContextMenu calls insertComponentRef for 'Insert module here' (Phase 4)", () => {
+describe("G3 — LayerNodeContextMenu calls insertComponentRef for 'Insert module here' (Phase 4)", () => {
   test('LayerNodeContextMenu.tsx must reference insertComponentRef', () => {
     const src = readSource(CONTEXT_MENU_PATH)
     if (!src.includes('insertComponentRef')) {
@@ -183,19 +150,18 @@ describe("G4 — LayerNodeContextMenu calls insertComponentRef for 'Insert modul
 })
 
 // ---------------------------------------------------------------------------
-// Gate 5 — No placement file may bypass insertComponentRef via insertNode
+// Gate 4 — No placement file may bypass insertComponentRef via insertNode
 //
 // insertNode(moduleId, defaults, parentId) can create any node type directly,
 // including 'base.visual-component-ref'. Calling it with that moduleId in a
 // placement-flow file skips cycle detection and the VC-mode path entirely.
 // ---------------------------------------------------------------------------
 
-describe("G5 — No placement file calls insertNode with 'base.visual-component-ref' directly (Phase 4)", () => {
+describe("G4 — No placement file calls insertNode with 'base.visual-component-ref' directly (Phase 4)", () => {
   const FILES: [string, string][] = [
     ['ModulePickerDropdown.tsx', PICKER_PATH],
     ['SiteExplorerPanel.tsx', EXPLORER_PATH],
     ['LayerNodeContextMenu.tsx', CONTEXT_MENU_PATH],
-    ['AdminCanvasLayout.tsx', ADMIN_LAYOUT_PATH],
   ]
 
   for (const [label, filePath] of FILES) {
@@ -204,7 +170,7 @@ describe("G5 — No placement file calls insertNode with 'base.visual-component-
       const hasBypass = containsBypassCall(src, 'insertNode')
       if (hasBypass) {
         throw new Error(
-          `[Phase 4 / G5] ${label} calls insertNode with 'base.visual-component-ref'.\n` +
+          `[Phase 4 / G4] ${label} calls insertNode with 'base.visual-component-ref'.\n` +
           "Use insertComponentRef(parentId, componentId) instead — it handles both VC and page\n" +
           "mode, prevents cycles, and is the single authorised entry point for VC ref insertion.\n" +
           `File: ${filePath}`,
@@ -216,7 +182,7 @@ describe("G5 — No placement file calls insertNode with 'base.visual-component-
 })
 
 // ---------------------------------------------------------------------------
-// Gate 6 — No placement file may bypass insertComponentRef via addNodeToVc
+// Gate 5 — No placement file may bypass insertComponentRef via addNodeToVc
 //
 // addNodeToVc(vcId, parentNodeId, newNode) adds a pre-constructed VCNode to a
 // Visual Component tree. Calling it with a node whose moduleId is
@@ -224,12 +190,11 @@ describe("G5 — No placement file calls insertNode with 'base.visual-component-
 // insertComponentRef's cycle check and page-mode dispatch.
 // ---------------------------------------------------------------------------
 
-describe("G6 — No placement file calls addNodeToVc with 'base.visual-component-ref' directly (Phase 4)", () => {
+describe("G5 — No placement file calls addNodeToVc with 'base.visual-component-ref' directly (Phase 4)", () => {
   const FILES: [string, string][] = [
     ['ModulePickerDropdown.tsx', PICKER_PATH],
     ['SiteExplorerPanel.tsx', EXPLORER_PATH],
     ['LayerNodeContextMenu.tsx', CONTEXT_MENU_PATH],
-    ['AdminCanvasLayout.tsx', ADMIN_LAYOUT_PATH],
   ]
 
   for (const [label, filePath] of FILES) {
@@ -238,7 +203,7 @@ describe("G6 — No placement file calls addNodeToVc with 'base.visual-component
       const hasBypass = containsBypassCall(src, 'addNodeToVc')
       if (hasBypass) {
         throw new Error(
-          `[Phase 4 / G6] ${label} calls addNodeToVc with 'base.visual-component-ref'.\n` +
+          `[Phase 4 / G5] ${label} calls addNodeToVc with 'base.visual-component-ref'.\n` +
           "Use insertComponentRef(parentId, componentId) instead — it wraps addNodeToVc\n" +
           "with cycle detection and is the single authorised entry point for VC ref insertion.\n" +
           `File: ${filePath}`,

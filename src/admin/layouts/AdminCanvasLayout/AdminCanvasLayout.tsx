@@ -3,8 +3,8 @@
  *
  * One of the admin layout families in `src/admin/layouts/`:
  *   - AdminCanvasLayout (this file) — used by the Site editor. Carries the
- *     floating editor panels, the page canvas, and the DnD context that wires
- *     the SiteExplorer drag-to-canvas flow.
+ *     floating editor panels, the page canvas, and the DnD context shared by
+ *     site-editor drag surfaces such as Site Explorer organization.
  *   - AdminPageLayout — used by Plugins, Users, Account, and plugin admin
  *     pages. Strips the canvas / sidebar / DnD chrome and renders a
  *     simple centered page body with a unified header.
@@ -43,9 +43,8 @@ import {
   pointerWithin,
   useSensor,
   useSensors,
-  type DragEndEvent,
 } from '@dnd-kit/core'
-import { CanvasRoot, CANVAS_ROOT_DROPPABLE_ID } from '@admin/pages/site/canvas'
+import { CanvasRoot } from '@admin/pages/site/canvas'
 import { PropertiesPanel } from '@admin/pages/site/panels/PropertiesPanel'
 import { CodeEditorPanel } from '@admin/pages/site/code-editor'
 import { Toolbar } from '@admin/pages/site/toolbar/Toolbar'
@@ -59,8 +58,7 @@ import { useEditorSelectPreference } from '@admin/pages/site/preferences/editorP
 import { usePersistence } from '@admin/pages/site/hooks/usePersistence'
 import { useSiteEditorUrlSync } from '@admin/pages/site/hooks/useSiteEditorUrlSync'
 import { useEditorLayoutPersistence } from '@admin/pages/site/hooks/useEditorLayoutPersistence'
-import { selectActiveCanvasPage, selectActivePage, selectRightSidebarExpanded, useEditorStore } from '@admin/pages/site/store/store'
-import { resolveInsertLocation } from '@admin/pages/site/store/insertLocation'
+import { selectActivePage, selectRightSidebarExpanded, useEditorStore } from '@admin/pages/site/store/store'
 import { cmsAdapter } from '@core/persistence/cms'
 import { useAdminUi } from '@admin/state/adminUi'
 import { pagePublicPath } from '@core/page-tree'
@@ -196,51 +194,14 @@ export function AdminCanvasLayout() {
   // and keeps the open Plugins page list refreshed.
   usePluginEventBridge()
 
-  // ── Canvas-level DnD (B2 — visualComponentRef drop from SiteExplorer) ──────
-  // Handles drops of { kind: 'visualComponentRef', componentId: string } payloads
-  // dragged from the SiteExplorerPanel onto the canvas.
-  // NOTE: DomPanel has its own nested DndContext for DOM tree reordering — that
-  // context is isolated and unaffected by this outer one (dnd-kit nesting).
+  // ── Site-editor DnD shell ─────────────────────────────────────────────────
+  // Site Explorer organization hooks into this outer DndContext. DomPanel has
+  // its own nested DndContext for DOM tree reordering, isolated by dnd-kit.
   const canvasDndSensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 5 },
     }),
   )
-
-  const handleCanvasDragEnd = (event: DragEndEvent) => {
-    if (!canEditDraftSite) return
-
-    const payload = event.active.data.current
-    // Only handle visualComponentRef drags — ignore all other drag payloads
-    // (e.g. DOM-panel tree node drags which live in their own nested context).
-    if (!payload || payload['kind'] !== 'visualComponentRef') return
-    if (!event.over) return
-
-    const componentId = payload['componentId']
-    if (typeof componentId !== 'string' || !componentId) return
-
-    const state = useEditorStore.getState()
-    const page = selectActiveCanvasPage(state)
-    if (!page) return
-
-    // Determine the drop target: canvas root drop → page root; node drop →
-    // that node. resolveInsertLocation then maps the target onto an actual
-    // (parent, index) pair, so drops onto leaf nodes (Text, Button, Image)
-    // land as a sibling-after instead of silently failing inside a node that
-    // doesn't accept children.
-    const targetId =
-      String(event.over.id) === CANVAS_ROOT_DROPPABLE_ID
-        ? page.rootNodeId
-        : String(event.over.id)
-
-    const location = resolveInsertLocation(page, targetId)
-    if (!location) return
-
-    const result = state.insertComponentRef(location.parentId, componentId, location.index)
-    if (result === null) {
-      console.warn('[component-system] insertComponentRef returned null — cycle prevented or empty componentId')
-    }
-  }
 
   // UI density preference — `data-editor-density` on the editor root drives
   // CSS variables consumed by tree rows, toolbar buttons, and other density-
@@ -307,12 +268,12 @@ export function AdminCanvasLayout() {
         position: relative makes this the containing block for absolutely
         positioned panels (Guideline #356 / Task #358 / Architect #504).
         flex is kept so CanvasRoot's flex:1 fills the full width.
-        DndContext wraps the full editor body so SiteExplorerPanel draggables
-        (visualComponentRef) can be dropped onto the CanvasRoot drop target.
+        DndContext wraps the full editor body so SiteExplorerPanel rows can be
+        reordered across sections and folders.
         DomPanel has its own nested DndContext for tree-node reordering — that
         context is isolated; nested DndContexts are fully supported by dnd-kit.
       */}
-      <DndContext sensors={canvasDndSensors} collisionDetection={pointerWithin} onDragEnd={handleCanvasDragEnd}>
+      <DndContext sensors={canvasDndSensors} collisionDetection={pointerWithin}>
       {/* `ConfirmDeleteProvider` wraps the editor body so the canvas
           Delete-key handler, Layers panel context menu, and other
           descendant destructive actions can call `useConfirmDelete()`

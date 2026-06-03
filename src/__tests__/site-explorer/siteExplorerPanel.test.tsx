@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import React from 'react'
-import { DndContext } from '@dnd-kit/core'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { readFileSync } from 'fs'
 import { SiteExplorerPanel } from '@site/panels/SiteExplorerPanel'
@@ -778,27 +777,17 @@ describe('SiteExplorerPanel', () => {
     expect(scriptFile).toBeUndefined()
   })
 
-  it('renders a drag handle on each Component row', () => {
+  it('does not expose a drag-to-canvas handle on Component rows', () => {
     loadSite()
-    render(
-      <DndContext>
-        <SiteExplorerPanel variant="docked" />
-      </DndContext>,
-    )
+    render(<SiteExplorerPanel variant="docked" />)
 
     const panel = screen.getByTestId('site-explorer-panel')
-    const handles = within(panel).getAllByTestId('site-explorer-component-drag-handle')
-    // One component in the fixture (HeroCard)
-    expect(handles).toHaveLength(1)
+    expect(within(panel).queryByTestId('site-explorer-component-drag-handle')).toBeNull()
   })
 
   it('clicking a Component row still navigates to VC edit', () => {
     loadSite()
-    render(
-      <DndContext>
-        <SiteExplorerPanel variant="docked" />
-      </DndContext>,
-    )
+    render(<SiteExplorerPanel variant="docked" />)
 
     fireEvent.click(screen.getByRole('button', { name: /open component herocard/i }))
     expect(useEditorStore.getState().activeDocument).toEqual({
