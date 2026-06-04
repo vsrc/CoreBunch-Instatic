@@ -3,6 +3,8 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { handleServerRequest } from '../../../server/router'
+import { SESSION_COOKIE_NAME } from '../../../server/auth/tokens'
+import { serveAdminApp } from '../../../server/static'
 import { createFakeDb } from './dbTestFake'
 
 // Static file serving tests never touch the database.
@@ -15,6 +17,36 @@ function createStaticDir(): string {
   mkdirSync(join(dir, 'assets'))
   writeFileSync(join(dir, 'index.html'), '<div id="root">admin app</div>')
   writeFileSync(join(dir, 'assets', 'app.js'), 'console.log("admin")')
+  return dir
+}
+
+function createAdminShellFixture(): string {
+  const dir = mkdtempSync(join(tmpdir(), 'instatic-static-'))
+  mkdirSync(join(dir, 'assets'))
+  writeFileSync(
+    join(dir, 'index.html'),
+    `<!doctype html>
+<html>
+  <head>
+    <style data-initial-loader></style>
+  </head>
+  <body>
+    <div id="root">
+      <div class="loading" data-initial-loader-spinner="true"><div></div></div>
+    </div>
+  </body>
+</html>`,
+  )
+  for (const name of [
+    'AuthenticatedAdmin-test.js',
+    'SitePage-test.js',
+    'ContentPage-test.js',
+    'DataPage-test.js',
+    'CodeMirrorEditor-test.js',
+    'dnd-vendor-test.js',
+  ]) {
+    writeFileSync(join(dir, 'assets', name), 'export {}')
+  }
   return dir
 }
 
@@ -46,6 +78,45 @@ describe('self-hosted admin static serving', () => {
       expect(res.status).toBe(200)
       expect(res.headers.get('content-type')).toContain('javascript')
       expect(await res.text()).toContain('console.log')
+    } finally {
+      rmSync(staticDir, { recursive: true, force: true })
+    }
+  })
+
+  it('preloads only the authenticated shell chunk in authenticated admin HTML', async () => {
+    const staticDir = createAdminShellFixture()
+    try {
+      const req = new Request('http://localhost/admin/site')
+      req.headers.set('cookie', `${SESSION_COOKIE_NAME}=test-session`)
+      const res = await serveAdminApp(staticDir, req)
+
+      expect(res?.status).toBe(200)
+      const html = (await res?.text()) ?? ''
+      expect(html).toContain('window.__instaticAuthed = 1')
+      expect(html).toContain('rel="modulepreload" href="/assets/AuthenticatedAdmin-test.js"')
+      expect(html).not.toContain('SitePage-test.js')
+      expect(html).not.toContain('ContentPage-test.js')
+      expect(html).not.toContain('DataPage-test.js')
+      expect(html).not.toContain('CodeMirrorEditor-test.js')
+      expect(html).not.toContain('dnd-vendor-test.js')
+      expect(html).not.toContain('rel="prefetch"')
+    } finally {
+      rmSync(staticDir, { recursive: true, force: true })
+    }
+  })
+
+  it('does not preload authenticated workspace chunks on the login shell', async () => {
+    const staticDir = createAdminShellFixture()
+    try {
+      const res = await serveAdminApp(staticDir, new Request('http://localhost/admin'))
+
+      expect(res?.status).toBe(200)
+      const html = (await res?.text()) ?? ''
+      expect(html).toContain('data-initial-login-skeleton="true"')
+      expect(html).not.toContain('AuthenticatedAdmin-test.js')
+      expect(html).not.toContain('SitePage-test.js')
+      expect(html).not.toContain('CodeMirrorEditor-test.js')
+      expect(html).not.toContain('rel="prefetch"')
     } finally {
       rmSync(staticDir, { recursive: true, force: true })
     }

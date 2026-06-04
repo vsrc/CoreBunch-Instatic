@@ -1,8 +1,43 @@
+import type { CSSProperties } from 'react'
+import type { Breakpoint } from '@core/page-tree'
 import { Skeleton, SkeletonCircle } from '@ui/components/Skeleton'
+import { cn } from '@ui/cn'
 import styles from './CanvasFrameSkeleton.module.css'
+
+type FrameStyle = CSSProperties & { '--bp-width': string }
 
 interface CanvasFrameSkeletonProps {
   breakpointId: string
+}
+
+interface CanvasFrameSkeletonFrameProps {
+  breakpoint: Pick<Breakpoint, 'id' | 'width'>
+  dimmed?: boolean
+}
+
+export function CanvasFrameSkeletonFrame({
+  breakpoint,
+  dimmed = false,
+}: CanvasFrameSkeletonFrameProps) {
+  const frameStyle = { '--bp-width': `${breakpoint.width}px` } as FrameStyle
+
+  return (
+    <div
+      className={cn(styles.frameWrapper, dimmed && styles.frameWrapperDimmed)}
+      data-testid={`canvas-loading-frame-${breakpoint.id}`}
+      style={frameStyle}
+    >
+      <div className={styles.labelRow} aria-hidden="true">
+        <Skeleton width="100%" height={28} radius="var(--editor-radius)" />
+      </div>
+      <div
+        data-breakpoint-id={breakpoint.id}
+        className={styles.viewport}
+      >
+        <CanvasFrameSkeleton breakpointId={breakpoint.id} />
+      </div>
+    </div>
+  )
 }
 
 export function CanvasFrameSkeleton({ breakpointId }: CanvasFrameSkeletonProps) {

@@ -57,8 +57,134 @@
   line-height: 1.5;
 }
 
+.canvasBootstrapStatus {
+  position: relative;
+  display: block;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-top-left-radius: 16px;
+  background: var(--editor-surface-2);
+}
+
+.canvasBootstrapLayer {
+  position: absolute;
+  top: 80px;
+  left: 80px;
+  display: flex;
+  align-items: flex-start;
+  gap: 40px;
+}
+
 .canvasStageRightSidebarOpen {
   border-top-right-radius: 12px;
+}
+
+.importHtmlLoadingDialog.importHtmlLoadingDialog {
+  width: min(1040px, calc(100vw - 48px));
+  max-height: min(760px, calc(100vh - 48px));
+}
+
+.importHtmlLoadingBody.importHtmlLoadingBody {
+  padding: 0;
+  overflow: hidden;
+}
+
+.importHtmlLoadingColumns {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.9fr) minmax(360px, 1.1fr);
+  height: min(68vh, 640px);
+  min-height: 480px;
+  background: var(--editor-surface);
+}
+
+.importHtmlLoadingPreviewColumn,
+.importHtmlLoadingEditorColumn {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--editor-surface);
+}
+
+.importHtmlLoadingPreviewColumn {
+  border-right: 1px solid var(--editor-border);
+}
+
+.importHtmlLoadingColumnHeader {
+  height: 40px;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--editor-border);
+  background: var(--editor-surface-2);
+}
+
+.importHtmlLoadingColumnTitle {
+  margin: 0;
+  color: var(--editor-text-subtle);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.importHtmlPreviewSkeleton {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+}
+
+.importHtmlPreviewSkeletonSummary,
+.importHtmlPreviewSkeletonRow,
+.importHtmlPreviewSkeletonRowIndented {
+  height: 10px;
+  border-radius: var(--editor-radius-sm);
+  background: var(--editor-surface-2);
+}
+
+.importHtmlPreviewSkeletonSummary {
+  width: 86px;
+  margin-bottom: 2px;
+}
+
+.importHtmlPreviewSkeletonRow {
+  width: 58%;
+}
+
+.importHtmlPreviewSkeletonRowIndented {
+  width: 44%;
+  margin-left: 22px;
+}
+
+.importHtmlEditorSkeleton {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+@media (max-width: 760px) {
+  .importHtmlLoadingDialog.importHtmlLoadingDialog {
+    width: min(100%, calc(100vw - 24px));
+  }
+
+  .importHtmlLoadingColumns {
+    grid-template-columns: 1fr;
+    height: min(74vh, 680px);
+  }
+
+  .importHtmlLoadingPreviewColumn {
+    min-height: 190px;
+    border-right: 0;
+    border-bottom: 1px solid var(--editor-border);
+  }
 }
 
 /* Root cross-fade between admin pages — sidebars and toolbar share this single

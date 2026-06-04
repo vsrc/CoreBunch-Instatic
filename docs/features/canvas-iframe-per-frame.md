@@ -66,7 +66,7 @@ Source: `src/admin/pages/site/canvas/CanvasTransformLayer.tsx`, `BreakpointFrame
 
 Viewport contexts flagged `previewFrame: false` are frameless — they're still selectable editing contexts in the context selector (overrides route to them) but don't render a canvas iframe.
 
-Large pages are staged by `useProgressiveCanvasFrameLoading`. `BreakpointFrame` mounts the iframe and a parent-document `CanvasFrameSkeleton` immediately, but `NodeRenderer` is gated by `renderTree`. The active breakpoint is revealed after the shell has painted; inactive breakpoints are revealed one at a time through idle scheduling. This keeps `/admin/site` responsive when a page has many nodes and multiple preview frames would otherwise duplicate the full render work in one commit.
+Large pages are staged by `useProgressiveCanvasFrameLoading`. `BreakpointFrame` mounts the iframe and a parent-document `CanvasFrameSkeleton` immediately, but `NodeRenderer` is gated by `renderTree`. The same shared skeleton frame is used by the editor-body lazy fallback and by the no-site canvas state, so startup does not step through separate text-only loading screens. The active breakpoint is revealed after the shell has painted; inactive breakpoints are revealed one at a time through idle scheduling. This keeps `/admin/site` responsive when a page has many nodes and multiple preview frames would otherwise duplicate the full render work in one commit.
 
 The active viewport context (highlighted, drives style override routing) is tracked by `activeBreakpointId` in `canvasSlice`.
 

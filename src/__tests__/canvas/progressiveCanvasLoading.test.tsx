@@ -8,7 +8,7 @@ import {
 } from '@core/persistence/userPreferences'
 import { __resetModuleInserterPreferenceForTests } from '@site/module-picker/useModuleInserterPreference'
 import { makeNode, makePage, makeSite } from '../fixtures'
-import { queryCanvasNodeInFrame } from './iframeCanvasQuery'
+import { getCanvasFrameDocument, queryCanvasNodeInFrame } from './iframeCanvasQuery'
 import '@modules/base'
 
 afterEach(cleanup)
@@ -100,5 +100,29 @@ describe('progressive canvas loading', () => {
 
     expect(queryCanvasNodeInFrame('mobile', 'headline')).toBeTruthy()
     expect(screen.queryByTestId('canvas-frame-skeleton-mobile')).toBeNull()
+  })
+
+  it('hides root iframe overflow in design mode but leaves live mode scrollable', async () => {
+    render(<CanvasRoot />)
+
+    await flushAnimationFrame()
+
+    const designDoc = getCanvasFrameDocument('desktop')
+    expect(designDoc).toBeTruthy()
+    expect(designDoc!.documentElement.style.height).toBe('auto')
+    expect(designDoc!.body.style.height).toBe('auto')
+    expect(designDoc!.documentElement.style.overflow).toBe('hidden')
+    expect(designDoc!.body.style.overflow).toBe('hidden')
+
+    cleanup()
+    useEditorStore.setState({ canvasView: 'live' } as Parameters<typeof useEditorStore.setState>[0])
+    render(<CanvasRoot />)
+
+    await flushAnimationFrame()
+
+    const liveDoc = getCanvasFrameDocument('desktop')
+    expect(liveDoc).toBeTruthy()
+    expect(liveDoc!.documentElement.style.overflow).toBe('')
+    expect(liveDoc!.body.style.overflow).toBe('')
   })
 })

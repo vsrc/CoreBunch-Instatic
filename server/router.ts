@@ -342,7 +342,7 @@ async function tryServeMediaRedirect(
  * resolved file doesn't exist, so non-static paths fall through to the
  * downstream route handlers naturally. `/` and `/index.html` are
  * deliberately skipped so `serveAdminApp` keeps ownership of the admin
- * HTML pipeline (login skeleton + boot-API kickoff + prefetch hints).
+ * HTML pipeline (login skeleton + boot-API kickoff + authenticated preload).
  */
 async function tryServeStaticAsset(
   _req: Request,

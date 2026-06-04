@@ -5,9 +5,9 @@
  * be opened from the Spotlight command, the canvas context menu, and the DOM
  * panel context menu via a single `openImportHtmlModal()` call.
  *
- * AdminCanvasLayout renders `{importHtmlModalOpen && <ImportHtmlModal />}` —
- * the component mounts fresh on each open. All local state is initialized
- * from store values once on mount; no reset effects are needed.
+ * AdminCanvasEditorBody lazy-loads this component when `importHtmlModalOpen`
+ * flips true. The component mounts fresh on each open. All local state is
+ * initialized from store values once on mount; no reset effects are needed.
  *
  * Pipeline on "Insert":
  *   1. `importHtml(source)` — parse → harvest inline styles + <style> CSS →
@@ -193,8 +193,8 @@ function FragmentPreview({ result, showIcon, showTag, showClasses }: FragmentPre
 // ---------------------------------------------------------------------------
 
 /**
- * ImportHtmlModal is mounted conditionally:
- *   `{importHtmlModalOpen && <ImportHtmlModal />}`
+ * ImportHtmlModal is lazy-mounted conditionally from AdminCanvasEditorBody:
+ *   `{importHtmlModalOpen && <Suspense><ImportHtmlModal /></Suspense>}`
  *
  * This means the component is always freshly mounted each time the modal
  * opens — no reset effects are needed. Local state is initialized once

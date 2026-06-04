@@ -10,9 +10,10 @@
  */
 
 import type { Ref } from 'react'
-import type { Page, Breakpoint } from '@core/page-tree'
+import { DEFAULT_BREAKPOINTS, type Page, type Breakpoint } from '@core/page-tree'
 import type { TemplateRenderDataContext } from '@core/templates/dynamicBindings'
 import { BreakpointFrame } from './BreakpointFrame'
+import { CanvasFrameSkeletonFrame } from '@admin/shared/CanvasFrameSkeleton'
 import type { InjectableRuntimeScript } from './useRuntimeScriptBuild'
 import { useProgressiveCanvasFrameLoading } from './useProgressiveCanvasFrameLoading'
 import styles from './CanvasTransformLayer.module.css'
@@ -46,6 +47,7 @@ export function CanvasTransformLayer({
   for (const breakpoint of breakpoints) {
     if (breakpoint.previewFrame !== false) framedBreakpoints.push(breakpoint)
   }
+  const fallbackBreakpoints = framedBreakpoints.length > 0 ? framedBreakpoints : DEFAULT_BREAKPOINTS
   const framedBreakpointIds = framedBreakpoints.map((breakpoint) => breakpoint.id)
   const readyFrameIds = useProgressiveCanvasFrameLoading({
     loadKey: page ? `${page.id}:${page.rootNodeId}` : 'no-page',
@@ -85,16 +87,14 @@ export function CanvasTransformLayer({
           />
         ))
       ) : (
-        <NoSiteState />
+        fallbackBreakpoints.map((breakpoint) => (
+          <CanvasFrameSkeletonFrame
+            key={breakpoint.id}
+            breakpoint={breakpoint}
+            dimmed={dimInactiveBreakpoints && activeBreakpointId !== breakpoint.id}
+          />
+        ))
       )}
-    </div>
-  )
-}
-
-function NoSiteState() {
-  return (
-    <div className={styles.noSite}>
-      Loading site&hellip;
     </div>
   )
 }

@@ -169,10 +169,17 @@ The modal:
 
 After insert, every produced node is a normal canvas node. It can be selected, moved, re-styled, and deleted like any other node.
 
-`ImportHtmlModal` is mounted in `AdminCanvasLayout.tsx` gated by `importHtmlModalOpen`:
+`ImportHtmlModal` is lazy-mounted in `AdminCanvasEditorBody.tsx` gated by
+`importHtmlModalOpen`. While the modal chunk downloads, the body renders the
+same dialog chrome with a two-column loading skeleton so opening the command
+has immediate feedback:
 
 ```tsx
-{importHtmlModalOpen && <ImportHtmlModal />}
+{importHtmlModalOpen && (
+  <Suspense fallback={<ImportHtmlModalLoading />}>
+    <ImportHtmlModal />
+  </Suspense>
+)}
 ```
 
 ---

@@ -4,10 +4,9 @@
  * `--bp-width` CSS var via inline style on the iframe (so each breakpoint
  * sets its own logical viewport width), and the iframe is at least a full
  * editor viewport tall so empty pages still have a recognisable frame.
- * Width / shadow / border-radius come straight across from
- * BreakpointFrame.module.css's `.viewport` rule so the visual chrome of an
- * iframe-rendered frame and the legacy div-rendered frame are
- * indistinguishable to the author.
+ * Width and shadow come straight across from BreakpointFrame.module.css's
+ * `.viewport` rule so the visual chrome of an iframe-rendered frame and the
+ * legacy div-rendered frame are indistinguishable to the author.
  */
 
 .iframe {
@@ -26,7 +25,6 @@
   min-height: 100vh;
   background: var(--editor-accent);
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
-  border-radius: 4px;
   /* `overflow: hidden` would clip pop-out chrome inside the iframe (e.g.
    * a sticky nav that overlaps the page bottom). We rely on the iframe's
    * height matching its content height so there's nothing to clip. */

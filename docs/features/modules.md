@@ -198,7 +198,10 @@ The registry is type-erased — every module is held as `AnyModuleDefinition` (p
 
 ### Boot-time registration
 
-`src/modules/base/index.ts` registers every first-party module. It's imported by `SitePage.tsx` (the visual editor's mount) so the registry is populated before the canvas mounts:
+`src/modules/base/index.ts` registers every first-party module. It's imported by
+`AdminCanvasEditorBody.tsx` (the visual editor body) so the registry is
+populated before the canvas mounts, without pulling module definitions into the
+route shell:
 
 ```ts
 // src/modules/base/index.ts

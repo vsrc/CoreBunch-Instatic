@@ -109,19 +109,32 @@ const BUDGETS: ChunkBudget[] = [
     rationale: 'narrow admin boot/auth client (current ~7 KB raw / 2 KB gzipped)',
   },
 
-  // Site editor — loaded only on the Site route. Contains the visual canvas,
-  // site panels, first-party modules, and publisher graph. Content / Data /
-  // Media use AdminWorkspaceCanvasLayout instead and must not pull this chunk.
+  // Site editor — the route chunk must stay the real shell only. The heavy
+  // canvas/panels/modules graph lives in AdminCanvasEditorBody so /admin/site
+  // can paint the existing toolbar/chrome before the editor body downloads.
   {
     prefix: 'SitePage-',
-    maxBytes: 850_000,
+    maxBytes: 30_000,
     rationale:
-      'site editor (canvas + panels + modules + publisher). Current ' +
-      '~768 KB raw / gzipped ~251 KB after CMS-native forms added ' +
-      'editor setup panels, form presets, primitive modules, and canvas ' +
-      'form-control suppression. Includes React Compiler overhead ' +
-      '(`useMemoCache` calls per component, ~30% bundle growth) and the ' +
-      'module-engine default-props layer added to all base modules.',
+      'site route shell (current ~22 KB raw / ~9 KB gzipped). Must not ' +
+      'pull the visual editor body, DnD, canvas, first-party modules, or ' +
+      'PropertiesPanel back into the active route chunk.',
+  },
+  {
+    prefix: 'AdminCanvasEditorBody-',
+    maxBytes: 780_000,
+    rationale:
+      'post-paint Site editor body (canvas + panels + modules + publisher). ' +
+      'Current ~724 KB raw / ~228 KB gzipped after moving Import HTML behind ' +
+      'its own open-state lazy boundary. This is still the main Site runtime ' +
+      'cost, but it must remain behind the shell lazy boundary.',
+  },
+  {
+    prefix: 'ImportHtml-',
+    maxBytes: 12_000,
+    rationale:
+      'rarely opened Import HTML modal chunk (current ~9 KB raw / ~4 KB ' +
+      'gzipped). Must stay behind the modal open-state lazy boundary.',
   },
 
   {

@@ -1,51 +1,20 @@
 import { useEffect } from 'react'
 import { AdminCanvasLayout } from '@admin/layouts/AdminCanvasLayout'
-import { useEditorStore } from '@site/store/store'
 import { consumePendingAction } from '@admin/spotlight/pendingAction'
-import { useAutoResolveDependencies } from '@site/hooks/useAutoResolveDependencies'
-
-// Register base modules with the global registry. Kept here (not in
-// AdminEntry / main.tsx) so the publisher / page-tree / sanitize stack only
-// ships in the lazy SitePage chunk — admins who never open the visual editor
-// (Users-only role, Content-only role, Account page, etc.) never download it.
-import '@modules/base'
-// Register built-in loop sources so the Properties Panel + editor preview
-// can pick them up. Same lazy-chunk reasoning as the modules import above.
-import '@core/loops/sources'
+import { useEditorStore } from '@site/store/store'
 
 /**
- * SitePage — the visual instatic workspace.
+ * SitePage — visual editor route.
  *
- * Mounts the editor (canvas + toolbar + sidebars + panels) inside the admin
- * shell. Everything inside this folder (`@site/*`) is editor-only:
- *   - canvas/        — the rendering surface, breakpoint frames, sandbox iframe
- *   - toolbar/       — top-bar (publish, save, zoom, settings, agent)
- *   - sidebars/      — left/right sidebars + panel rail
- *   - panels/        — DOM, properties, site explorer, fonts, etc.
- *   - property-controls/ — form controls used by the properties panel
- *   - module-picker/ — drag-source for blocks
- *   - explorer-actions/ — context menu / rename for explorer items
- *   - code-editor/   — CodeMirror surface for script/style files
- *   - preview/       — preview overlay
- *   - agent/         — AI agent state & executor
- *   - store/         — Zustand store + slices for the visual editor
- *   - hooks/         — editor-only React hooks
- *   - preferences/   — editor preferences (catalog, persistence, class usage)
- *   - layout/        — panel-layout persistence
- *   - ui/            — editor-shared building blocks (Tree, ModuleIcon)
+ * The route renders the real admin/site shell immediately. Heavy editor body
+ * work (DnD, canvas, panels, module registration, CodeMirror panel mount) is
+ * lazy-loaded one level down by AdminCanvasLayout after the shell has painted.
  */
 export function SitePage() {
-  // Keep `siteRuntime.dependencyLock` in lockstep with `packageJson` while
-  // the editor is open — so dropping a module that auto-declares a dep
-  // doesn't strand the user with a "stale lock" banner waiting on a manual
-  // click. See `useAutoResolveDependencies` for the debounce / failure
-  // handling.
-  useAutoResolveDependencies()
-
   // Consume cross-workspace pending actions queued by the spotlight. Each
   // action waits for the editor store to hydrate (site !== null) — we
   // subscribe once and tear down as soon as the action has fired so the
-  // listener doesn't outlive the SitePage mount.
+  // listener doesn't outlive the editor mount.
   useEffect(() => {
     function runIfHydrated(): boolean {
       const store = useEditorStore.getState()

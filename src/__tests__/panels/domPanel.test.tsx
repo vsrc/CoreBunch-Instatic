@@ -5,7 +5,7 @@
  *   1. data-testid="dom-panel" / "dom-panel-ready" present (Guideline #221)
  *   2. role="complementary" + aria-label on panel container
  *   3. Empty state text shown when page has only root node
- *   4. "Loading site..." state when site is null
+ *   4. Layers skeleton state when site is null
  *   5. data-panel attribute present (event propagation guard, Guideline #192)
  *   6. Toggle button aria-expanded reflects collapsed state
  *   7. Collapse toggle: panel collapses and focus moves to toggle button
@@ -229,9 +229,10 @@ describe('DomPanel — ARIA landmark', () => {
 // ---------------------------------------------------------------------------
 
 describe('DomPanel — empty states', () => {
-  it('shows "Loading site..." when site is null', () => {
+  it('shows a layers skeleton when site is null', () => {
     render(<DomPanel />)
-    expect(screen.getByText('Loading site...')).toBeDefined()
+    expect(screen.getByRole('status', { name: 'Loading layers' })).toBeDefined()
+    expect(screen.queryByText('Loading site...')).toBeNull()
   })
 
   it('renders the body root row when the page is empty (always-show invariant)', () => {

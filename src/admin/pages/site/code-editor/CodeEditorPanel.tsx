@@ -259,7 +259,7 @@ const SKELETON_LINE_WIDTHS = [
   '82%', '58%',
 ] as const
 
-function CodeEditorSkeleton() {
+export function CodeEditorSkeleton() {
   return (
     <div className={styles.loadingSkeleton} aria-hidden="true">
       <div className={styles.loadingGutter}>

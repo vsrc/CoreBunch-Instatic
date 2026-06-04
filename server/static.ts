@@ -365,121 +365,53 @@ const BOOT_API_KICKOFF = `
       })();
     </script>`
 
-// Chunks to prefetch in browser idle time after the initial paint. These
-// are the chunks the user is statistically likely to need within the next
-// few seconds — every admin workspace page, the editor store, and the
-// vendor chunks the editor depends on. Prefetching them means that when
-// the user clicks the Site / Content / Data / Media nav link, the chunk
-// is already on disk and the route transition is instant — no Suspense
-// fallback flashes the loading screen.
+// Critical authenticated-shell chunks. These are pulled into the HTML with
+// `<link rel="modulepreload">` because they are needed immediately after the
+// boot probe proves the user is signed in.
 //
-// Uses `rel="prefetch"` (lowest browser priority — downloads during idle
-// network) so it doesn't compete with the eager paint chunks. The
-// `crossorigin` flag must match the modulepreload entries in index.html
-// or the browser will fetch a duplicate copy when the real module loads.
-//
-// The chunk filenames are content-hashed so we can't hardcode them —
-// resolve them once per server boot by globbing `dist/assets/`. If a
-// chunk isn't found (mid-rebuild, dev mode, etc.) we skip the hint
-// rather than emitting a broken URL.
-//
-// Trade-off: this downloads ~600 KB raw / ~200 KB gz of extra bytes that
-// the user might not need. On the M-class Macs / typical broadband
-// targets the CMS is designed for, this is negligible and the
-// "every navigation feels instant" UX win is worth it. If we ever care
-// about constrained-bandwidth users, this list can shrink to just the
-// most-likely-next pages.
-// Critical post-login chunks — these are pulled in via `<link rel="modulepreload">`
-// (high priority) because they're on the dashboard's render-and-commit
-// critical path. The `await import(...)` in `main.tsx` blocks the React
-// mount until both load.
-//
-// Leaving them as low-priority `<link rel="prefetch">` would let the
-// browser deprioritize them behind other prefetch work — empirically
-// that added ~280 ms to the dashboard FCP because React's commit
-// scheduler waits for the chunks' module evaluation before painting.
-const POST_LOGIN_CRITICAL_PREFIXES: readonly string[] = [
+// Do not list workspace pages or editor-only chunks here. Parser-discovered
+// `<link rel="prefetch">` is not an "after first paint" scheduler in Chromium:
+// it starts requests during HTML parse. Workspace prewarming belongs in
+// AuthenticatedAdmin's requestIdleCallback scheduler, where it actually runs
+// after the active page has painted.
+const AUTHENTICATED_SHELL_PREFIXES: readonly string[] = [
   'AuthenticatedAdmin-',
 ]
 
-// Other post-login chunks — workspace pages the user MIGHT navigate to
-// next, plus the heavy editor chunks. These use `<link rel="prefetch">`
-// (lowest priority) so they DON'T compete with the eager paint chunks
-// or the critical post-login chunks above. They download during browser
-// idle time after first paint.
-const POST_LOGIN_IDLE_PREFIXES: readonly string[] = [
-  // The other workspace pages — the active page is loaded eagerly by
-  // `main.tsx` based on URL path; the rest prefetch in idle time for
-  // instant nav. Order matches frequency of use.
-  'SitePage-',
-  'ContentPage-',
-  'DataPage-',
-  'DashboardPage-',
-  'MediaPage-',
-  'PluginsPage-',
-  'PluginPage-',
-  'UsersPage-',
-  'AccountPage-',
-  // Editor-store and dnd-kit chunks — needed by SitePage / canvas / dnd.
-  // Not on the dashboard's path, but the user often goes to the editor
-  // next, so prefetching here means the first nav into Site is fast.
-  'store-',
-  'dnd-vendor-',
-  'validation-vendor-',
-  // Heavy editor chunks pulled in by SitePage's downstream lazy imports.
-  // Prefetching now means the visual editor first-paint is sub-100 ms
-  // after the click.
-  'AdminCanvasLayout-',
-  'CodeMirrorEditor-',
-]
-
-let postLoginPrefetchCache: { staticDir: string; html: string } | null = null
-function buildPostLoginPrefetchHints(staticDir: string): string {
-  if (postLoginPrefetchCache && postLoginPrefetchCache.staticDir === staticDir) {
-    return postLoginPrefetchCache.html
+let authenticatedShellPreloadCache: { staticDir: string; html: string } | null = null
+function buildAuthenticatedShellPreloadHints(staticDir: string): string {
+  if (authenticatedShellPreloadCache && authenticatedShellPreloadCache.staticDir === staticDir) {
+    return authenticatedShellPreloadCache.html
   }
   const assetsDir = resolve(staticDir, 'assets')
   let entries: string[]
   try {
     // Sync readdir is fine here — it runs at most once per server boot
-    // (result cached on `postLoginPrefetchCache`) and the assets/ directory
+    // (result cached on `authenticatedShellPreloadCache`) and the assets/ directory
     // is small (a few hundred entries).
     entries = readdirSync(assetsDir) as string[]
   } catch {
-    postLoginPrefetchCache = { staticDir, html: '' }
+    authenticatedShellPreloadCache = { staticDir, html: '' }
     return ''
   }
   const lines: string[] = []
-  // Critical chunks first — modulepreload (high priority, fetched + parsed
-  // before idle work).
-  for (const prefix of POST_LOGIN_CRITICAL_PREFIXES) {
+  for (const prefix of AUTHENTICATED_SHELL_PREFIXES) {
     const match = entries.find((name) => name.startsWith(prefix) && name.endsWith('.js'))
     if (!match) continue
     lines.push(
       `    <link rel="modulepreload" href="/assets/${match}" crossorigin>`,
     )
   }
-  // Idle chunks — prefetch (low priority, browser downloads only when idle).
-  for (const prefix of POST_LOGIN_IDLE_PREFIXES) {
-    const match = entries.find((name) => name.startsWith(prefix) && name.endsWith('.js'))
-    if (!match) continue
-    lines.push(
-      `    <link rel="prefetch" href="/assets/${match}" as="script" crossorigin>`,
-    )
-  }
   const html = lines.join('\n')
-  postLoginPrefetchCache = { staticDir, html }
+  authenticatedShellPreloadCache = { staticDir, html }
   return html
 }
 
 // Authenticated path: keep the spinner shell but ALSO embed the
-// `BOOT_API_KICKOFF` inline script + prefetch hints. The user still sees
+// `BOOT_API_KICKOFF` inline script + shell preload hints. The user still sees
 // the spinner until React mounts, but:
 //   - The boot fetches fire at HTML-parse time (BOOT_API_KICKOFF), so
 //     useAdminBoot's `useEffect` consumes already-resolved promises.
-//   - Workspace page chunks prefetch in browser idle time, so clicking
-//     between Site / Content / Data / etc. in the nav is instant — no
-//     Suspense loading screen flash.
 //   - `window.__instaticAuthed = 1` flag tells the client this is the
 //     authenticated path. The session cookie is `HttpOnly` so
 //     `document.cookie` can't see it; this flag lets `main.tsx` decide
@@ -489,14 +421,14 @@ function buildPostLoginPrefetchHints(staticDir: string): string {
 const AUTHED_FLAG_SCRIPT = `
     <script>window.__instaticAuthed = 1;</script>`
 function injectAuthenticatedHints(html: string, staticDir: string): string {
-  const prefetchHints = buildPostLoginPrefetchHints(staticDir)
+  const preloadHints = buildAuthenticatedShellPreloadHints(staticDir)
   // Use `</head>` as the anchor — it's guaranteed to be in the document
   // and is unique. The earlier `/<\/style>\s*<\/head>/` regex missed
   // when the build emitted the importmap `<script>` between the loader
   // `<style>` block and `</head>`.
   return html.replace(
     '</head>',
-    `${AUTHED_FLAG_SCRIPT}\n${BOOT_API_KICKOFF}\n${prefetchHints}\n  </head>`,
+    `${AUTHED_FLAG_SCRIPT}\n${BOOT_API_KICKOFF}\n${preloadHints}\n  </head>`,
   )
 }
 
@@ -504,21 +436,19 @@ function injectAuthenticatedHints(html: string, staticDir: string): string {
 // repeating the heavy index.html template by patching the served body
 // in-place: replace the inner contents of `<div id="root">` (which the
 // build pipeline always emits with the loader spinner) with our skeleton.
-function injectLoginSkeleton(html: string, staticDir: string): string {
+function injectLoginSkeleton(html: string): string {
   // 1. Inject the skeleton CSS right after the loader CSS block so the
-  //    critical styles are sent in the first response packet. Also add
-  //    preload hints for the API endpoints `useAdminBoot` will call, and
-  //    prefetch hints for the chunks the user will need post-login.
+  //    critical styles are sent in the first response packet. Also add the
+  //    boot-API kickoff so `useAdminBoot` can consume already-started fetches.
   const styleTag = `<style data-initial-login>${LOGIN_SKELETON_STYLES}</style>`
-  const prefetchHints = buildPostLoginPrefetchHints(staticDir)
-  const injected = `</style>\n    ${styleTag}${BOOT_API_KICKOFF}\n${prefetchHints}`
+  const injected = `</style>\n    ${styleTag}${BOOT_API_KICKOFF}`
   let next = html.replace(
     /<\/style>\s*<\/head>/,
     (m) => m.replace('</style>', injected),
   )
   // Fallback if the marker pattern shifts: append at the end of <head>.
   if (!next.includes('data-initial-login')) {
-    next = next.replace('</head>', `  ${styleTag}${BOOT_API_KICKOFF}\n${prefetchHints}\n  </head>`)
+    next = next.replace('</head>', `  ${styleTag}${BOOT_API_KICKOFF}\n  </head>`)
   }
 
   // 2. Replace the inner contents of `<div id="root">…</div>` with the
@@ -561,7 +491,7 @@ export async function serveAdminApp(staticDir: string, req?: Request): Promise<R
   const html = await file.text()
   const transformed = requestHasSessionCookie(req)
     ? injectAuthenticatedHints(html, staticDir)
-    : injectLoginSkeleton(html, staticDir)
+    : injectLoginSkeleton(html)
   const bytes = new TextEncoder().encode(transformed) as ResponseBytes
   const acceptEncoding = req?.headers.get('accept-encoding') ?? null
   const encoding = selectEncoding(acceptEncoding)

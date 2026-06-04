@@ -1,10 +1,10 @@
 /**
- * AdminCanvasLayout — the canvas-bearing admin shell.
+ * AdminCanvasLayout — the Site editor admin shell.
  *
  * One of the admin layout families in `src/admin/layouts/`:
- *   - AdminCanvasLayout (this file) — used by the Site editor. Carries the
- *     floating editor panels, the page canvas, and the DnD context shared by
- *     site-editor drag surfaces such as Site Explorer organization.
+ *   - AdminCanvasLayout (this file) — used by the Site editor. Paints the
+ *     real toolbar/chrome first, then lazy-loads the editor body containing
+ *     floating panels, page canvas, and Site Explorer's shared DnD context.
  *   - AdminPageLayout — used by Plugins, Users, Account, and plugin admin
  *     pages. Strips the canvas / sidebar / DnD chrome and renders a
  *     simple centered page body with a unified header.
@@ -37,37 +37,24 @@
  * Authenticates via ambient Claude Code credentials through the local Bun server.
  * No env vars, no API keys, no endpoint configuration required (Constraint #385).
  */
-import {
-  DndContext,
-  PointerSensor,
-  pointerWithin,
-  useSensor,
-  useSensors,
-} from '@dnd-kit/core'
-import { CanvasRoot } from '@admin/pages/site/canvas'
-import { PropertiesPanel } from '@admin/pages/site/panels/PropertiesPanel'
-import { CodeEditorPanel } from '@admin/pages/site/code-editor'
 import { Toolbar } from '@admin/pages/site/toolbar/Toolbar'
 import { SettingsButton } from '@admin/pages/site/toolbar/SettingsButton'
 import { ZoomControls } from '@admin/pages/site/toolbar/ZoomControls'
 import { PublishButton } from '@admin/pages/site/toolbar/PublishButton'
-import { LeftSidebar } from '@admin/pages/site/sidebars/LeftSidebar'
-import { RightSidebar } from '@admin/pages/site/sidebars/RightSidebar'
-import { ConfirmDeleteProvider } from '@admin/shared/dialogs/ConfirmDeleteDialog'
 import { useEditorSelectPreference } from '@admin/pages/site/preferences/editorPreferences'
 import { usePersistence } from '@admin/pages/site/hooks/usePersistence'
 import { useSiteEditorUrlSync } from '@admin/pages/site/hooks/useSiteEditorUrlSync'
 import { useEditorLayoutPersistence } from '@admin/pages/site/hooks/useEditorLayoutPersistence'
-import { selectActivePage, selectRightSidebarExpanded, useEditorStore } from '@admin/pages/site/store/store'
+import { selectActivePage, useEditorStore } from '@admin/pages/site/store/store'
 import { cmsAdapter } from '@core/persistence/cms'
 import { useAdminUi } from '@admin/state/adminUi'
-import { pagePublicPath } from '@core/page-tree'
-import { cn } from '@ui/cn'
+import { DEFAULT_BREAKPOINTS, pagePublicPath } from '@core/page-tree'
 import { useInstalledEditorPlugins } from '@admin/pages/plugins/hooks/useInstalledEditorPlugins'
 import { usePluginEventBridge } from '@admin/pages/plugins/hooks/usePluginEventBridge'
 import { AdminSectionNavigation } from '@admin/shared/AdminSectionNavigation'
+import { CanvasFrameSkeletonFrame } from '@admin/shared/CanvasFrameSkeleton'
 import styles from './AdminCanvasLayout.module.css'
-import { lazy, Suspense, useEffect } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { useCurrentAdminUser } from '@admin/sessionContext'
 import {
   canEditContent as accessCanEditContent,
@@ -79,7 +66,9 @@ import {
 import { EditorPermissionsProvider } from '@site/EditorPermissionsProvider'
 import type { EditorPermissions } from '@site/editorPermissionsContext'
 
-import { ImportHtmlModal } from '@admin/modals/ImportHtml'
+const AdminCanvasEditorBody = lazy(() =>
+  import('./AdminCanvasEditorBody').then((m) => ({ default: m.AdminCanvasEditorBody })),
+)
 
 // SettingsModal is heavy (~37 KB raw) and closed 99% of the time. lazy()
 // pushes it into its own chunk and the conditional render below avoids
@@ -107,8 +96,6 @@ const PreviewOverlay = lazy(() =>
  */
 export function AdminCanvasLayout() {
   const site = useEditorStore((s) => s.site)
-  const propertiesPanelMode = useEditorStore((s) => s.propertiesPanelMode)
-  const rightSidebarExpanded = useEditorStore(selectRightSidebarExpanded)
   // Toolbar branding — pulled from the editor store here (we already have
   // it loaded) and forwarded to the prop-driven Toolbar below. Keeps the
   // Toolbar component itself free of editor-store imports.
@@ -120,7 +107,6 @@ export function AdminCanvasLayout() {
   // editor's `settingsSlice.openSettings` mirrors into it, and the admin
   // shell reads from it too.
   const settingsOpen = useAdminUi((s) => s.settingsOpen)
-  const importHtmlModalOpen = useEditorStore((s) => s.importHtmlModalOpen)
   const publishSiteSummary = useAdminUi((s) => s.setSiteSummary)
   const publishActiveLivePath = useAdminUi((s) => s.setActiveLivePath)
   // Public path of the page currently open in the Site-editor canvas.
@@ -152,7 +138,6 @@ export function AdminCanvasLayout() {
       publishActiveLivePath(null)
     }
   }, [activeSitePath, publishActiveLivePath])
-  const hasRightSidebar = rightSidebarExpanded
   // Three-way edit permissions — see `src/admin/access.ts`. A user with all
   // three holds full editor rights; a user with only `canEditContent` is the
   // "Client / copy editor" persona: read everything, change copy on existing
@@ -193,15 +178,6 @@ export function AdminCanvasLayout() {
   // and keeps the open Plugins page list refreshed.
   usePluginEventBridge()
 
-  // ── Site-editor DnD shell ─────────────────────────────────────────────────
-  // Site Explorer organization hooks into this outer DndContext. DomPanel has
-  // its own nested DndContext for DOM tree reordering, isolated by dnd-kit.
-  const canvasDndSensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: { distance: 5 },
-    }),
-  )
-
   // UI density preference — `data-editor-density` on the editor root drives
   // CSS variables consumed by tree rows, toolbar buttons, and other density-
   // sensitive surfaces. Reading the preference here keeps the attribute in
@@ -216,121 +192,124 @@ export function AdminCanvasLayout() {
     ? persistence.saveStatus.message ?? 'Reload the admin page and try again.'
     : null
 
+  const loadEditorBody = usePostPaintEditorBodyGate()
+
   return (
     <EditorPermissionsProvider value={permissions}>
-    <div className={styles.shell} data-editor-density={density}>
-      {/* ── Top toolbar (z-60, Guideline #374) ───────────────────────────── */}
-      {/* Toolbar is now a prop-driven shell — this layout supplies the
-          site brand, the preview overlay lazy mount, and
-          the editor-specific right slot (zoom / publish / settings). The
-          lazy mount gates on `previewOpen` so the chunk loads only when the
-          user actually opens preview. */}
-      <Toolbar
-        siteName={siteName}
-        faviconUrl={faviconUrl}
-        section="site"
-        adminNavigationSlot={(
-          <AdminSectionNavigation
-            section="site"
-            currentUser={currentUser}
-          />
+      <div className={styles.shell} data-editor-density={density}>
+        {/* ── Top toolbar (z-60, Guideline #374) ───────────────────────────── */}
+        {/* Toolbar is now a prop-driven shell — this layout supplies the
+            site brand, the preview overlay lazy mount, and
+            the editor-specific right slot (zoom / publish / settings). The
+            lazy mount gates on `previewOpen` so the chunk loads only when the
+            user actually opens preview. */}
+        <Toolbar
+          siteName={siteName}
+          faviconUrl={faviconUrl}
+          section="site"
+          adminNavigationSlot={(
+            <AdminSectionNavigation
+              section="site"
+              currentUser={currentUser}
+            />
+          )}
+          overlay={previewOpen && (
+            <Suspense fallback={null}>
+              <PreviewOverlay />
+            </Suspense>
+          )}
+          rightSlot={(
+            <>
+              <ZoomControls />
+              <PublishButton
+                enabled={canPublishPages}
+                onSave={canSaveSite ? persistence.saveSite : undefined}
+                saveStatus={persistence.saveStatus}
+              />
+              <SettingsButton />
+            </>
+          )}
+        />
+
+        {loadEditorBody ? (
+          <Suspense fallback={<AdminCanvasEditorBodyLoading />}>
+            <AdminCanvasEditorBody
+              canEditDraftSite={canEditDraftSite}
+              canSaveSite={canSaveSite}
+              loadError={loadError}
+            />
+          </Suspense>
+        ) : (
+          <AdminCanvasEditorBodyLoading />
         )}
-        overlay={previewOpen && (
+
+        {/* Settings Modal (portal-rendered, listens to adminUi.settingsOpen).
+            Lazy + conditional render — the 1300-line modal + its six section
+            subtree stays out of the eager graph until the user opens settings. */}
+        {settingsOpen && (
           <Suspense fallback={null}>
-            <PreviewOverlay />
+            <SettingsModal />
           </Suspense>
         )}
-        rightSlot={(
-          <>
-            <ZoomControls />
-            <PublishButton
-              enabled={canPublishPages}
-              onSave={canSaveSite ? persistence.saveSite : undefined}
-              saveStatus={persistence.saveStatus}
-            />
-            <SettingsButton />
-          </>
-        )}
-      />
 
-      {/* ── Canvas + floating overlay panels ──────────────────────────────── */}
-      {/*
-        position: relative makes this the containing block for absolutely
-        positioned panels (Guideline #356 / Task #358 / Architect #504).
-        flex is kept so CanvasRoot's flex:1 fills the full width.
-        DndContext wraps the full editor body so SiteExplorerPanel rows can be
-        reordered across sections and folders.
-        DomPanel has its own nested DndContext for tree-node reordering — that
-        context is isolated; nested DndContexts are fully supported by dnd-kit.
-      */}
-      <DndContext sensors={canvasDndSensors} collisionDetection={pointerWithin}>
-      {/* `ConfirmDeleteProvider` wraps the editor body so the canvas
-          Delete-key handler, Layers panel context menu, and other
-          descendant destructive actions can call `useConfirmDelete()`
-          and gate on the `confirmBeforeDelete` editor preference.
-          Plugin uninstall is intentionally *not* gated on that preference
-          and uses its own dedicated `PluginRemoveDialog` instead. */}
-      <ConfirmDeleteProvider>
-      <div className={styles.editorBody}>
-        <LeftSidebar workspace="site" editable={canEditDraftSite} />
-        <div
-          className={cn(styles.canvasStage, hasRightSidebar && styles.canvasStageRightSidebarOpen)}
-          data-right-sidebar-expanded={hasRightSidebar ? 'true' : 'false'}
-        >
-          <div className={styles.canvasContent} key="site">
-            {/* Canvas — fills the remaining space between sidebars */}
-            {loadError ? (
-              <SiteEditorLoadError message={loadError} />
-            ) : (
-              <CanvasRoot editable={canEditDraftSite} />
-            )}
-            {/* Properties can be unpinned into the floating draggable overlay. */}
-            {canSaveSite && propertiesPanelMode === 'floating' && <PropertiesPanel variant="floating" />}
-          </div>
-        </div>
-        {/* `mode` tells the RightSidebar which expansion model to use:
-            - `'site'`:      Site editor — width follows the selection-
-              gated `sitePropertiesExpanded` selector.
-            - `'hidden'`:    Site viewer with no `pages.draft.save`
-              capability. */}
-        <RightSidebar
-          key="site"
-          mode={canSaveSite ? 'site' : 'hidden'}
-        />
       </div>
-      </ConfirmDeleteProvider>
-      </DndContext>
-
-      {/* Code editor/media preview: viewport overlay, not constrained by the
-          canvas stage. The panel itself is small chrome; the heavy CodeMirror
-          6 bundle (~600 kB) is lazy-loaded inside the panel only when the
-          user opens a text file. */}
-      <CodeEditorPanel />
-
-      {/* Settings Modal (portal-rendered, listens to adminUi.settingsOpen).
-          Lazy + conditional render — the 1300-line modal + its six section
-          subtree stays out of the eager graph until the user opens settings. */}
-      {settingsOpen && (
-        <Suspense fallback={null}>
-          <SettingsModal />
-        </Suspense>
-      )}
-
-      {/* Import HTML modal — opens from Spotlight or right-click "Paste HTML here…".
-          Dialog handles its own portal + Escape; always rendered so it can
-          react to `importHtmlModalOpen` without a lazy-load delay. */}
-      {importHtmlModalOpen && <ImportHtmlModal />}
-
-    </div>
     </EditorPermissionsProvider>
   )
 }
 
-function SiteEditorLoadError({ message }: { message: string }) {
+function usePostPaintEditorBodyGate(): boolean {
+  const delayBodyUntilPaint =
+    typeof import.meta.env !== 'undefined' && import.meta.env.PROD === true
+  const [loadEditorBody, setLoadEditorBody] = useState(!delayBodyUntilPaint)
+
+  useEffect(() => {
+    if (!delayBodyUntilPaint) return
+    return scheduleAfterFirstPaint(() => setLoadEditorBody(true))
+  }, [delayBodyUntilPaint])
+
+  return loadEditorBody
+}
+
+function scheduleAfterFirstPaint(callback: () => void): () => void {
+  if (typeof window === 'undefined') return () => {}
+
+  if (typeof window.requestAnimationFrame !== 'function') {
+    const timeoutId = window.setTimeout(callback, 0)
+    return () => window.clearTimeout(timeoutId)
+  }
+
+  let secondFrameId: number | null = null
+  const firstFrameId = window.requestAnimationFrame(() => {
+    secondFrameId = window.requestAnimationFrame(callback)
+  })
+
+  return () => {
+    window.cancelAnimationFrame(firstFrameId)
+    if (secondFrameId !== null) window.cancelAnimationFrame(secondFrameId)
+  }
+}
+
+function AdminCanvasEditorBodyLoading() {
   return (
-    <section className={styles.canvasBootstrapError} role="alert">
-      <h1>Could not load CMS site</h1>
-      <p>{message}</p>
-    </section>
+    <div className={styles.editorBody} aria-busy="true">
+      <div className={styles.canvasStage} data-right-sidebar-expanded="false">
+        <div className={styles.canvasContent}>
+          <section
+            className={styles.canvasBootstrapStatus}
+            role="status"
+            aria-label="Loading editor"
+          >
+            <div className={styles.canvasBootstrapLayer} aria-hidden="true">
+              {DEFAULT_BREAKPOINTS.map((breakpoint) => (
+                <CanvasFrameSkeletonFrame
+                  key={breakpoint.id}
+                  breakpoint={breakpoint}
+                />
+              ))}
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
   )
 }

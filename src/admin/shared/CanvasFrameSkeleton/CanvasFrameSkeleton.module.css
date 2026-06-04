@@ -1,3 +1,34 @@
+.frameWrapper {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  opacity: 1;
+  transition:
+    opacity 140ms ease,
+    filter 140ms ease;
+  contain: layout paint;
+}
+
+.frameWrapperDimmed {
+  filter: saturate(0.72);
+  opacity: 0.42;
+}
+
+.labelRow {
+  display: flex;
+  align-items: center;
+  width: var(--bp-width);
+}
+
+.viewport {
+  position: relative;
+  width: var(--bp-width);
+  min-height: 100vh;
+  overflow: hidden;
+  background: var(--editor-accent);
+  box-shadow: var(--canvas-chrome-shadow);
+}
+
 .skeleton {
   position: absolute;
   inset: 0;

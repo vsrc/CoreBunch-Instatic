@@ -24,7 +24,7 @@ import { NodeRenderer } from './NodeRenderer'
 import { BreakpointSelectionOverlay } from './BreakpointSelectionOverlay'
 import { CanvasBreakpointContext, CanvasTemplateContext } from './CanvasContexts'
 import { IframeFrameSurface, type IframeFrameSurfaceHandle } from './IframeFrameSurface'
-import { CanvasFrameSkeleton } from './CanvasFrameSkeleton'
+import { CanvasFrameSkeleton } from '@admin/shared/CanvasFrameSkeleton'
 import type { InjectableRuntimeScript } from './useRuntimeScriptBuild'
 import { Button } from '@ui/components/Button'
 import { CursorTooltip, type CursorTooltipPoint } from '@ui/components/Tooltip'
@@ -140,10 +140,7 @@ export function BreakpointFrame({
       <div
         ref={viewportRef}
         data-breakpoint-id={breakpoint.id}
-        className={cn(
-          styles.viewport,
-          isActive && breakpointChromeVisible && styles.viewportActive,
-        )}
+        className={styles.viewport}
       >
         <IframeFrameSurface
           ref={handleIframeRef}

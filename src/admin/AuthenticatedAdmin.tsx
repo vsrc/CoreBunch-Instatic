@@ -183,6 +183,21 @@ const ALL_WORKSPACE_PAGES = [
   PluginPage,
 ]
 
+function pageForSection(section: AdminWorkspace) {
+  return (
+    section === 'site' ? SitePage :
+    section === 'content' ? ContentPage :
+    section === 'data' ? DataPage :
+    section === 'media' ? MediaPage :
+    section === 'plugins' ? PluginsPage :
+    section === 'users' ? UsersPage :
+    section === 'ai' ? AiPage :
+    section === 'pluginPage' ? PluginPage :
+    section === 'account' ? AccountPage :
+    DashboardPage
+  )
+}
+
 export default function AuthenticatedAdmin({ section, currentUser }: AuthenticatedAdminProps) {
   const inRouter = useInRouterContext()
   const fallbackWorkspace = firstAccessibleWorkspace(currentUser)
@@ -192,7 +207,7 @@ export default function AuthenticatedAdmin({ section, currentUser }: Authenticat
   // the active page has rendered + painted. `useEffect` fires after
   // the browser's first paint of the active page, so the user sees the
   // dashboard (or whatever section they landed on) before we kick off
-  // network/CPU work for the other 8.
+  // network/CPU work for sibling pages.
   //
   // `requestIdleCallback` is the right primitive here — it fires when
   // the browser has truly idle main-thread time. In dev mode that's
@@ -206,11 +221,13 @@ export default function AuthenticatedAdmin({ section, currentUser }: Authenticat
       requestIdleCallback?: IdleCb
       cancelIdleCallback?: CancelIdleCb
     }
+    const activePage = pageForSection(section)
     const fire = () => {
       for (const page of ALL_WORKSPACE_PAGES) {
+        if (page === activePage) continue
         // `.preload()` is idempotent — the active page's preload is
-        // already in flight (or resolved), this just returns the same
-        // promise. The other 8 actually fire their imports here.
+        // already in flight (or resolved). The sibling pages actually
+        // fire their imports here.
         void page.preload().catch(() => {
           // Best-effort. A single failed background preload is not
           // fatal — the page will retry via its render-path preload
@@ -218,18 +235,38 @@ export default function AuthenticatedAdmin({ section, currentUser }: Authenticat
         })
       }
     }
-    if (typeof w.requestIdleCallback === 'function') {
-      // The `timeout: 2000` cap means even on a busy main thread we
-      // start within 2s of paint. That's the latest a typical user
-      // takes to click their first nav link, so we're racing them
-      // exactly the right amount.
-      const idleId = w.requestIdleCallback(fire, { timeout: 2000 })
-      return () => w.cancelIdleCallback?.(idleId)
+    const scheduleIdlePreload = () => {
+      if (typeof w.requestIdleCallback === 'function') {
+        // The `timeout: 2000` cap means even on a busy main thread we
+        // start within 2s of paint. That's the latest a typical user
+        // takes to click their first nav link, so we're racing them
+        // exactly the right amount.
+        const idleId = w.requestIdleCallback(fire, { timeout: 2000 })
+        return () => w.cancelIdleCallback?.(idleId)
+      }
+
+      const timeoutId = window.setTimeout(fire, 300)
+      return () => window.clearTimeout(timeoutId)
     }
 
-    const timeoutId = window.setTimeout(fire, 300)
-    return () => window.clearTimeout(timeoutId)
-  }, [])
+    if (section === 'site') {
+      // `/admin/site` has a second, active-route post-paint import:
+      // AdminCanvasEditorBody. Let that editor body claim the first idle
+      // slot before warming sibling workspace pages; otherwise Content/Data
+      // preloads start first and delay the canvas/dnd work the user actually
+      // asked for by opening Site.
+      let cancelIdlePreload: (() => void) | null = null
+      const timeoutId = window.setTimeout(() => {
+        cancelIdlePreload = scheduleIdlePreload()
+      }, 800)
+      return () => {
+        window.clearTimeout(timeoutId)
+        cancelIdlePreload?.()
+      }
+    }
+
+    return scheduleIdlePreload()
+  }, [section])
 
   if (!canAccessWorkspace(currentUser, section)) {
     if (inRouter && fallbackWorkspace) {

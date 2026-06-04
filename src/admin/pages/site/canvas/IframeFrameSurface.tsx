@@ -659,9 +659,20 @@ function applyIframeBodyReset(
   // viewport, short pages still fill it), and the canvas-chrome CSS
   // (cursor / user-select / nested-iframe overrides) is NOT applied — real
   // cursors, text selection, and embedded iframes behave like the live site.
-  if (interaction === 'live') return
+  if (interaction === 'live') {
+    iframeDoc.documentElement.style.height = ''
+    iframeDoc.body.style.height = ''
+    iframeDoc.documentElement.style.overflow = ''
+    iframeDoc.body.style.overflow = ''
+    return
+  }
   iframeDoc.documentElement.style.height = 'auto'
   iframeDoc.body.style.height = 'auto'
+  // Design frames grow to fit their content on the parent canvas. The iframe
+  // document itself must never expose root scrollbars while that fit settles
+  // or because authored CSS sets html/body overflow.
+  iframeDoc.documentElement.style.overflow = 'hidden'
+  iframeDoc.body.style.overflow = 'hidden'
   let chrome = iframeDoc.head.querySelector('style[data-instatic-canvas-chrome]')
   if (!chrome) {
     chrome = iframeDoc.createElement('style')
