@@ -118,7 +118,7 @@ function parseVCParam(raw: unknown): VCParam | null {
 /**
  * Tolerant parser for a single VCNode (used by parseVisualComponent).
  *
- * Unlike `Value.Check(VCNodeSchema, raw)`, this function handles:
+ * Unlike strict schema validation, this function handles:
  *   - Missing classIds → default []
  *   - Missing/invalid props → default {}
  *   - Missing/invalid breakpointOverrides → default {}

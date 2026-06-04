@@ -7,8 +7,11 @@
  */
 
 import type { TSchema, Static } from '@sinclair/typebox'
-import { Value } from '@sinclair/typebox/value'
-import { formatValueErrors } from './typeboxHelpers'
+import {
+  compiledCheck,
+  compiledDecode,
+  compiledFormatValueErrors,
+} from './typeboxCompiler'
 
 export type JsonParseResult<T> =
   | { ok: true; value: T }
@@ -34,10 +37,10 @@ export function safeParseJson<T extends TSchema>(
     // mean "discard and use defaults" or "return 400".
     return { ok: false, error: new Error('Invalid JSON') }
   }
-  if (!Value.Check(schema, parsed)) {
-    return { ok: false, error: new Error(formatValueErrors(schema, parsed)) }
+  if (!compiledCheck(schema, parsed)) {
+    return { ok: false, error: new Error(compiledFormatValueErrors(schema, parsed)) }
   }
-  return { ok: true, value: Value.Decode(schema, parsed) as Static<T> }
+  return { ok: true, value: compiledDecode(schema, parsed) as Static<T> }
 }
 
 /**
@@ -65,8 +68,8 @@ export async function parseJsonResponse<T extends TSchema>(
   schema: T,
 ): Promise<Static<T>> {
   const data = (await res.json()) as unknown
-  if (!Value.Check(schema, data)) {
-    throw new Error(formatValueErrors(schema, data))
+  if (!compiledCheck(schema, data)) {
+    throw new Error(compiledFormatValueErrors(schema, data))
   }
-  return Value.Decode(schema, data) as Static<T>
+  return compiledDecode(schema, data) as Static<T>
 }

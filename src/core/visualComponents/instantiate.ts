@@ -23,10 +23,12 @@
  */
 
 import { Type } from '@sinclair/typebox'
-import { Value } from '@sinclair/typebox/value'
 import type { BaseNode } from '@core/page-tree'
+import { compiledCheck } from '@core/utils/typeboxCompiler'
 import type { VisualComponent, VCNode } from './schemas'
 import { VCNodeSchema } from './schemas'
+
+const VCNodeArraySchema = Type.Array(VCNodeSchema)
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -141,7 +143,7 @@ export function instantiateVCAtRef(
       // Fall back to slot param defaultValue (VCNode[] format).
       const paramDefault = vc.params.find((p) => p.type === 'slot' && p.name === slotName)
       const defaultContentResult = Array.isArray(paramDefault?.defaultValue)
-        ? Value.Check(Type.Array(VCNodeSchema), paramDefault.defaultValue)
+        ? compiledCheck(VCNodeArraySchema, paramDefault.defaultValue)
         : false
       const defaultContent: VCNode[] = defaultContentResult
         ? (paramDefault!.defaultValue as VCNode[])

@@ -26,7 +26,8 @@
  * Constraint #269: no imports from editor / editor-store here.
  */
 
-import { Type, Value, type Static } from '@core/utils/typeboxHelpers'
+import { Type, type Static } from '@core/utils/typeboxHelpers'
+import { compiledCheck } from '@core/utils/typeboxCompiler'
 import { BreakpointSchema, type Breakpoint, parseBreakpoint } from './breakpoint'
 import {
   ConditionDefSchema,
@@ -203,7 +204,7 @@ export function parseSiteDocument(raw: unknown): SiteShell {
   const settings = parseSiteSettings(r.settings)
 
   // PackageJson — resilient, falls back to DEFAULT_PACKAGE_JSON
-  const packageJson: SitePackageJson = Value.Check(SitePackageJsonSchema, r.packageJson)
+  const packageJson: SitePackageJson = compiledCheck(SitePackageJsonSchema, r.packageJson)
     ? (r.packageJson as SitePackageJson)
     : DEFAULT_PACKAGE_JSON
 

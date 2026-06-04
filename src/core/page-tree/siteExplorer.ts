@@ -1,5 +1,6 @@
 import { nanoid } from 'nanoid'
 import { Type, Value, type Static } from '@core/utils/typeboxHelpers'
+import { compiledCheck, compiledDecode } from '@core/utils/typeboxCompiler'
 import type { SiteFile } from '@core/files/schemas'
 import type { Page } from './page'
 import type { SiteDocument } from './siteDocument'
@@ -115,8 +116,8 @@ function parseItems(raw: unknown, folderIds: ReadonlySet<string>): SiteExplorerI
   const seen = new Set<string>()
   const items: SiteExplorerItemPlacement[] = []
   for (const entry of raw) {
-    if (!Value.Check(SiteExplorerItemPlacementSchema, entry)) continue
-    const item = Value.Decode(SiteExplorerItemPlacementSchema, entry) as SiteExplorerItemPlacement
+    if (!compiledCheck(SiteExplorerItemPlacementSchema, entry)) continue
+    const item = compiledDecode(SiteExplorerItemPlacementSchema, entry)
     const id = item.id.trim()
     if (!id || seen.has(id) || !Number.isFinite(item.order)) continue
     seen.add(id)

@@ -8,8 +8,8 @@
  */
 
 import { Type, type Static } from '@sinclair/typebox'
-import { Value } from '@sinclair/typebox/value'
 import { withFallback, filterArray } from '@core/utils/typeboxHelpers'
+import { compiledCheck } from '@core/utils/typeboxCompiler'
 import {
   normalizeFontTokenVariable,
   sanitizeFontFallbackStack,
@@ -146,7 +146,7 @@ function isSafeUnicodeRange(range: string): boolean {
 
 // Composite check used by callers that want schema + path-safety in one go.
 function checkFontFile(value: unknown): value is FontFile {
-  if (!Value.Check(FontFileSchema, value)) return false
+  if (!compiledCheck(FontFileSchema, value)) return false
   const file = value as FontFile
   if (!isSafeFontSrc(file.path, file.mediaAssetId)) return false
   if (!fontPathMatchesFormat(file)) return false

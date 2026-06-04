@@ -24,7 +24,8 @@
  * Constraint #269: no imports from editor / editor-store here.
  */
 
-import { Type, Value, type Static } from '@core/utils/typeboxHelpers'
+import { Type, type Static } from '@core/utils/typeboxHelpers'
+import { compiledCheck } from '@core/utils/typeboxCompiler'
 import { FrameworkSettingsSchema } from '@core/framework/schemas'
 import { SiteFontsSettingsSchema, parseSiteFontsSettings } from '@core/fonts/schemas'
 
@@ -80,7 +81,7 @@ export function parseSiteSettings(raw: unknown): SiteSettings {
     }
   }
 
-  const framework = Value.Check(FrameworkSettingsSchema, r.framework)
+  const framework = compiledCheck(FrameworkSettingsSchema, r.framework)
     ? (r.framework as SiteSettings['framework'])
     : undefined
 

@@ -8,7 +8,8 @@
  * Constraint #269: no imports from editor / editor-store here.
  */
 
-import { Type, Value, type Static } from '@core/utils/typeboxHelpers'
+import { Type, type Static } from '@core/utils/typeboxHelpers'
+import { compiledCheck } from '@core/utils/typeboxCompiler'
 
 // ---------------------------------------------------------------------------
 // Internal sub-schemas
@@ -22,8 +23,6 @@ const TemplateConditionSchema = Type.Object({
   operator: Type.Literal('equals'),
   value: Type.String(),
 })
-
-type TemplateCondition = Static<typeof TemplateConditionSchema>
 
 // ---------------------------------------------------------------------------
 // PageTemplateConfigSchema
@@ -58,7 +57,7 @@ export function parsePageTemplate(raw: unknown): PageTemplateConfig | null {
 
   const priority = typeof r.priority === 'number' && isFinite(r.priority) ? r.priority : 0
   const conditions = Array.isArray(r.conditions)
-    ? r.conditions.flatMap((c) => Value.Check(TemplateConditionSchema, c) ? [c as TemplateCondition] : [])
+    ? r.conditions.flatMap((c) => compiledCheck(TemplateConditionSchema, c) ? [c] : [])
     : []
 
   return { enabled: true, context: 'entry', tableSlug: r.tableSlug as string, priority, conditions }

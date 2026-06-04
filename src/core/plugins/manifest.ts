@@ -1,4 +1,5 @@
 import { Type, Value, type Static } from '@core/utils/typeboxHelpers'
+import { compiled } from '@core/utils/typeboxCompiler'
 import type {
   PluginAdminPage,
   PluginManifest,
@@ -370,7 +371,7 @@ export function parsePluginManifest(input: unknown): PluginManifest {
   try {
     data = Value.Parse(manifestSchema, input) as ManifestRaw
   } catch {
-    const errors = [...Value.Errors(manifestSchema, input)]
+    const errors = [...compiled(manifestSchema).Errors(input)]
     const first = errors[0]
     const rawMessage = first?.message ?? 'manifest is malformed'
     const message = first ? friendlyManifestError(rawMessage, first.path ?? '') : rawMessage
@@ -663,4 +664,3 @@ export function validatePluginRecordData(
 
   return data
 }
-

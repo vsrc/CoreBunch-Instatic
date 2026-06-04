@@ -5,8 +5,12 @@
  * checked.
  */
 
-import { Value } from '@sinclair/typebox/value'
 import type { TSchema } from '@sinclair/typebox'
+import {
+  compiled,
+  compiledCheck,
+  compiledDecode,
+} from '@core/utils/typeboxCompiler'
 import { ALLOWED_API_TARGETS, isAllowedApiTarget } from './targets'
 import { ApiCallSchemas, type ValidatedApiCall } from './apiCallSchema'
 
@@ -18,7 +22,7 @@ export class ApiCallValidationError extends Error {
 }
 
 function firstSchemaError(schema: TSchema, value: unknown): string {
-  const [error] = [...Value.Errors(schema, value)]
+  const [error] = [...compiled(schema).Errors(value)]
   if (!error) return 'unknown validation error'
   const path = error.path || '/'
   return `${path}: ${error.message}`
@@ -60,13 +64,13 @@ export function parseApiCall(value: unknown): ValidatedApiCall {
   }
 
   const schema = ApiCallSchemas[target]
-  if (!Value.Check(schema, value)) {
+  if (!compiledCheck(schema, value)) {
     throw new ApiCallValidationError(
       `Invalid api-call payload for ${target}: ${firstSchemaError(schema, value)}`,
     )
   }
 
-  const parsed = Value.Decode(schema, value)
+  const parsed = compiledDecode(schema, value)
   validateApiCallSemantics(parsed)
   return parsed
 }

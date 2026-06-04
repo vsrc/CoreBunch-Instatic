@@ -10,7 +10,8 @@
  * Constraint #269: no imports from editor / editor-store here.
  */
 
-import { Type, Value, type Static, withFallback } from '@core/utils/typeboxHelpers'
+import { Type, type Static, withFallback } from '@core/utils/typeboxHelpers'
+import { compiledCheck } from '@core/utils/typeboxCompiler'
 
 // ---------------------------------------------------------------------------
 // PropBinding — used by both BaseNode (propBindings field) and VCNodeSchema
@@ -120,7 +121,7 @@ export function parsePropBindings(
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
   const out: Record<string, { paramId: string }> = {}
   for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
-    if (Value.Check(PropBindingSchema, v)) {
+    if (compiledCheck(PropBindingSchema, v)) {
       out[k] = v
     }
   }

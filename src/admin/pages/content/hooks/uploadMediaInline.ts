@@ -13,10 +13,10 @@
  * the asset's `publicPath`.
  */
 
-import { Value } from '@sinclair/typebox/value'
 import { normalizeCmsMediaAsset } from '@core/persistence/cmsMedia'
 import { CmsMediaAssetEnvelopeSchema } from '@core/persistence/responseSchemas'
 import type { CmsMediaAsset } from '@core/persistence'
+import { compiledCheck } from '@core/utils/typeboxCompiler'
 
 interface UploadOptions {
   file: File
@@ -59,7 +59,7 @@ export async function uploadMediaInline({ file, onProgress, signal }: UploadOpti
         return
       }
       const data = xhr.response as unknown
-      if (!Value.Check(CmsMediaAssetEnvelopeSchema, data)) {
+      if (!compiledCheck(CmsMediaAssetEnvelopeSchema, data)) {
         reject(new Error('Server response did not match the expected shape'))
         return
       }

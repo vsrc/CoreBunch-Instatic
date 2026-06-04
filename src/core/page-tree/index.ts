@@ -8,7 +8,7 @@
 // this pattern.
 // ---------------------------------------------------------------------------
 
-// Schemas — exported as both runtime constants (for `parseValue` / `Value.Check`)
+// Schemas — exported as both runtime constants (for parse/compiled validation)
 // and types (via Static<typeof X>).
 export { BaseNodeSchema, parsePropBindings } from './baseNode'
 export { NodeTreeSchema } from './treeSchema'

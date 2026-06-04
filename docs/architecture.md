@@ -324,6 +324,8 @@ The codebase enforces "validate, then trust": every untyped input goes through a
 
 Domain types come from `Static<typeof Schema>`. There is no parallel `interface Foo` next to `FooSchema`. **Schemas are the source of truth.**
 
+Repeated `Check` / `Decode` / `Errors` paths use the cached TypeCompiler helpers in `src/core/utils/typeboxCompiler.ts`. Keep `parseValue` on TypeBox's full `Value.Parse` pipeline when defaulting, conversion, or cleaning semantics matter.
+
 `zod` is banned from app and core code. The AI drivers now talk directly to each provider's REST API and pass TypeBox schemas straight through as JSON Schema (TypeBox schemas ARE JSON Schema), so no driver imports Zod — the package is unused pending its removal in the deps-cleanup phase. The `ai-driver-isolation.test.ts` gate still permits `zod` inside `server/ai/drivers/` (a vestigial exemption) and bans it everywhere else.
 
 See [docs/reference/typebox-patterns.md](reference/typebox-patterns.md) for the cookbook.

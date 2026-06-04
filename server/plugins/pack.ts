@@ -28,7 +28,8 @@ import type {
 } from '@core/page-tree'
 import { parseVisualComponent } from '@core/visualComponents'
 import type { VisualComponent } from '@core/visualComponents'
-import { parseValue, safeParseValue, Value } from '@core/utils/typeboxHelpers'
+import { parseValue, safeParseValue } from '@core/utils/typeboxHelpers'
+import { compiledCheck } from '@core/utils/typeboxCompiler'
 import { Type } from '@sinclair/typebox'
 import { PageSchema } from '@core/page-tree'
 import { parseStyleRule } from '@core/page-tree'
@@ -96,7 +97,7 @@ export function parsePluginPack(pluginId: string, raw: unknown): PluginPackConte
 
   const pages: Page[] = []
   for (const rawPage of parsed.value.pages ?? []) {
-    if (!Value.Check(PageSchema, rawPage)) {
+    if (!compiledCheck(PageSchema, rawPage)) {
       throw new PluginPackError(`Plugin "${pluginId}" pack contains an invalid Page entry`)
     }
     pages.push(parseValue(PageSchema, rawPage) as Page)
@@ -104,7 +105,7 @@ export function parsePluginPack(pluginId: string, raw: unknown): PluginPackConte
 
   const classes: StyleRule[] = []
   for (const rawClass of parsed.value.classes ?? []) {
-    // Use the tolerant parser instead of `Value.Check(StyleRuleSchema, ...)`
+    // Use the tolerant parser instead of a strict schema check
     // so pack authors can omit the Phase 0 selectors-system fields
     // (`kind`, `selector`, `order`) — they backfill to sensible class-kind
     // defaults. Hard-required fields (id, name) still cause null returns

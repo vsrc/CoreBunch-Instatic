@@ -11,8 +11,7 @@
 
 import type { SiteBundle, BundlePreview, ImportResult, ImportStrategy, ExportRequest } from '@core/data/bundleSchema'
 import { SiteBundleSchema, BundlePreviewSchema, ImportResultSchema } from '@core/data/bundleSchema'
-import { parseValue, formatValueErrors } from '@core/utils/typeboxHelpers'
-import { Value } from '@sinclair/typebox/value'
+import { parseValue, formatValueErrors, compiled } from '@core/utils/typeboxHelpers'
 import { readEnvelope, assertOk } from '@core/http'
 
 // ---------------------------------------------------------------------------
@@ -141,13 +140,13 @@ export function parseSiteBundle(raw: string): SiteBundle {
     try {
       // formatValueErrors gives up to 5 issues; we also fish out the first
       // path separately so we can populate SiteBundleParseError.path.
-      const firstErr = Value.Errors(SiteBundleSchema, parsed).First()
+      const firstErr = compiled(SiteBundleSchema).Errors(parsed).First()
       if (firstErr) {
         firstPath = firstErr.path
         message = formatValueErrors(SiteBundleSchema, parsed)
       }
     } catch {
-      // Value.Errors itself failed — keep defaults.
+      // Error collection itself failed — keep defaults.
     }
     throw new SiteBundleParseError(message, firstPath)
   }

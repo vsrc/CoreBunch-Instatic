@@ -10,7 +10,10 @@
  * `.catch(default)` for soft-fallback parsing of corrupted persisted data,
  * no `.transform()` for in-line shape massaging, and no `.refine()` for
  * cross-field invariants. We add those concerns as *helpers* that wrap
- * TypeBox's `Value.Check` / `Value.Parse` APIs.
+ * TypeBox validation. Hot `Check` / `Decode` / `Errors` paths go through
+ * the cached TypeCompiler helpers in `typeboxCompiler.ts`; `parseValue`
+ * intentionally keeps TypeBox's `Value.Parse` pipeline for defaulting,
+ * conversion, cleaning, assertion, and decoding.
  *
  * Public API
  * ----------
@@ -25,10 +28,16 @@
 import { Type } from '@sinclair/typebox'
 import type { TSchema, Static as TBStatic } from '@sinclair/typebox'
 import { Value } from '@sinclair/typebox/value'
+import {
+  compiled,
+  compiledFormatValueErrors,
+  compiledSafeParseValue,
+} from './typeboxCompiler'
 
 export { Type, Value }
 export type { TSchema }
 export type Static<T extends TSchema> = TBStatic<T>
+export { compiled }
 
 // Sentinel used to attach a fallback to any schema. Picked up by
 // `parseWithFallbackAnnotation`. We use a Symbol so it never clashes with
@@ -62,7 +71,7 @@ export function withFallback<T extends TSchema>(schema: T, fallback: TBStatic<T>
  *
  * Returns a value that has been *coerced* through the schema (defaults
  * applied, transforms run if any). For pure validation without coercion use
- * `Value.Check` directly.
+ * `safeParseValue`, `filterArray`, or the compiled helpers directly.
  */
 export function parseValue<T extends TSchema>(schema: T, value: unknown): TBStatic<T> {
   // Value.Parse runs Default + Convert + Clean + Decode + Check. That's the
@@ -78,14 +87,7 @@ export function safeParseValue<T extends TSchema>(
   schema: T,
   value: unknown,
 ): SchemaResult<T> {
-  if (!Value.Check(schema, value)) {
-    const errors: { path: string; message: string }[] = []
-    for (const err of Value.Errors(schema, value)) {
-      errors.push({ path: err.path, message: err.message })
-    }
-    return { ok: false, errors }
-  }
-  return { ok: true, value: Value.Decode(schema, value) as TBStatic<T> }
+  return compiledSafeParseValue(schema, value)
 }
 
 /**
@@ -107,25 +109,20 @@ export function filterArray<T extends TSchema>(
   values: unknown,
 ): TBStatic<T>[] {
   if (!Array.isArray(values)) return []
+  const validator = compiled(itemSchema)
   const out: TBStatic<T>[] = []
   for (const item of values) {
-    if (Value.Check(itemSchema, item)) {
-      out.push(Value.Decode(itemSchema, item) as TBStatic<T>)
+    if (validator.Check(item)) {
+      out.push(validator.Decode(item) as TBStatic<T>)
     }
   }
   return out
 }
 
 /**
- * Format Value.Errors into a single human-readable message. Used by
+ * Format compiled TypeBox errors into a single human-readable message. Used by
  * `parseValue` and at HTTP boundaries to produce useful error responses.
  */
 export function formatValueErrors(schema: TSchema, value: unknown): string {
-  const issues: string[] = []
-  for (const err of Value.Errors(schema, value)) {
-    issues.push(`${err.path || '<root>'}: ${err.message}`)
-    if (issues.length >= 5) break
-  }
-  return issues.join('; ') || 'Validation failed'
+  return compiledFormatValueErrors(schema, value)
 }
-

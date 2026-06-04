@@ -11,12 +11,13 @@ Schemas are the **source of truth**. Domain types come from `Static<typeof Schem
 ## TL;DR
 
 - **Helpers live in `src/core/utils/typeboxHelpers.ts`** — `Type`, `Value`, `Static`, `withFallback`, `parseValue`, `safeParseValue`, `filterArray`, `formatValueErrors`.
+- **Compiled validators live in `src/core/utils/typeboxCompiler.ts`** — `compiled`, `compiledCheck`, `compiledDecode`, `compiledSafeParseValue`, `compiledFormatValueErrors`. Hot repeated `Check` / `Decode` / `Errors` paths should use these or helpers that already call them.
 - **JSON boundary helpers live in `src/core/utils/jsonValidate.ts`** — `safeParseJson`, `parseJsonWithFallback`, `parseJsonResponse`.
 - **Canonical client HTTP layer:** `@core/http` — `apiRequest(path, { schema, … })` (the default for browser→server calls), plus `ApiError`, `isAbortError`, `readEnvelope`, `responseErrorMessage`, `ErrorEnvelopeSchema`. All defined in `src/core/http/apiClient.ts`.
 - **Schemas are source of truth.** `type Foo = Static<typeof FooSchema>` — never a hand-rolled interface beside the schema.
 - **Soft fallbacks** for corrupted local storage / optional config use `withFallback(schema, default)` + `parseJsonWithFallback`.
 - **Hard fallbacks** for required documents throw and bubble to an error boundary.
-- **`zod` is banned outside `server/ai/drivers/`.** The Anthropic and OpenRouter drivers (`typeboxToZod.ts`, `anthropic.ts`, `openrouter.ts`) translate TypeBox schemas to Zod for their SDKs' `tool()` APIs. Gated by `ai-driver-isolation.test.ts`.
+- **`zod` is banned repo-wide.** The AI drivers hit each provider's REST API directly and pass TypeBox schemas through as JSON Schema, so nothing imports Zod anymore; the package has been removed from `package.json`. Gated by `ai-driver-isolation.test.ts`.
 
 ---
 
@@ -62,13 +63,23 @@ const prefs = parseJsonWithFallback(
 | Helper                            | Purpose                                                              |
 |-----------------------------------|----------------------------------------------------------------------|
 | `Type`                            | Re-export from `@sinclair/typebox` — build schemas                   |
-| `Value`                           | Re-export — run validation (`Value.Check`, `Value.Parse`, `Value.Decode`, `Value.Errors`) |
+| `Value`                           | Re-export — reserved mainly for `Value.Parse` and `Value.Create`; prefer compiled helpers for repeated `Check` / `Decode` / `Errors` |
 | `Static<typeof Schema>`           | Type inference — equivalent to `z.infer<typeof S>`                   |
-| `parseValue(schema, value)`       | Strict parse; throws on invalid input. Use at hard boundaries.       |
-| `safeParseValue(schema, value)`   | Discriminated union `{ ok: true, value } \| { ok: false, errors }`   |
+| `parseValue(schema, value)`       | Strict parse with TypeBox's full `Value.Parse` pipeline; use when defaults/conversion/cleaning matter |
+| `safeParseValue(schema, value)`   | Discriminated union `{ ok: true, value } \| { ok: false, errors }`; uses the compiled validator cache |
 | `withFallback(schema, fallback)`  | Annotate a schema with a default; consulted by `parseWithFallbackAnnotation` and similar |
-| `filterArray(itemSchema, values)` | Filter an `unknown[]` keeping only items matching the schema         |
-| `formatValueErrors(schema, value)`| Human-readable error message string for failed validation            |
+| `filterArray(itemSchema, values)` | Filter an `unknown[]` keeping only items matching the schema; uses the compiled validator cache |
+| `formatValueErrors(schema, value)`| Human-readable error message string for failed validation; uses the compiled validator cache |
+
+### `src/core/utils/typeboxCompiler.ts`
+
+| Helper                                      | Purpose                                                          |
+|---------------------------------------------|------------------------------------------------------------------|
+| `compiled(schema)`                          | Return the cached `TypeCheck` for a schema, compiling it once per schema object |
+| `compiledCheck(schema, value)`              | Boolean validation via the cached compiled validator              |
+| `compiledDecode(schema, value)`             | Decode via the cached compiled validator                          |
+| `compiledSafeParseValue(schema, value)`     | Compiled equivalent of `safeParseValue`                           |
+| `compiledFormatValueErrors(schema, value)`  | Compact error formatter using the compiled validator's errors     |
 
 ### `src/core/utils/jsonValidate.ts`
 
@@ -76,7 +87,7 @@ const prefs = parseJsonWithFallback(
 |-------------------------------------------------|------------------------------------------------------------------|
 | `safeParseJson(raw, schema)`                    | Parse a string as JSON + validate; returns `{ ok, value } \| { ok, error }` |
 | `parseJsonWithFallback(raw, schema, default)`   | Best-effort read; returns the default on parse / validate failure|
-| `parseJsonResponse(res, schema)`                | Validate `await res.json()` against a schema; throws on mismatch  |
+| `parseJsonResponse(res, schema)`                | Validate `await res.json()` against a schema using the compiled validator cache; throws on mismatch |
 
 ### `src/core/http/apiClient.ts` (canonical client HTTP layer, `@core/http`)
 
@@ -113,6 +124,21 @@ export type Foo = Static<typeof FooSchema>
 ```
 
 **Never** write `interface Foo` next to `FooSchema`. The schema is the source of truth. If the type drifts from the schema, the schema wins.
+
+### Use compiled validators for hot repeated checks
+
+TypeBox's `Value.Check` / `Value.Decode` / `Value.Errors` interpret the schema each time. Repeated API response parsing, data-row-heavy screens, import validation, plugin protocol payloads, and other hot paths should use the compiled helpers. Compilation is cached by schema object identity, so define reusable schemas at module scope.
+
+```ts
+import { compiledCheck, compiledDecode } from '@core/utils/typeboxCompiler'
+
+if (!compiledCheck(DataRowSchema, raw)) {
+  throw new Error('Invalid data row')
+}
+const row = compiledDecode(DataRowSchema, raw)
+```
+
+Do **not** replace `parseValue` just because a path is repeated. `parseValue` intentionally uses TypeBox's full `Value.Parse` pipeline: clone, clean, defaults, conversion, assertion, and decode. Keep it where callers depend on defaulting/conversion/cleaning, or replace it only after adding tests that prove those semantics are no longer needed.
 
 ### Validate a request body (server handler)
 
@@ -238,19 +264,19 @@ export class SiteValidationError extends Error {
 
 ## Migrating from Zod
 
-The codebase migrated off Zod. If you encounter a remaining Zod pattern (outside the `server/handlers/agent/tools.ts` exemption), translate it:
+The codebase migrated off Zod. If you encounter a remaining Zod pattern, translate it:
 
 | Zod                                                   | TypeBox                                                            |
 |-------------------------------------------------------|--------------------------------------------------------------------|
 | `z.infer<typeof X>`                                   | `Static<typeof X>`                                                  |
 | `X.parse(v)` (strict)                                 | `parseValue(X, v)` or `Value.Parse(X, v)`                          |
-| `X.safeParse(v)`                                      | `safeParseValue(X, v)` or `Value.Check(X, v)` for boolean-only      |
+| `X.safeParse(v)`                                      | `safeParseValue(X, v)` or `compiledCheck(X, v)` for boolean-only hot paths |
 | `X.catch(default)` (soft fallback)                    | `withFallback(X, default)`                                          |
 | `z.array(z.unknown()).transform(filter)`              | `filterArray(itemSchema, values)`                                   |
 | `.transform()` / `.preprocess()` (data migration)     | Sibling parser helper functions (e.g. `parsePageNode`, `parseSitePage`) |
-| `.refine()` (cross-field invariants)                  | Named guard functions called after `Value.Check`                    |
+| `.refine()` (cross-field invariants)                  | Named guard functions called after compiled schema validation       |
 
-The exemption file `server/handlers/agent/tools.ts` exists because `@anthropic-ai/claude-agent-sdk`'s `tool()` API has a type-level `AnyZodRawShape` constraint that TypeBox can't satisfy. **No other Zod usage is allowed.** Gated by an import scan.
+There are no Zod exemptions. Provider drivers call REST/SSE APIs directly and pass TypeBox schemas through as JSON Schema for tool inputs. Gated by an import scan.
 
 ---
 
@@ -300,13 +326,14 @@ Common boundaries already wrapped — extend the same pattern when you add a new
 - [docs/editor.md](../editor.md) — editor store + persistence
 - Source-of-truth files:
   - `src/core/utils/typeboxHelpers.ts` — helper layer (`parseValue`, `withFallback`, `filterArray`, etc.)
+  - `src/core/utils/typeboxCompiler.ts` — cached TypeCompiler layer for hot validation execution
   - `src/core/utils/jsonValidate.ts` — JSON boundary helpers
   - `src/core/http/apiClient.ts` — `apiRequest`, `ApiError`, `isAbortError`, `readEnvelope`, `assertOk`, `responseErrorMessage`, `ErrorEnvelopeSchema`
   - `src/core/persistence/responseSchemas.ts` — shared CMS HTTP response schemas
   - `src/core/persistence/validate.ts` — `validateSite`, `validatePages`, `ValidatePagesOptions`, `SiteValidationError`
   - `src/core/plugins/manifest.ts` — `parsePluginManifest`
   - `server/http.ts` — `readValidatedBody`, `jsonResponse`, `badRequest`
-  - `server/ai/drivers/typeboxToZod.ts`, `server/ai/drivers/anthropic.ts`, `server/ai/drivers/openrouter.ts` — the only legitimate `zod` exemptions (Anthropic and OpenRouter drivers translate TypeBox schemas to Zod for their SDKs)
+  - `server/ai/drivers/` — direct provider HTTP drivers; tools are declared with their TypeBox `inputSchema` passed through as JSON Schema (no Zod)
 - Gate tests:
   - `src/__tests__/architecture/boundary-validation.test.ts` — enforces the four HTTP / JSON-parse boundary rules (no `res.json() as`, no `JSON.parse as`, no raw `fetch(` in admin, no raw `req.json(` in server handlers)
-  - `src/__tests__/architecture/ai-driver-isolation.test.ts` — enforces provider SDK isolation; `@anthropic-ai/sdk` banned everywhere, `zod` restricted to `server/ai/drivers/`
+  - `src/__tests__/architecture/ai-driver-isolation.test.ts` — enforces provider-SDK and `zod` isolation: `@anthropic-ai/sdk`, `@anthropic-ai/claude-agent-sdk`, `@openai/agents`, `@openrouter/agent`, `@modelcontextprotocol/sdk`, and `zod` are all banned repo-wide

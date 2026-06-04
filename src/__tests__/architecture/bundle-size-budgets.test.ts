@@ -87,8 +87,10 @@ const BUDGETS: ChunkBudget[] = [
   },
   {
     prefix: 'validation-vendor-',
-    maxBytes: 110_000,
-    rationale: '@sinclair/typebox (current ~103 KB raw / 26 KB gzipped)',
+    maxBytes: 125_000,
+    rationale:
+      '@sinclair/typebox value + compiler helpers for hot validation ' +
+      '(current ~116 KB raw / 29 KB gzipped)',
   },
   {
     prefix: 'dnd-vendor-',

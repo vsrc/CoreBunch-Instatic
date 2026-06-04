@@ -1,9 +1,9 @@
 import {
   Type,
-  Value,
   formatValueErrors,
   type Static,
 } from '@core/utils/typeboxHelpers'
+import { compiledCheck, compiledDecode } from '@core/utils/typeboxCompiler'
 import type { BaseNode } from './baseNode'
 import { PageNodeSchema, type PageNode } from './pageNode'
 import { NodeTreeSchema, type NodeTree } from './treeSchema'
@@ -116,10 +116,10 @@ export function assertValidNodeTree<TNode extends BaseNode>(
 }
 
 export function parsePageNodeTree(value: unknown, path = 'tree'): NodeTree<PageNode> {
-  if (!Value.Check(NodeTreeSchema, value)) {
+  if (!compiledCheck(NodeTreeSchema, value)) {
     throw new Error(`${path}: ${formatValueErrors(NodeTreeSchema, value)}`)
   }
-  const tree = Value.Decode(NodeTreeSchema, value) as NodeTree<PageNode>
+  const tree = compiledDecode(NodeTreeSchema, value) as NodeTree<PageNode>
   assertValidNodeTree(tree, path)
   return tree
 }

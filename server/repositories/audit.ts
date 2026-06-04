@@ -1,6 +1,7 @@
 import { nanoid } from 'nanoid'
 import type { DbClient } from '../db/client'
-import { Type, Value, type Static } from '@core/utils/typeboxHelpers'
+import { Type, type Static } from '@core/utils/typeboxHelpers'
+import { compiledCheck, compiledDecode } from '@core/utils/typeboxCompiler'
 
 const AuditActionSchema = Type.Union([
   Type.Literal('login.success'),
@@ -102,7 +103,7 @@ export interface AuditEvent {
 }
 
 function normalizeMetadata(value: unknown): AuditMetadata {
-  return Value.Check(AuditMetadataSchema, value) ? Value.Decode(AuditMetadataSchema, value) : {}
+  return compiledCheck(AuditMetadataSchema, value) ? compiledDecode(AuditMetadataSchema, value) : {}
 }
 
 function userAuditLabel(row: AuditUserLabelRow): string {

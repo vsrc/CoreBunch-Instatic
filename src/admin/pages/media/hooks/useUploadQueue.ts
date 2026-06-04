@@ -14,8 +14,8 @@
  * drain in the corner.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Value } from '@sinclair/typebox/value'
 import { checkSizeLimit } from '@core/files/upload'
+import { compiledCheck } from '@core/utils/typeboxCompiler'
 import {
   setCmsMediaAssetFolders,
   type CmsMediaAsset,
@@ -143,7 +143,7 @@ export function useUploadQueue({
           // path does (`parseJsonResponse`) — XHR returns the parsed JSON
           // via responseType: 'json'.
           const data = xhr.response as unknown
-          if (!Value.Check(CmsMediaAssetEnvelopeSchema, data)) {
+          if (!compiledCheck(CmsMediaAssetEnvelopeSchema, data)) {
             patchItem(item.id, {
               status: 'failed',
               error: 'Server response did not match the expected shape',

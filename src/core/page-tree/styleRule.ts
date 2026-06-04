@@ -28,7 +28,8 @@
  * Constraint #269: no imports from editor / editor-store here.
  */
 
-import { Type, Value, type Static, withFallback } from '@core/utils/typeboxHelpers'
+import { Type, type Static, withFallback } from '@core/utils/typeboxHelpers'
+import { compiledCheck } from '@core/utils/typeboxCompiler'
 import { GeneratedClassMetadataSchema } from '@core/framework/schemas'
 import {
   asPlainObject,
@@ -178,7 +179,7 @@ export function parseStyleRule(raw: unknown): StyleRule | null {
   const scope = parseStyleRuleScope(r.scope)
   const tags = parseStringArrayField(r.tags)
   const contextStyles = parseContextStyles(r)
-  const generated = Value.Check(GeneratedClassMetadataSchema, r.generated)
+  const generated = compiledCheck(GeneratedClassMetadataSchema, r.generated)
     ? (r.generated as StyleRule['generated'])
     : undefined
 
