@@ -370,7 +370,7 @@ interface AgentSlice {
 }
 ```
 
-Conversations and their message history are persisted server-side in `ai_conversations` + `ai_conversation_messages`. `loadAgentConversation(id)` rehydrates a past thread into `agentMessages` without re-running the conversation.
+Conversations and their message history are persisted server-side in `ai_conversations` + `ai_messages`. `loadAgentConversation(id)` rehydrates a past thread into `agentMessages` without re-running the conversation.
 
 ---
 

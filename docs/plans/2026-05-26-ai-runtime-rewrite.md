@@ -24,7 +24,7 @@ A plan to take the current single-provider, single-surface Claude Agent SDK inte
 - **Persistent conversations**: tables `ai_conversations` + `ai_messages`, scoped per user + per surface. Soft-delete with a nightly job that hard-purges rows older than 30 days. Conversations survive reload and device-switching.
 - **Four AI surfaces** with scoped toolsets and **independent message histories**: Site editor (24 tools, live), Content workspace (15 tools, live), Data workspace (Phase 4 follow-up), Plugin SDK (Phase 5).
 - **Model picker** in every chat: `(credentialId, modelId)` persisted per-surface. Defaults sourced from site-wide config with per-user override.
-- **New capabilities**: `ai.providers.manage` (set keys + site defaults), `ai.use` (invoke any AI surface, read own conversations), `ai.audit.read` (see all-user usage log).
+- **New capabilities**: `ai.chat` (open chats, invoke tools, see models), `ai.tools.write` (browser write tools), `ai.providers.manage` (set keys + site defaults), `ai.audit.read` (see all-user usage log).
 - **No-credential UX**: banner inside the chat panel with a "Open AI settings" deep-link to `/admin/ai`; Send button disabled until at least one credential exists.
 - **Cost tracking:** Anthropic/OpenAI/Ollama use a hard-coded price table (`server/ai/pricing.ts`). OpenRouter provides native per-call USD cost and is intentionally absent from the table. Token counts always stored; cost rolls up daily.
 - **Six-phase rollout**. Phases 1-3 are live; 4-6 are the next deliverables.
@@ -358,8 +358,6 @@ create table ai_conversations (
   title text not null,
   credential_id text references ai_provider_credentials(id) on delete set null,
   model_id text not null,
-  session_id text,                            -- provider-specific resume id, if any
-  context_json text,                          -- per-scope context: { pageId, postId, tableId, ... }
   prompt_tokens_total bigint not null default 0,
   completion_tokens_total bigint not null default 0,
   cost_usd_total numeric(10, 6) not null default 0,
@@ -396,7 +394,6 @@ create unique index ai_msg_conv_position_idx
 
 Notes:
 - **Per-user, per-scope** queries: `WHERE user_id = ? AND scope = ? AND deleted_at IS NULL ORDER BY updated_at DESC` is the canonical "my recent chats" query, served by `ai_conv_user_scope_idx`.
-- **`context_json`** is what the snapshot/page-context payload was when the conversation started — lets us recover "the user was editing page X" if they reopen the chat after switching pages.
 - **Soft-delete** sets `deleted_at`. A nightly job (registered via the existing scheduler tick) hard-deletes rows where `deleted_at < now() - interval '30 days'`. Cascading FK takes the messages with it.
 - **Token + cost accounting** lives at both row levels: per message (granular) and per conversation (sum, denormalised for the list view).
 
@@ -559,21 +556,21 @@ The handler picks the scope from the URL (`/admin/api/ai/chat/site`, `/admin/api
 
 | Method + Path                                            | Capability gate                                        | Purpose                                              |
 |----------------------------------------------------------|--------------------------------------------------------|------------------------------------------------------|
-| `POST /admin/api/ai/chat/:scope`                         | `ai.use` + scope-specific (e.g. `pages.edit` for site) | Open NDJSON stream. Body carries `conversationId` (new or existing) and the user's prompt. |
-| `POST /admin/api/ai/tool-result`                         | `ai.use`                                               | Browser bridge POST (renamed; same semantics)        |
+| `POST /admin/api/ai/chat/:scope`                         | `ai.chat`                                              | Open NDJSON stream. Body carries `conversationId` (new or existing) and the user's prompt. |
+| `POST /admin/api/ai/tool-result`                         | `ai.tools.write`                                       | Browser bridge POST (renamed; same semantics)        |
 | `GET  /admin/api/ai/credentials`                         | `ai.providers.manage`                                  | List CredentialView[] for current user (all auth modes) |
 | `POST /admin/api/ai/credentials`                         | `ai.providers.manage`                                  | Create — body `{ providerId, authMode, displayLabel, apiKey?, baseUrl? }` |
 | `PUT  /admin/api/ai/credentials/:id`                     | `ai.providers.manage`                                  | Replace secret or rename. Auth mode is immutable; user creates a new row to switch modes. |
 | `DELETE /admin/api/ai/credentials/:id`                   | `ai.providers.manage`                                  | Hard-delete. Rejected if the row is referenced by any `ai_defaults`. |
 | `POST /admin/api/ai/credentials/:id/test`                | `ai.providers.manage`                                  | Calls `driver.listModels(creds)`; returns `{ ok, modelCount, error }` |
-| `GET  /admin/api/ai/providers/:id/models?credentialId=`  | `ai.use`                                               | Returns AiProviderModel[]; cached per-credential, 1h server-side |
-| `GET  /admin/api/ai/defaults`                            | `ai.use`                                               | Returns `Record<ToolScope, { credentialId, modelId }>` |
+| `GET  /admin/api/ai/providers/:id/models?credentialId=`  | `ai.chat`                                              | Returns AiProviderModel[]; cached per-credential, 1h server-side |
+| `GET  /admin/api/ai/defaults`                            | `ai.chat`                                              | Returns `Record<ToolScope, { credentialId, modelId }>` |
 | `PUT  /admin/api/ai/defaults/:scope`                     | `ai.providers.manage`                                  | Updates one scope's site-wide default                |
-| `GET  /admin/api/ai/conversations?scope=`                | `ai.use`                                               | List current user's non-deleted conversations for a scope (newest first) |
-| `POST /admin/api/ai/conversations`                       | `ai.use`                                               | Create a new conversation row — body `{ scope, title?, credentialId, modelId, contextJson? }` |
-| `GET  /admin/api/ai/conversations/:id`                   | `ai.use` + ownership check                             | Full conversation + all messages                     |
-| `PUT  /admin/api/ai/conversations/:id`                   | `ai.use` + ownership check                             | Rename, change model, soft-delete (`deletedAt`)      |
-| `DELETE /admin/api/ai/conversations/:id`                 | `ai.use` + ownership check                             | Soft-delete. Nightly job hard-purges after 30 days.  |
+| `GET  /admin/api/ai/conversations?scope=`                | `ai.chat`                                              | List current user's non-deleted conversations for a scope (newest first) |
+| `POST /admin/api/ai/conversations`                       | `ai.chat`                                              | Create a new conversation row — body `{ scope, title?, credentialId, modelId }` |
+| `GET  /admin/api/ai/conversations/:id`                   | `ai.chat` + ownership check                            | Full conversation + all messages                     |
+| `PUT  /admin/api/ai/conversations/:id`                   | `ai.chat` + ownership check                            | Rename, change model, soft-delete (`deletedAt`)      |
+| `DELETE /admin/api/ai/conversations/:id`                 | `ai.chat` + ownership check                            | Soft-delete. Nightly job hard-purges after 30 days.  |
 
 All state-changing methods CSRF-checked via `originAllowed()` (same gate as today).
 All write tools subject to step-up auth when the underlying mutation (publish, deletePage, …) requires it — unchanged from today's behaviour.
@@ -600,11 +597,12 @@ Three new capabilities added to `src/core/auth/capabilityCatalog.ts` (or whereve
 
 | Permission                | Risk     | Granted to (by default)   | What it allows                                  |
 |---------------------------|----------|---------------------------|-------------------------------------------------|
-| `ai.use`                  | medium   | Owner, Admin              | Open chats, invoke read/write tools, see models |
+| `ai.chat`                 | medium   | Owner, Admin              | Open chats, invoke read/write tools, see models |
+| `ai.tools.write`          | medium   | Owner, Admin              | Execute browser-bridged write tools             |
 | `ai.providers.manage`     | high     | Owner, Admin              | Create/update/delete credentials; set defaults  |
 | `ai.audit.read`           | medium   | Owner, Admin              | Read AI usage audit log                         |
 
-Client role does NOT get `ai.use` by default — opt-in per deployment.
+Client role does NOT get `ai.chat` by default — opt-in per deployment.
 Member role never gets any of these.
 
 ---
@@ -665,7 +663,7 @@ Independent message histories: each scope has its own slice instance keyed by `s
 
 - `src/admin/pages/site/agent/agentSlice.ts` is **deleted**. The Site editor mounts `<AiAssistantDrawer scope="site" />`.
 - `src/admin/pages/site/agent/executor.ts` keeps its role: the **browser bridge dispatcher** for site write tools. Renamed to `siteBridge.ts` and registered with the drawer for `scope: 'site'`.
-- `renderEvidence.ts` and `pageContext.ts` (renamed from `agentSlice.ts`'s `buildPageContext`) build the page snapshot, attached to the chat request and stored as `context_json` on the conversation row.
+- `renderEvidence.ts` and `pageContext.ts` (renamed from `agentSlice.ts`'s `buildPageContext`) build the page snapshot, attached to each chat request as `snapshot` in the POST body.
 - System prompt unchanged, moved to `server/ai/tools/instatic/systemPrompt.ts`.
 - Conversation sidebar shows the user's recent site-editor chats; opening one re-attaches the snapshot it was created with (so the agent can still reason about that page even if the user navigated elsewhere).
 
@@ -813,7 +811,7 @@ Each phase is independently shippable and leaves the app in a runnable state.
 
 ### Phase 2 — Settings UI + capability + credentials handlers ✅ shipped
 
-- Capabilities `ai.use`, `ai.providers.manage`, `ai.audit.read` added to the catalog and granted to Owner/Admin built-in roles.
+- Capabilities `ai.chat`, `ai.tools.write`, `ai.providers.manage`, `ai.audit.read` added to the catalog and granted to Owner/Admin built-in roles.
 - Top-level admin route `/admin/ai` with three tabs: **Providers** (credential CRUD, two-column dialog), **Defaults** (per-scope `(credentialId, modelId)`), **Audit** (placeholder until Phase 6).
 - Credential handlers: list, create, update, delete, test.
 - Auth-mode is derived from `providerId` — UI does not expose a separate picker (Anthropic/OpenAI/OpenRouter = `apiKey`; Ollama = `baseUrl`).
@@ -927,7 +925,7 @@ Pre-rewrite there was no AI-related persistent state to migrate (no DB rows, no 
 
 - Streaming media generation (image/audio). A future plan.
 - A "Claude Skills" mechanism in our app (orthogonal — skills are a Claude Code CLI feature today, not a generic LLM concept).
-- A way for non-admins to use AI. Member role gets no `ai.use` capability; a future plan can introduce a `pages.suggest` or similar limited-scope permission for editorial workflows.
+- A way for non-admins to use AI. Member role gets no `ai.chat` capability; a future plan can introduce a `pages.suggest` or similar limited-scope permission for editorial workflows.
 - Federated identity (SSO) for the providers themselves (e.g. "log in to Anthropic with OAuth"). Out of scope; BYO-key only.
 - A general-purpose Cmd+K AI mode. The user did not select Spotlight; revisit after Phase 4 if usage patterns suggest it.
 
