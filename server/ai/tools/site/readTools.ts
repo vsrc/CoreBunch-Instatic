@@ -59,7 +59,7 @@ const listModulesTool: AiTool = {
   description:
     'List registered modules with id, name, category, props schema, and style targets. `category` filters case-insensitively.',
   inputSchema: ListModulesInput,
-  handler: async (input, ctx) => {
+  handler: async (input) => {
     const { category } = input as Static<typeof ListModulesInput>
     const normalized = category?.toLowerCase()
     const all = describeAgentModules()
