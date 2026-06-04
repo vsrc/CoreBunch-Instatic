@@ -68,6 +68,7 @@ export function MediaSidebar({ workspace, activePanel, onActivePanelChange }: Me
   const panelWidth = activePanel ? leftSidebarWidth : 0
   const style = {
     '--left-sidebar-panel-width': `${panelWidth}px`,
+    '--left-sidebar-panel-layout-width': `${leftSidebarWidth}px`,
   } as CSSProperties
 
   // Storage election changes which adapter handles each asset role.
@@ -176,6 +177,7 @@ export function MediaSidebar({ workspace, activePanel, onActivePanelChange }: Me
           width={leftSidebarWidth}
           targetRef={sidebarRef}
           cssVariable="--left-sidebar-panel-width"
+          layoutCssVariable="--left-sidebar-panel-layout-width"
           ariaLabel="Resize media sidebar"
           onResize={setLeftSidebarWidth}
         />

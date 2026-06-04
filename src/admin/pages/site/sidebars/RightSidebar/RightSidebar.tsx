@@ -44,6 +44,7 @@ export function RightSidebar({ mode }: RightSidebarProps) {
 
   const style = {
     '--right-sidebar-panel-width': `${panelWidth}px`,
+    '--right-sidebar-panel-layout-width': `${propertiesPanel.width}px`,
   } as CSSProperties
 
   return (
@@ -61,6 +62,7 @@ export function RightSidebar({ mode }: RightSidebarProps) {
           width={propertiesPanel.width}
           targetRef={sidebarRef}
           cssVariable="--right-sidebar-panel-width"
+          layoutCssVariable="--right-sidebar-panel-layout-width"
           ariaLabel="Resize right sidebar"
           onResize={(width) => setPropertiesPanel({ width })}
         />

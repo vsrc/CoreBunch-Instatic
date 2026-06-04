@@ -82,6 +82,7 @@ export function LeftSidebar({ workspace = 'site', contentPanel, editable = true 
 
   const style = {
     '--left-sidebar-panel-width': `${panelWidth}px`,
+    '--left-sidebar-panel-layout-width': `${leftSidebarWidth}px`,
   } as CSSProperties
 
   return (
@@ -174,6 +175,7 @@ export function LeftSidebar({ workspace = 'site', contentPanel, editable = true 
           width={leftSidebarWidth}
           targetRef={sidebarRef}
           cssVariable="--left-sidebar-panel-width"
+          layoutCssVariable="--left-sidebar-panel-layout-width"
           ariaLabel="Resize left sidebar"
           onResize={setLeftSidebarWidth}
         />

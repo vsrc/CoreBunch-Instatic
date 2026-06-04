@@ -16,6 +16,7 @@ interface SidebarResizeHandleProps {
   width: number
   targetRef: RefObject<HTMLElement | null>
   cssVariable: string
+  layoutCssVariable?: string
   ariaLabel: string
   onResize: (width: number) => void
 }
@@ -43,6 +44,7 @@ export function SidebarResizeHandle({
   width,
   targetRef,
   cssVariable,
+  layoutCssVariable,
   ariaLabel,
   onResize,
 }: SidebarResizeHandleProps) {
@@ -54,9 +56,11 @@ export function SidebarResizeHandle({
   const applyLiveWidth = useCallback((nextWidth: number) => {
     const clampedWidth = clampSidebarWidth(nextWidth)
     widthRef.current = clampedWidth
-    targetRef.current?.style.setProperty(cssVariable, `${clampedWidth}px`)
+    const target = targetRef.current
+    target?.style.setProperty(cssVariable, `${clampedWidth}px`)
+    if (layoutCssVariable) target?.style.setProperty(layoutCssVariable, `${clampedWidth}px`)
     handleRef.current?.setAttribute('aria-valuenow', String(clampedWidth))
-  }, [cssVariable, targetRef])
+  }, [cssVariable, layoutCssVariable, targetRef])
 
   useEffect(() => {
     applyLiveWidth(width)

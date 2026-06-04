@@ -38,6 +38,7 @@ export function ContentSidebar({
   const panelWidth = activePanel ? leftSidebarWidth : 0
   const style = {
     '--left-sidebar-panel-width': `${panelWidth}px`,
+    '--left-sidebar-panel-layout-width': `${leftSidebarWidth}px`,
   } as CSSProperties
 
   return (
@@ -108,6 +109,7 @@ export function ContentSidebar({
           width={leftSidebarWidth}
           targetRef={sidebarRef}
           cssVariable="--left-sidebar-panel-width"
+          layoutCssVariable="--left-sidebar-panel-layout-width"
           ariaLabel="Resize content sidebar"
           onResize={setLeftSidebarWidth}
         />

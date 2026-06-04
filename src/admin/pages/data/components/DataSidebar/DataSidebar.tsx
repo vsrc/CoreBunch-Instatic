@@ -83,11 +83,14 @@ export function DataSidebar({
   const dataSidebarCollapsed = useEditorStore((s) => s.dataSidebarCollapsed)
   const setDataSidebarCollapsed = useEditorStore((s) => s.setDataSidebarCollapsed)
 
-  // When collapsed, the panel slot collapses to zero-width (rail stays visible).
+  // When collapsed, only the outer allocation collapses. The panel body keeps
+  // the saved layout width and is clipped by the sidebar shell, so text does
+  // not reflow during open/close motion.
   const panelWidth = dataSidebarCollapsed ? 0 : leftSidebarWidth
 
   const style = {
     '--left-sidebar-panel-width': `${panelWidth}px`,
+    '--left-sidebar-panel-layout-width': `${leftSidebarWidth}px`,
   } as CSSProperties
   const tablesRailAccent = railAccent('data:tables:Data tables')
   const tablesRailButtonStyle = {
@@ -304,6 +307,7 @@ export function DataSidebar({
           width={leftSidebarWidth}
           targetRef={sidebarRef}
           cssVariable="--left-sidebar-panel-width"
+          layoutCssVariable="--left-sidebar-panel-layout-width"
           ariaLabel="Resize data sidebar"
           onResize={setLeftSidebarWidth}
         />

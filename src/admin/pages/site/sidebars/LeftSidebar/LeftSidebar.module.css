@@ -3,6 +3,7 @@
     z-index: 55;
     display: flex;
     --left-sidebar-panel-width: 0px;
+    --left-sidebar-panel-layout-width: var(--left-sidebar-panel-width);
     flex: 0 0 calc(42px + var(--left-sidebar-panel-width));
     width: calc(42px + var(--left-sidebar-panel-width));
     min-width: 42px;
@@ -14,14 +15,13 @@
 }
 
 .panelSlot {
-    flex: 1;
-    width: 100%;
-    min-width: 0;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 42px;
+    width: var(--left-sidebar-panel-layout-width);
     min-height: 0;
     overflow: hidden;
-    transition:
-        flex-basis 180ms ease,
-        width 180ms ease;
 }
 
 .panelMount {
@@ -35,8 +35,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .sidebar,
-    .panelSlot {
+    .sidebar {
         transition: none;
     }
 }

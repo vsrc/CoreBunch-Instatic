@@ -214,6 +214,9 @@ describe('Data table context menu', () => {
     expect(
       screen.getByTestId('data-left-sidebar').style.getPropertyValue('--left-sidebar-panel-width'),
     ).toBe('0px')
+    expect(
+      screen.getByTestId('data-left-sidebar').style.getPropertyValue('--left-sidebar-panel-layout-width'),
+    ).toBe('320px')
   })
 
   it('opens table settings and guarded delete actions from the sidebar', () => {

@@ -482,6 +482,8 @@ describe('AdminCanvasLayout — permanent panel rail', () => {
 
     expect(sidebar.getAttribute('data-expanded')).toBe('false')
     expect(sidebar.getAttribute('data-active-panel')).toBe('none')
+    expect(sidebar.style.getPropertyValue('--left-sidebar-panel-width')).toBe('0px')
+    expect(sidebar.style.getPropertyValue('--left-sidebar-panel-layout-width')).toBe('320px')
     expect(useEditorStore.getState().siteExplorerPanelOpen).toBe(false)
 
     fireEvent.click(within(rail).getByRole('button', { name: /open colors panel/i }))
@@ -552,6 +554,8 @@ describe('AdminCanvasLayout — permanent panel rail', () => {
       expect(useEditorStore.getState().propertiesPanelMode).toBe('floating')
       expect(rightSidebar.getAttribute('data-expanded')).toBe('false')
     }, { timeout: 150 })
+    expect(rightSidebar.style.getPropertyValue('--right-sidebar-panel-width')).toBe('0px')
+    expect(rightSidebar.style.getPropertyValue('--right-sidebar-panel-layout-width')).toBe('360px')
 
     const floatingPanel = screen.getByTestId('properties-panel')
     expect(floatingPanel.getAttribute('data-variant')).toBe('floating')
