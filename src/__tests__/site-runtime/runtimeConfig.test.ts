@@ -48,7 +48,7 @@ function page(id: string, template = false): Page {
         children: [],
       },
     },
-    ...(template ? { template: { enabled: true, context: 'entry', tableSlug: 'posts', priority: 0, conditions: [] } } : {}),
+    ...(template ? { template: { enabled: true, target: { kind: 'postTypes', tableSlugs: ['posts'] }, priority: 0 } } : {}),
   }
 }
 

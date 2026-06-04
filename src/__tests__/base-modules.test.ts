@@ -270,7 +270,7 @@ describe('base.container — render() specifics', () => {
 
   it('renders the shared CanvasModulePlaceholder inside empty containers', () => {
     // The empty-state affordance is now the unified CanvasModulePlaceholder
-    // (same primitive used by base.image, base.video, base.content, base.loop,
+    // (same primitive used by base.image, base.video, base.outlet, base.loop,
     // base.slot-outlet, base.visual-component-ref) so an empty container reads
     // the same way as every other empty module — one consistent stripe-pattern
     // language across the canvas. The legacy `.emptyCanvasContainer` CSS rule

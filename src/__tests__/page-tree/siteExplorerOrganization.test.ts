@@ -54,10 +54,8 @@ describe('site explorer organization', () => {
           title: 'Post Template',
           template: {
             enabled: true,
-            context: 'entry',
-            tableSlug: 'posts',
+            target: { kind: 'postTypes', tableSlugs: ['posts'] },
             priority: 0,
-            conditions: [],
           },
         }),
       ],

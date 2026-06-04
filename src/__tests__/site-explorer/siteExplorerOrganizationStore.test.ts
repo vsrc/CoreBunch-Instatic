@@ -109,10 +109,8 @@ describe('Site Explorer organization store actions', () => {
 
     useEditorStore.getState().convertPageToTemplate('pricing', {
       enabled: true,
-      context: 'entry',
-      tableSlug: 'posts',
+      target: { kind: 'postTypes', tableSlugs: ['posts'] },
       priority: 0,
-      conditions: [],
     })
 
     let explorer = useEditorStore.getState().site?.explorer
