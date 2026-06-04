@@ -207,14 +207,20 @@ export function BindingPickerPopover({
   //      definitions so the preview is sensible even before any row is
   //      published (titles like "Example Post Title", etc.).
   //   3. Loop-bound with no published rows — fall back to (2).
-  const [currentEntryItem, setCurrentEntryItem] = useState<LoopItem | null>(null)
+  // The fetched preview item is stored together with the table id it was
+  // fetched for. The value the rows actually consume (`currentEntryItem`) is
+  // derived during render and only surfaces the fetched item when it still
+  // belongs to the current scope — so changing scope never flashes the
+  // previous table's preview values, and there is no setState-in-effect reset.
+  const [fetchedEntry, setFetchedEntry] = useState<{
+    tableId: string
+    item: LoopItem | null
+  } | null>(null)
 
-  /* eslint-disable react-hooks/set-state-in-effect */
+  // No eslint-disable needed here: the only setState (setFetchedEntry) runs
+  // inside the async load(), not synchronously in the effect body.
   useEffect(() => {
-    if (!scopedTable) {
-      setCurrentEntryItem(null)
-      return
-    }
+    if (!scopedTable) return
     let cancelled = false
     const tableId = scopedTable.id
 
@@ -229,7 +235,7 @@ export function BindingPickerPopover({
           })
           if (cancelled) return
           if (result.items.length > 0) {
-            setCurrentEntryItem(result.items[0] ?? null)
+            setFetchedEntry({ tableId, item: result.items[0] ?? null })
             return
           }
         } catch {
@@ -242,10 +248,10 @@ export function BindingPickerPopover({
       try {
         const table = await getCmsDataTable(tableId)
         if (cancelled || !table) return
-        setCurrentEntryItem(dataTablePreviewToLoopItem(table))
+        setFetchedEntry({ tableId, item: dataTablePreviewToLoopItem(table) })
       } catch {
         if (cancelled) return
-        setCurrentEntryItem(null)
+        setFetchedEntry({ tableId, item: null })
       }
     }
 
@@ -254,6 +260,11 @@ export function BindingPickerPopover({
       cancelled = true
     }
   }, [scopedTable, loopTableId])
+
+  const currentEntryItem =
+    fetchedEntry && scopedTable && fetchedEntry.tableId === scopedTable.id
+      ? fetchedEntry.item
+      : null
 
   // ─── Field list assembly ───────────────────────────────────────────────
   const controlKind = control.type as PropertyControlKind
