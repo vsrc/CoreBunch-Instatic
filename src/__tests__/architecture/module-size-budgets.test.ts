@@ -93,7 +93,6 @@ const EXEMPT = new Set<string>([
 const GRANDFATHERED: Record<string, number> = {
   'src/admin/pages/site/store/slices/classSlice.ts': 1014,
   'server/repositories/data/rows.ts': 1023,
-  'src/admin/pages/site/panels/PropertiesPanel/ClassPicker.tsx': 761,
   'src/admin/pages/site/store/slices/visualComponentsSlice.ts': 924,
   'server/repositories/media.ts': 704,
   'server/handlers/cms/auth.ts': 854,
@@ -103,7 +102,6 @@ const GRANDFATHERED: Record<string, number> = {
   'src/core/siteImport/cssToStyleRules.ts': 829,
   'src/admin/pages/site/panels/TypographyPanel/FontsSection/AddGoogleFontDialog.tsx': 750,
   'src/core/markdown/markdownDocument.ts': 748,
-  'src/ui/components/ContextMenu/ContextMenu.tsx': 741,
   'src/admin/pages/dashboard/DashboardPage.tsx': 732,
   'src/admin/pages/data/components/NewFieldDialog/NewFieldDialog.tsx': 703,
 }
