@@ -27,11 +27,12 @@ export {
   parseStyleRule,
 } from './styleRule'
 export { SiteShellSchema } from './siteDocument'
+export { PageTemplateConfigSchema, TemplateTargetSchema, parsePageTemplate } from './pageTemplate'
 
 // Types — derived from schemas. Schemas are the source of truth.
 export type { Breakpoint } from './breakpoint'
 export type { DynamicPropBinding } from './dynamicBinding'
-export type { PageTemplateConfig } from './pageTemplate'
+export type { PageTemplateConfig, TemplateTarget } from './pageTemplate'
 export type { PageNode } from './pageNode'
 export type { TreeOperation, TreeMutateResult } from './operationSchema'
 export type { Page } from './page'
