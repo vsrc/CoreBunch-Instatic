@@ -498,15 +498,21 @@ Opens the rail-selected panel:
 - `SiteExplorerPanel` — pages and components roster
 - `MediaExplorerPanel` — quick media insert
 - `ColorsPanel`, `TypographyPanel`, `SpacingPanel` — site-level design tokens
-- `FrameworkScalePanel` — scale / spacing system
 - `DependenciesPanel` — site package.json / `bun install`
 - `SelectorsPanel` — CSS class library
 - `PluginEditorPanel` — plugin-provided editor panels
 - `AgentPanel` — AI assistant
 
-### Right sidebar
+### Right sidebar (`RightSidebar`)
 
-Property controls bound to the selected node. Contents driven by the node's module schema (`src/core/module-engine/`).
+`src/admin/pages/site/sidebars/RightSidebar/RightSidebar.tsx`. Accepts a `mode` prop (`'site' | 'hidden'`):
+
+- `'site'` — expands when a node or class is selected AND the panel is docked AND not collapsed. Determined by `selectRightSidebarExpanded` (`src/admin/pages/site/store/store.ts`).
+- `'hidden'` — always collapsed (site viewer; no `pages.draft.save` capability).
+
+`isExpanded` is derived from synchronous editor store state only — never from async prop availability. This means the sidebar lands at its final width on the very first render with no transition.
+
+Property controls are driven by the selected node's module schema (`src/core/module-engine/`).
 
 At the top of the Properties Panel, the selector picker is the single entry point for CSS rules that affect the selected element. Assigned class rules render as removable `TagPill` chips and are stored on `node.classIds`; matching ambient rules render as non-removable `TagPill` chips because they apply by selector matching, not assignment. The dropdown searches both class rules and ambient selectors. Ambient rows that do not match the selected canvas element stay visible but disabled with the mismatch reason, and selector-shaped input such as `.hero .title`, `h1`, or `a:hover` creates an ambient rule instead of a class.
 
@@ -515,6 +521,23 @@ The Typography panel stores Google/custom font assets and editable font tokens t
 When the user clicks a rule in the Selectors Panel, the Properties Panel switches to **selector-editing mode** — the body shows style controls for that rule directly, and the header renders `SelectorHeader` with the rule's CSS selector, an inline rename input, and a delete button. The delete and rename actions are only shown for non-generated rules and require `site.style.edit`.
 
 When an eligible node is selected on a page canvas (not root, not already a ref, not inside VC mode), a **Componentize** button (`ConvertToComponentButton`) appears next to the class picker. Clicking it, or triggering `openComponentizeEditor(nodeId)` from the layer context menu, opens an inline name-input strip and, on confirmation, calls `convertNodeToComponent(nodeId, name)` to extract the subtree into a new Visual Component. Full details: [`docs/features/visual-components.md`](features/visual-components.md) → "Componentizing existing page content".
+
+### Sidebar motion model
+
+Both sidebars animate open/close with `transition: flex-basis 180ms ease, width 180ms ease` (disabled under `prefers-reduced-motion: reduce`). The implementation uses a **two-variable pattern** to prevent content reflow during animation:
+
+| CSS variable | Value when closed | Value when open | Used for |
+|---|---|---|---|
+| `--left-sidebar-panel-width` | `0px` | saved panel width | Sidebar `flex-basis` / `width` (drives the animation) |
+| `--left-sidebar-panel-layout-width` | saved panel width | saved panel width | Panel slot `width` (stays constant; prevents reflow) |
+| `--right-sidebar-panel-width` | `0px` | saved panel width | Sidebar `flex-basis` / `width` |
+| `--right-sidebar-panel-layout-width` | saved panel width | saved panel width | Panel slot `width` |
+
+The sidebar shell expands/collapses by animating `--*-panel-width`. The panel slot always stays at `--*-panel-layout-width` so text and controls inside it do not reflow during the animation.
+
+**No transition fires on cold load.** `restoreStoredEditorLayout` is called at module-evaluation time in `store.ts` — before the first React render — so the store already has the persisted sidebar widths when the component tree mounts. Because there is no state delta to animate, the CSS transition is silent on cold loads and only fires when the user explicitly opens or closes a panel.
+
+`SidebarResizeHandle` (`src/admin/shared/SidebarResizeHandle/SidebarResizeHandle.tsx`) is the drag-and-keyboard handle shared by every sidebar instance. It sets `cssVariable` directly on the target element during drag (for smooth live feedback) and only calls `onResize` on pointer-up to commit the change to the store and to `localStorage` via `writeWorkspaceLayout`.
 
 ---
 
