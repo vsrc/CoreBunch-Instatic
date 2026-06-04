@@ -9,10 +9,8 @@
  *   cells.slug (= row.slug)  → page.slug (denormalized on data_rows.slug)
  *   cells.body               → { nodes, rootNodeId } (pageTree field)
  *   cells.templateEnabled    → page.template.enabled
- *   cells.templateContext    → page.template.context
- *   cells.templateTableSlug  → page.template.tableSlug
+ *   cells.templateTarget     → page.template.target (stored as JSON object)
  *   cells.templatePriority   → page.template.priority
- *   cells.templateConditions → page.template.conditions (stored as JSON array)
  *
  * Ownership is mapped between DataRow user-id columns and Page optional fields:
  *   row.authorUserId        → page.ownerUserId
@@ -21,6 +19,7 @@
  */
 
 import type { Page, PageNode, PageTemplateConfig } from '@core/page-tree'
+import { parsePageTemplate } from '@core/page-tree'
 import type { DataRow, DataRowCells } from '@core/data/schemas'
 
 // ---------------------------------------------------------------------------
@@ -72,32 +71,11 @@ export function pageFromRow(row: DataRow): Page {
 
 function readTemplateFromCells(cells: DataRowCells): PageTemplateConfig | null {
   if (cells.templateEnabled !== true) return null
-  if (cells.templateContext !== 'entry') return null
-  if (typeof cells.templateTableSlug !== 'string' || cells.templateTableSlug.length === 0) return null
-
-  const priority = typeof cells.templatePriority === 'number' && isFinite(cells.templatePriority)
-    ? cells.templatePriority
-    : 0
-
-  // templateConditions stored as a JSON array in the cells JSONB column
-  const rawConditions = Array.isArray(cells.templateConditions) ? cells.templateConditions : []
-  const conditions: PageTemplateConfig['conditions'] = rawConditions.flatMap((c) => {
-    if (!c || typeof c !== 'object' || Array.isArray(c)) return []
-    const entry = c as Record<string, unknown>
-    if (typeof entry.id !== 'string') return []
-    if (typeof entry.field !== 'string') return []
-    if (entry.operator !== 'equals') return []
-    if (typeof entry.value !== 'string') return []
-    return [{ id: entry.id, field: entry.field, operator: 'equals' as const, value: entry.value }]
-  })
-
-  return {
+  return parsePageTemplate({
     enabled: true,
-    context: 'entry',
-    tableSlug: cells.templateTableSlug as string,
-    priority,
-    conditions,
-  }
+    target: cells.templateTarget,
+    priority: cells.templatePriority,
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -123,10 +101,8 @@ export function pageToCells(page: Page): DataRowCells {
 
   if (page.template) {
     cells.templateEnabled = true
-    cells.templateContext = page.template.context
-    cells.templateTableSlug = page.template.tableSlug
+    cells.templateTarget = page.template.target
     cells.templatePriority = page.template.priority
-    cells.templateConditions = page.template.conditions
   }
 
   return cells
