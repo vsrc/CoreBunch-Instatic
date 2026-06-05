@@ -1,12 +1,12 @@
 .backdrop {
     position: fixed;
     inset: 0;
-    /* Above modal dialogs (Settings / StepUp at z 200/201, toolbar dropdowns
-     also at 201) because the picker can be invoked from inside those modals
-     (e.g. Settings → General → Favicon → Browse library…) and must sit above
-     them. Stays below the publish preview overlay (z 400) and the tooltip
-     layer (z 2000). */
-    z-index: 300;
+    /* Above the spotlight-style modal layer (Settings backdrop at
+     --spotlight-z-index: 9000, its dialog wrapper at +1) because the picker
+     can be invoked from inside those modals (e.g. Settings → General →
+     Favicon → Browse library…) and must sit above them. Stays below the body
+     slash menu (z 10000) and the tooltip layer (--tooltip-z-index: 10001). */
+    z-index: calc(var(--spotlight-z-index) + 50);
     display: flex;
     align-items: center;
     justify-content: center;
