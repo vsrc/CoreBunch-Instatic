@@ -47,7 +47,7 @@ interface StyleRule {
 }
 ```
 
-`contextStyles` is the **unified editing-context map** (see [docs/plans/2026-05-30-unified-condition-axis.md](../plans/2026-05-30-unified-condition-axis.md)). Each key is a *context id* that is **either**:
+`contextStyles` is the **unified editing-context map**. Each key is a *context id* that is **either**:
 
 - a **viewport context id** (from `site.breakpoints`) → the publisher emits the context's configured `@media` query; **or**
 - a **custom condition id** (from `site.conditions`, the reusable `@media`/`@container`/`@supports` registry) → the publisher emits that condition's `@`-prelude.

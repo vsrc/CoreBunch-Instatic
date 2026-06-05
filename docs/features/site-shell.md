@@ -12,6 +12,7 @@ The shell is stored in a single `site` row. Pages and VCs live separately in `da
 - Source-of-truth schema: `src/core/page-tree/siteDocument.ts` → `SiteShellSchema`.
 - Sub-schemas:
   - `Breakpoint[]` — viewport contexts: canvas frame widths plus their published media queries
+  - `ConditionDef[]` — reusable custom `@media`/`@container`/`@supports` definitions (the condition registry)
   - `SiteSettings` — color tokens, typography, spacing scale, framework tokens
   - `Record<string, StyleRule>` — the style rule registry (user-defined CSS rules)
   - `SiteFile[]` — arbitrary text/CSS/JS files attached to the site
@@ -32,6 +33,7 @@ export type SiteShell = {
   id:           string
   name:         string
   breakpoints:  Breakpoint[]
+  conditions?:  ConditionDef[]   // reusable custom @media/@container/@supports registry
   settings:     SiteSettings
   styleRules:   Record<string, StyleRule>
   files:        SiteFile[]
@@ -92,6 +94,26 @@ Viewport contexts power three things:
 - The class registry's responsive CSS (`@media ...` queries from each context's `mediaQuery`).
 
 Viewport contexts can be added / removed / reordered through Settings → Viewport contexts. Adding a context can create a new canvas frame when `previewFrame !== false`; frameless contexts remain selectable editing contexts for published CSS.
+
+### `ConditionDef` (custom condition registry)
+
+`src/core/page-tree/condition.ts`:
+
+```ts
+type ConditionDef = {
+  id:        string      // deterministic from content: 'media:<q>', 'container:<name>:<q>', 'supports:<q>'
+  label:     string      // human label in the context switcher (e.g. "Dark", "Card ≥400")
+  condition: Condition   // { kind: 'media' | 'container' | 'supports', query, name? }
+}
+```
+
+`site.conditions` is the reusable registry of custom editing contexts. Each `ConditionDef` defines a named `@media`, `@container`, or `@supports` block. Every `StyleRule.contextStyles` key is either a `breakpoint.id` (viewport override) or a `condition.id` (custom condition override).
+
+Conditions are authored via the `CanvasContextSelector` (the canvas top-right editing-context pill). `+ Add context…` opens an inline dialog with a guided builder: preset chips for common `@media` values, range inputs, and a raw CSS escape hatch with live `CSSStyleSheet`-based validation.
+
+Cascade emission order: base → custom conditions (registry order) → viewport contexts. Removing a condition drops its overrides from every rule.
+
+CRUD actions on `classSlice`: `addCondition`, `updateCondition`, `removeCondition`. Active context is tracked in `canvasSlice` via `activeConditionId`.
 
 ### `SiteSettings`
 
@@ -302,6 +324,7 @@ The shell's `parseSiteDocument(raw)` is **tolerant in the right places**:
 | `breakpoints` | Throw (default would silently destroy customization) |
 | `createdAt`, `updatedAt` | Throw                                  |
 | `settings`    | Fall back to `DEFAULT_SITE_SETTINGS`             |
+| `conditions`  | Per-entry: drop invalid entries; absent → `[]`   |
 | `classes`     | Per-entry: drop entries missing `id` or `name`   |
 | `files`       | Per-entry: drop invalid entries                  |
 | `explorer`    | Fall back to empty folders / current item order  |
@@ -440,6 +463,7 @@ A plugin canvas module can then `import * as THREE from 'three'` and it resolves
   - `src/core/page-tree/siteDocument.ts` — `SiteShellSchema`, `SiteDocument`, `parseSiteDocument`
   - `src/core/page-tree/siteSettings.ts` — `SiteSettingsSchema`, `DEFAULT_SITE_SETTINGS`, `parseSiteSettings`
   - `src/core/page-tree/breakpoint.ts` — `BreakpointSchema`, `DEFAULT_BREAKPOINTS`
+  - `src/core/page-tree/condition.ts` — `ConditionDefSchema`, `conditionId`, `conditionLabel`, `makeConditionDef`, `parseConditions`
   - `src/core/page-tree/styleRule.ts` — `StyleRuleSchema`
   - `src/core/framework/schemas.ts` — `FrameworkSettingsSchema`, `FrameworkColorToken`, `FrameworkColorSettings`
   - `src/core/framework/generate.ts` — `generateFrameworkRootCss`, `generateFrameworkUtilityClasses`
