@@ -28,7 +28,7 @@ export function CanvasFrameSkeletonFrame({
       style={frameStyle}
     >
       <div className={styles.labelRow} aria-hidden="true">
-        <Skeleton width="100%" height={28} radius="var(--editor-radius)" />
+        <Skeleton width="100%" height={28} radius={0} />
       </div>
       <div
         data-breakpoint-id={breakpoint.id}
