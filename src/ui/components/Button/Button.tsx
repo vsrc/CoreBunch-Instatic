@@ -7,7 +7,9 @@
  * Sizes:     micro (18px) | xs (26px) | sm (28px, default) | md (32px) | lg (44px touch target)
  * Icon-only: iconOnly={true} → square, requires aria-label
  * Pressed:   pressed={true} → aria-pressed + active bg (toolbar toggles)
- * Tooltip:   tooltip={...} → wraps with Tooltip primitive (works for disabled too)
+ * Tooltip:   tooltip={...} → wraps with Tooltip primitive (works for disabled too).
+ *            Auto-suppressed while aria-expanded={true} (open dropdown/menu),
+ *            so the tooltip never overlays the popup it triggered.
  *
  * Constraints:
  *   - CSS Modules only — no Tailwind, no inline styles (#402/#403)
@@ -88,6 +90,13 @@ export function Button(
     // Extract aria-disabled from rest so we can merge it with our own logic.
     const { 'aria-disabled': ariaDisabledRest, ...restProps } = rest
 
+    // When this button is the trigger for an open popup (its `aria-expanded` is
+    // true), suppress its tooltip: the open menu/dropdown already makes the
+    // button's purpose obvious, and a hover tooltip would overlay the popup.
+    // Reading without destructuring keeps `aria-expanded` in restProps so it
+    // still lands on the rendered <button> for accessibility.
+    const popupOpen = rest['aria-expanded'] === true || rest['aria-expanded'] === 'true'
+
     // When a tooltip is provided alongside disabled, use aria-disabled instead
     // of the native disabled attribute so that mouseenter still fires and the
     // tooltip can show (native disabled silently swallows pointer events).
@@ -134,7 +143,7 @@ export function Button(
 
     if (tooltip) {
       return (
-        <Tooltip content={tooltip} side={tooltipSide ?? "auto"}>
+        <Tooltip content={tooltip} side={tooltipSide ?? "auto"} disabled={popupOpen}>
           {button}
         </Tooltip>
       );
