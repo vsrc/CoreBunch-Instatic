@@ -45,10 +45,10 @@ import { useEditorSelectPreference } from '@admin/pages/site/preferences/editorP
 import { usePersistence } from '@admin/pages/site/hooks/usePersistence'
 import { useSiteEditorUrlSync } from '@admin/pages/site/hooks/useSiteEditorUrlSync'
 import { useEditorLayoutPersistence } from '@admin/pages/site/hooks/useEditorLayoutPersistence'
-import { selectActivePage, useEditorStore } from '@admin/pages/site/store/store'
+import { useEditorStore } from '@admin/pages/site/store/store'
 import { cmsAdapter } from '@core/persistence/cms'
 import { useAdminUi } from '@admin/state/adminUi'
-import { DEFAULT_BREAKPOINTS, pagePublicPath } from '@core/page-tree'
+import { DEFAULT_BREAKPOINTS } from '@core/page-tree'
 import { useInstalledEditorPlugins } from '@admin/pages/plugins/hooks/useInstalledEditorPlugins'
 import { usePluginEventBridge } from '@admin/pages/plugins/hooks/usePluginEventBridge'
 import { AdminSectionNavigation } from '@admin/shared/AdminSectionNavigation'
@@ -108,14 +108,6 @@ export function AdminCanvasLayout() {
   // shell reads from it too.
   const settingsOpen = useAdminUi((s) => s.settingsOpen)
   const publishSiteSummary = useAdminUi((s) => s.setSiteSummary)
-  const publishActiveLivePath = useAdminUi((s) => s.setActiveLivePath)
-  // Public path of the page currently open in the Site-editor canvas.
-  // Forwarded to adminUi below so the toolbar's "Open live page" button
-  // can deep-link without subscribing to the editor store.
-  const activeSitePath = useEditorStore((s) => {
-    const slug = selectActivePage(s)?.slug
-    return slug ? pagePublicPath(slug) : null
-  })
   const currentUser = useCurrentAdminUser()
 
   // Keep the adminUi site summary in sync with whatever the editor store
@@ -126,18 +118,9 @@ export function AdminCanvasLayout() {
   useEffect(() => {
     publishSiteSummary({ name: siteName, faviconUrl })
   }, [siteName, faviconUrl, publishSiteSummary])
-  // Mirror the active page's public path into adminUi so the toolbar's
-  // "Open live page" icon can deep-link without subscribing to the editor
-  // store.
-  useEffect(() => {
-    publishActiveLivePath(activeSitePath)
-    return () => {
-      // Clear on unmount so navigating away from the editor leaves
-      // the toolbar pointing at the site root again rather than a
-      // stale path.
-      publishActiveLivePath(null)
-    }
-  }, [activeSitePath, publishActiveLivePath])
+  // The toolbar's "Open live page" target (adminUi.activeLivePath) is owned by
+  // `useActiveLivePath` in the lazy editor body — it resolves templates to the
+  // page / post they're previewed against instead of their non-routable slug.
   // Three-way edit permissions — see `src/admin/access.ts`. A user with all
   // three holds full editor rights; a user with only `canEditContent` is the
   // "Client / copy editor" persona: read everything, change copy on existing
