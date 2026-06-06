@@ -245,6 +245,34 @@ Examples in the codebase: `migrations-sqlite.ts` migration `006_data_rows_schedu
 3. Use ANSI SQL only. No `now()`, no `::jsonb`, no `distinct on`.
 4. JSON columns end in `_json` — both adapters handle them.
 
+### Using `db.unsafe()` with dialect-aware placeholders
+
+`db.unsafe()` is reserved for queries that splice a shared column-list constant
+into the SQL string (like `USER_JOINED_COLUMNS` in `server/repositories/users.ts`
+or `DATA_ROW_COLUMNS`), where the tagged-template API can't be used because the
+full SELECT list must be a string literal. In those cases use `placeholder()` from
+`server/db/client.ts` for positional parameters so the same SQL works on both
+dialects:
+
+```ts
+import { placeholder, type DbClient } from '../db/client'
+
+const { rows } = await db.unsafe<SubscriberRow>(
+  `select ${SUBSCRIBER_COLUMNS}
+   from subscribers
+   where id = ${placeholder(db.dialect, 1)}
+     and deleted_at is null
+   limit 1`,
+  [subscriberId],
+)
+```
+
+`placeholder(db.dialect, N)` returns `$N` on Postgres and `?` on SQLite. Every
+parameter position must use it — never concatenate the value directly into the
+string. The tagged-template API (`db\`...\``) handles dialect differences
+automatically and is preferred; `db.unsafe()` + `placeholder()` is the fallback
+for column-list splice scenarios only.
+
 ### "Latest per group" (the `distinct on` replacement)
 
 Postgres:

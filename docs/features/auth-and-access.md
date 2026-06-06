@@ -9,7 +9,7 @@ Every state-changing CMS request goes through one auth funnel: parse the session
 ## TL;DR
 
 - **Sessions** are token-cookie based. Cookie name: `SESSION_COOKIE_NAME` (`instatic_admin_session`). Tokens are hashed before storage; the cookie carries the raw token.
-- **Capabilities** are the access model. 19 `CoreCapability` strings defined in `server/auth/capabilities.ts`. Roles are sets of capabilities. Handlers gate on capability, not role.
+- **Capabilities** are the access model. 36 `CoreCapability` strings defined in `server/auth/capabilities.ts`. Roles are sets of capabilities. Handlers gate on capability, not role.
 - **`requireCapability(req, db, 'site.read')`** is the canonical handler entrypoint. Returns the `AuthUser` or a 401/403 `Response`.
 - **MFA (TOTP)** is per-user opt-in. Sessions for MFA-enrolled users are `pending_mfa` until verified, then become `active`. Failed MFA codes go through `mfaRateLimit` AND increment the per-account lockout counter — the same counter the password step uses. A locked account is rejected at the MFA step before any code is checked.
 - **Step-up auth** gates sensitive actions (delete user, revoke another device, sign out all) unless the user disables it on Account -> Security. The default window is 15 minutes; users can configure 5, 15, 30, or 60 minutes.
@@ -476,3 +476,5 @@ if (userHasAnyCapability(user, SITE_WRITE_CAPABILITIES)) { /* … */ }
   - `src/__tests__/architecture/cms-handlers-capability-gated.test.ts`
   - `src/__tests__/architecture/capability-picker-coverage.test.ts`
   - `src/__tests__/architecture/binding-compatibility-coverage.test.ts`
+- Regression tests:
+  - `src/__tests__/server/requestScopedAuth.test.ts` — verifies the session is hydrated exactly once per request (step-up-gated write: one hydrate, not two) and that `last_seen_at` is debounced to at most one write per session per 30s window.
