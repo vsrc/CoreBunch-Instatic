@@ -8,8 +8,8 @@ The published output has **no framework runtime**, **no client-side hydration of
 
 ## TL;DR
 
-- Entry point: `publishPage(page, ctx)` in `src/core/publisher/render.ts`. Returns the full HTML document string.
-- Recursion: `renderNode(nodeId, ctx)` in `renderNode.ts`. Bottom-up walk. Two specialized renderers hook in for `base.visual-component-ref` and `base.loop`.
+- Entry point: `publishPage(page, site, registry, options?)` in `src/core/publisher/render.ts`. Returns the full HTML document string.
+- Recursion: `renderNode(nodeId, config, acc)` in `renderNode.ts`. Bottom-up walk. Two specialized renderers hook in for `base.visual-component-ref` and `base.loop`.
 - Hidden nodes (`node.hidden`) are pruned at the top of `renderNode`, before unknown-module comments, dynamic holes, specialized renderers, standard rendering, or CSS collection.
 - Per-node flow: render children → resolve effective + dynamic props → `escapeProps` → call `module.render(props, renderedChildren)` → collect deduped CSS → inject author class names.
 - CSS is deduped by `moduleId` via `CssCollector` (~60–80% size reduction on typical pages).
@@ -65,12 +65,12 @@ server/publish/
 ## The `publishPage` flow
 
 ```text
-publishPage(page, ctx)             ← src/core/publisher/render.ts
+publishPage(page, site, registry, options)  ← src/core/publisher/render.ts
     │
     ├─→ resolve template-context frames (page / site / route)
     ├─→ inject root node's classIds into <body> tag
     ├─→ build <head>: title, description, favicon, lang, importmap, runtime <script>s, CSP
-    ├─→ renderNode(rootNodeId, ctx)
+    ├─→ renderNode(rootNodeId, config, acc)
     │       │
     │       ├─→ if node.hidden, return '' before any renderer or CSS path
     │       ├─→ specialised renderer for `base.visual-component-ref`  → renderVisualComponentRef
@@ -336,10 +336,10 @@ Editing the CSP manually is **not** safe — it's a derived value. Edit the sour
 After `publishPage` returns, the server runs:
 
 ```text
-publishPage(page, ctx) → rawHtml
+publishPage(page, site, registry, options) → rawHtml
     │
     ▼
-applyPublishedHtmlPipeline(rawHtml, ctx)
+applyPublishedHtmlPipeline(renderedOutput, db)
     │
     ├─→ DOMPurify-sanitize the entire document
     ├─→ Emit `publish.before` hook (plugins can prepare state)
@@ -409,7 +409,7 @@ tryServePublicRoute (server/router.ts)
           │
           └─→ Layer B in-memory LRU:
                 getOrRender({urlPath, queryString: canonicalQuery}, async () => {
-                  publishPage(page, ctx) using snapshot bytes
+                  publishPage(page, site, registry, options) using snapshot bytes
                   applyPublishedHtmlPipeline (plugin filters)
                   return { body, headers, status: 200 }
                 })

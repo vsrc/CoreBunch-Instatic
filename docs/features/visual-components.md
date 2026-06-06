@@ -316,7 +316,7 @@ The admin UI shows the impact list before confirming the delete, so the user can
 At render time, the publisher's `renderVisualComponentRef` runs when the walker hits a `base.visual-component-ref` node:
 
 ```text
-renderVisualComponentRef(refNode, ctx, renderNode):
+renderVisualComponentRef(refNode, config, acc, renderNode):
     │
     ├─→ vc = selectVisualComponentById(config.site, refNode.props.componentId)
     ├─→ build slotInstancesByName from refNode's base.slot-instance children

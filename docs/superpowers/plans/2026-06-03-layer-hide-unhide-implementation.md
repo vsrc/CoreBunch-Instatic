@@ -29,24 +29,27 @@
 
 - [ ] **Step 1: Add failing renderNode tests**
 
-Add these tests inside the existing `describe('renderNode', () => { ... })` block in `src/__tests__/publisher/render.test.ts`:
+Add these tests inside the existing `describe('renderNode', () => { ... })` block in `src/__tests__/publisher/render.test.ts`.
+
+Note: `RenderConfig` and `RenderAccumulators` are the two explicit shapes threaded through the walker since the `RenderContext` split. `RenderConfig` holds read-only inputs (page, site, registry, dynamicNodeIds, etc.); `RenderAccumulators` (`makeAccumulators()`) holds the mutable output bag (cssMap, holeNodeIds, infiniteLoopIds).
 
 ```ts
   it('returns empty string for a hidden node', () => {
     const page = makePage({
       root: { moduleId: 'base.text', props: { text: 'Hidden', level: 1 }, hidden: true },
     })
-    const c = ctx(page)
-    expect(renderNode('root', c)).toBe('')
+    const config: RenderConfig = { page, site: makeSite({ pages: [page] }), registry, breakpointId: undefined }
+    expect(renderNode('root', config, makeAccumulators())).toBe('')
   })
 
   it('does not collect CSS for a hidden node', () => {
     const page = makePage({
       root: { moduleId: 'base.text', props: { text: 'Hidden', level: 1 }, hidden: true },
     })
-    const c = ctx(page)
-    renderNode('root', c)
-    expect(c.cssMap.size).toBe(0)
+    const config: RenderConfig = { page, site: makeSite({ pages: [page] }), registry, breakpointId: undefined }
+    const acc = makeAccumulators()
+    renderNode('root', config, acc)
+    expect(acc.cssMap.size).toBe(0)
   })
 
   it('renders visible children while omitting hidden children', () => {
@@ -59,8 +62,8 @@ Add these tests inside the existing `describe('renderNode', () => { ... })` bloc
       shown: { moduleId: 'base.text', props: { text: 'Shown', level: 2 } },
       hidden: { moduleId: 'base.text', props: { text: 'Hidden', level: 2 }, hidden: true },
     })
-    const c = ctx(page)
-    expect(renderNode('root', c)).toBe('<div class="wrapper"><h2>Shown</h2></div>')
+    const config: RenderConfig = { page, site: makeSite({ pages: [page] }), registry, breakpointId: undefined }
+    expect(renderNode('root', config, makeAccumulators())).toBe('<div class="wrapper"><h2>Shown</h2></div>')
   })
 
   it('prunes a hidden parent without mutating child hidden flags', () => {
@@ -78,8 +81,8 @@ Add these tests inside the existing `describe('renderNode', () => { ... })` bloc
         hidden: true,
       },
     })
-    const c = ctx(page)
-    expect(renderNode('root', c)).toBe('')
+    const config: RenderConfig = { page, site: makeSite({ pages: [page] }), registry, breakpointId: undefined }
+    expect(renderNode('root', config, makeAccumulators())).toBe('')
     expect(page.nodes['shown-child'].hidden).toBe(false)
     expect(page.nodes['hidden-child'].hidden).toBe(true)
   })
@@ -88,24 +91,28 @@ Add these tests inside the existing `describe('renderNode', () => { ... })` bloc
     const page = makePage({
       root: { moduleId: 'unknown.widget', props: {}, hidden: true },
     })
-    const c = ctx(page)
-    expect(renderNode('root', c)).toBe('')
+    const config: RenderConfig = { page, site: makeSite({ pages: [page] }), registry, breakpointId: undefined }
+    expect(renderNode('root', config, makeAccumulators())).toBe('')
   })
 
   it('does not emit a dynamic hole for a hidden dynamic node', () => {
     const page = makePage({
       root: { moduleId: 'base.text', props: { text: 'Dynamic', level: 1 }, hidden: true },
     })
-    const c = ctx(page)
-    const holeNodeIds = new Set<string>()
-    const html = renderNode('root', {
-      ...c,
+    // dynamicNodeIds and publishVersion live in RenderConfig (read-only inputs).
+    // holeNodeIds lives in RenderAccumulators (mutable output) — keep them separate.
+    const config: RenderConfig = {
+      page,
+      site: makeSite({ pages: [page] }),
+      registry,
+      breakpointId: undefined,
       dynamicNodeIds: new Set(['root']),
-      holeNodeIds,
       publishVersion: 7,
-    })
+    }
+    const acc = makeAccumulators()
+    const html = renderNode('root', config, acc)
     expect(html).toBe('')
-    expect(holeNodeIds.size).toBe(0)
+    expect(acc.holeNodeIds.size).toBe(0)
   })
 ```
 
@@ -219,15 +226,19 @@ Expected: at least the new hidden publisher tests fail because `renderNode` stil
 
 - [ ] **Step 4: Add minimal publisher guard**
 
-In `src/core/publisher/renderNode.ts`, update `renderNode`:
+In `src/core/publisher/renderNode.ts`, update `renderNode` to prune hidden nodes before any other path. The function signature uses the split shapes `RenderConfig` (read-only inputs) and `RenderAccumulators` (mutable outputs):
 
 ```ts
-export function renderNode(nodeId: string, ctx: RenderContext): string {
-  const node = ctx.page.nodes[nodeId]
+export function renderNode(
+  nodeId: string,
+  config: RenderConfig,
+  acc: RenderAccumulators,
+): string {
+  const node = config.page.nodes[nodeId]
   if (!node) return ''
   if (node.hidden) return ''
 
-  const def = ctx.registry.get(node.moduleId)
+  const def = config.registry.get(node.moduleId)
   ...
 }
 ```
