@@ -203,7 +203,7 @@ Resize math snaps to integer column / row deltas in `useDashboardLayout.ts`. The
 | Add from library  | Append `DashboardItem` to the user's layout            |
 | Remove widget     | Remove from layout; widget returns to library          |
 
-The layout is persisted server-side via `user_preferences.dashboard_layout_json`. The endpoint is `PATCH /admin/api/cms/me/preferences/dashboard-layout` (handled by `handleUserPreferencesRoutes`).
+The layout is persisted server-side in the `user_preferences` table under key `dashboard-layout`. The endpoint is `PUT /admin/api/cms/me/preferences/dashboard-layout` (handled by `handleUserPreferencesRoutes`).
 
 This is **per-user, not per-site** — every user has their own dashboard arrangement.
 

@@ -56,8 +56,6 @@ Stored in the `user_preferences` table — one row per `(user_id, key)`. Keys ar
 |-------------------------------------------|-----------------------------------------------------------------------|-----------------------------------------------------------------|
 | `dashboard-layout`                        | Dashboard widget positions / sizes                                     | `src/admin/pages/dashboard/hooks/useDashboardLayout.ts`         |
 | `module-inserter`                         | Module inserter notch favorites: ordered `{ kind, id }` refs for modules, layouts, and Visual Components | `src/admin/pages/site/module-picker/useModuleInserterPreference.ts` |
-| `spotlight-pinned`                        | User-pinned Spotlight commands                                        | `src/admin/spotlight/...`                                       |
-| `agent-config`                            | Agent panel: model selection, system prompt overrides                 | `src/admin/pages/site/agent/agentConfig.ts`                     |
 
 ### Endpoint
 

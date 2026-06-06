@@ -186,6 +186,8 @@ A new source is one branch here plus a new value in the `DynamicOptionsSource` u
 
 When the persisted value is no longer in the dynamic option list (e.g. user previously picked a `wide` breakpoint, then opened a site without it), the dropdown still shows the stored value with a `(not in current site)` suffix so the mismatch is visible. The runtime reader (`readEditorSelectPreference`) returns the stored string regardless — consumers (e.g. `applyDefaultBreakpointPreference` in `usePersistence.ts`) decide whether to apply it or fall back.
 
+**`defaultBreakpoint` has two effects on load.** `applyDefaultBreakpointPreference` sets `activeBreakpointId` (the editing context) when the loaded site has a matching breakpoint. Setting the active breakpoint alone does *not* move the canvas — it always mounts at pan `(0, 0)`, which shows the left-most (narrowest) frame. So `CanvasRoot` runs a one-shot effect on first load that pans the canvas to horizontally center the chosen frame (top aligned just below the viewport top), via `useCanvas().centerOnBreakpointFrame` and the pure `panToCenterBreakpointFrame` geometry in `canvasDomGeometry.ts`. This is the spatial half of "Which viewport context the canvas focuses on when a site is opened." Subsequent breakpoint switches (toolbar, node clicks) intentionally do **not** re-center — the designer keeps their place.
+
 ---
 
 ## Reading preferences from non-React code
