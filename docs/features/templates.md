@@ -237,6 +237,8 @@ Grouped menus rely on a small `Select` primitive capability: an `<optgroup label
 
 The preview selection lives in `templatePreviewSelection` (UI slice, `templateId → sourceId`). It is **session-only** — a pure preview convenience that never dirties or persists to the site document. Unset → the first real page / published row is previewed. Both `OutletEditor` (everywhere) and `useTemplatePreviewContext` (postTypes) read it.
 
+`useActiveLivePath` (`src/admin/pages/site/hooks/useActiveLivePath.ts`) also reads `templatePreviewSelection` to determine the target for the toolbar's **Open live page** button. Template pages have no routable slug of their own (the live router and bake loop both skip them), so opening the template slug directly would 404. Instead the hook resolves to the same source the preview dropdown shows: the previewed page's public path for `everywhere` templates, or the previewed row's permalink for `postTypes` templates. The fallback is the first real page / first published row, matching the preview dropdown's own default.
+
 ### Edit-in-context composition
 
 The design canvas renders the active document the way it publishes: **inside its matching template chain**. `CanvasComposedTree` (`src/admin/pages/site/canvas/CanvasComposedTree.tsx`) is the single render entry used by both `BreakpointFrame` and `CanvasLiveSurface`:
@@ -381,6 +383,7 @@ node.props.text = 'Posted by {currentEntry.author.displayName} on {currentEntry.
   - `src/modules/base/outlet/index.ts` — `base.outlet` module
   - `src/admin/pages/site/property-controls/DynamicBindingControl/` — binding affordance + picker popover
   - `src/admin/pages/site/hooks/useTemplatePreviewContext.ts` — synthetic preview context for the canvas
+  - `src/admin/pages/site/hooks/useActiveLivePath.ts` — resolves the toolbar "Open live page" path for templates
   - `src/core/templates/templatePreviewData.ts` — `buildPreviewCells`, `dataTablePreviewToLoopItem`
   - `server/repositories/data/templateSeeding.ts` — default-template seeding
   - `server/publish/publicRenderer.ts` — chain-aware render paths

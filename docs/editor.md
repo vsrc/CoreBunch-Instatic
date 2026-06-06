@@ -180,7 +180,9 @@ Every admin page picks one of three root layouts from `src/admin/layouts/`. Impo
 
 `AdminCanvasLayout` keeps the real editor shell mounted while `usePersistence()` loads the draft site document. In production it renders the toolbar/chrome first and lazy-loads `AdminCanvasEditorBody` after paint. The body owns the permanent rail, sidebars, canvas, DnD context, `ConfirmDeleteProvider`, `CodeEditorPanel`, first-party module registration, and loop-source registration. Rare modal surfaces such as `ImportHtmlModal` stay behind their own open-state lazy boundary inside the body. Loading states use the same local skeleton vocabulary: the editor-body lazy fallback and the canvas no-site fallback both render `CanvasFrameSkeletonFrame`, sidebars use compact skeleton rows or blocks, and loaded breakpoint frames keep `CanvasFrameSkeleton` visible while their iframe trees progressively mount.
 
-The `adminUi` store (`src/admin/state/adminUi.ts`) is the small cross-shell state store: settings-modal open flag, site-import modal open flag, site name/favicon for the toolbar, and the active live-page path. It lives outside `@site/` so `AdminPageLayout` can subscribe without pulling in the 165 KB editor graph. The editor's `settingsSlice` mirrors its state into `adminUi` via a registered bridge so both are always in sync.
+The `adminUi` store (`src/admin/state/adminUi.ts`) is the small cross-shell state store: settings-modal open flag, site-import modal open flag, site name/favicon for the toolbar, and `activeLivePath` — the public path the "Open live page" toolbar button opens. It lives outside `@site/` so `AdminPageLayout` can subscribe without pulling in the 165 KB editor graph. The editor's `settingsSlice` mirrors its state into `adminUi` via a registered bridge so both are always in sync.
+
+`activeLivePath` is written by the active workspace and cleared on unmount. The Site editor delegates to `useActiveLivePath` (`src/admin/pages/site/hooks/useActiveLivePath.ts`) inside `AdminCanvasEditorBody` — it resolves templates to a routable path rather than their own (non-routable) slug: an everywhere template maps to the previewed page's path; a postTypes template maps to the previewed published row's permalink. Both resolutions follow the same selection as the `TemplateModeControl` preview dropdown so the button always opens what the canvas is showing. The Content workspace writes `activeLivePath` inline inside its own layout; non-editor layouts never write it, so it stays `null` there naturally.
 
 `AdminWorkspaceCanvasLayout` and `AdminPageLayout` both call `useSiteSummary()` — a lightweight hook that fires a single `cmsAdapter.loadSite()` per session and writes the name + favicon into `adminUi`. The Site editor's `usePersistence` writes the same fields when it hydrates the full site, so after navigating to `/admin/site` the toolbar updates without a second fetch.
 
@@ -560,6 +562,7 @@ The sidebar shell expands/collapses by animating `--*-panel-width`. The panel sl
 - `SettingsButton` — opens the Settings modal (see below)
 - `ZoomControls` — canvas zoom
 - `ModulePickerDropdown` — opens the module inserter modal
+- `OpenLivePageButton` (`src/admin/shared/OpenLivePageButton/`) — toolbar icon (always visible, not Site-editor-only) that opens the live site in a new tab. Target URL is read from `adminUi.activeLivePath`: active document's public path when an editor is open, site root (`/`) otherwise. Tooltip changes between "Open live page" (active path) and "Open live site" (null). Component stays outside `src/admin/pages/site/` so it mounts on every admin route without touching the editor graph.
 
 ### Settings modal
 
@@ -681,7 +684,9 @@ See [docs/features/plugin-system.md](features/plugin-system.md) for the plugin S
   - `src/admin/main.tsx` — React root mount
   - `src/admin/AuthenticatedAdmin.tsx` — post-login shell + prewarmedLazy scheduler
   - `src/admin/lib/prewarmedLazy.ts` — React.lazy alternative with explicit preload + sync fast-path
-  - `src/admin/state/adminUi.ts` — cross-shell Zustand store (settings modal, site-import modal, site name/favicon)
+  - `src/admin/state/adminUi.ts` — cross-shell Zustand store (settings modal, site-import modal, site name/favicon, activeLivePath)
+  - `src/admin/shared/OpenLivePageButton/OpenLivePageButton.tsx` — toolbar "Open live page" icon button
+  - `src/admin/pages/site/hooks/useActiveLivePath.ts` — resolves `activeLivePath` for the Site editor (including template → previewed page/post mapping)
   - `src/admin/modals/Settings/SettingsModal.tsx` — settings modal (4 sections: General, Shortcuts, Publishing, Preferences)
   - `src/admin/pages/site/store/slices/settingsSlice.ts` — settings modal state + adminUi bridge
   - `src/admin/state/useSiteSummary.ts` — lightweight site name/favicon fetch for non-editor layouts
