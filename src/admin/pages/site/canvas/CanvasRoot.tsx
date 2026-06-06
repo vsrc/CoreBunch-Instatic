@@ -22,7 +22,7 @@
  * - prefers-reduced-motion: CSS transitions are disabled for users who opt out
  */
 
-import { lazy, Suspense, useRef } from 'react'
+import { lazy, Suspense, useEffect, useRef } from 'react'
 import { useEditorStore, selectActiveCanvasPage, selectRightSidebarExpanded } from '@site/store/store'
 import type { Breakpoint } from '@core/page-tree'
 import { registry } from '@core/module-engine'
@@ -154,11 +154,63 @@ export function CanvasRoot({ editable = true }: CanvasRootProps) {
   // silently mutating transformRef while in preview, which would otherwise
   // make the design canvas visibly jump on the first interaction after
   // returning from preview.
-  const { bind, handleKeyDown: canvasKeyDown, panBy } = useCanvas({
+  const { bind, handleKeyDown: canvasKeyDown, panBy, centerOnBreakpointFrame } = useCanvas({
     canvasRootRef: canvasRef,
     transformLayerRef,
     enabled: !isLive,
   })
+
+  // ─── Focus the active viewport frame on load and on document switch ────────
+  // The "Default viewport" preference (applied by usePersistence after the site
+  // loads) sets `activeBreakpointId`, but the canvas always mounts at pan (0,0),
+  // which shows the left-most (mobile) frame. Pan to center the active frame so
+  // the chosen viewport is actually focused on screen.
+  //
+  // This also re-centers whenever the active document changes (switching pages
+  // or entering/leaving a Visual Component): otherwise, scrolling down a long
+  // page then switching to a shorter one leaves the new frame panned out of the
+  // viewport.
+  //
+  // The effect keys on `canvasPage.id` (a stable per-document string) rather
+  // than the page OBJECT: Mutative hands back a fresh page object on every edit,
+  // and depending on the object would re-run this effect — cancelling the
+  // in-flight rAF retry before it fires — on every keystroke during load, so
+  // the centering never actually ran. Keying on the id means we run exactly
+  // once per document: ordinary editing never yanks the canvas, and breakpoint
+  // switches (toolbar, node clicks) keep the designer's place.
+  //
+  // We retry on rAF because the breakpoint frames mount a few frames after the
+  // page id becomes available (the per-frame iframes lay out asynchronously);
+  // `centerOnBreakpointFrame` returns false until the active frame has real
+  // geometry. The cap is a safety valve for the case where the active
+  // breakpoint has no preview frame at all.
+  const canvasPageId = canvasPage?.id ?? null
+  useEffect(() => {
+    if (isLive || !canvasPageId) return
+
+    // The breakpoint frames mount a few ticks after the page id becomes
+    // available (the per-frame iframes lay out asynchronously), so
+    // `centerOnBreakpointFrame` returns false until the active frame has real
+    // geometry. We retry on a short timer rather than requestAnimationFrame:
+    // rAF only fires while the document is actively painting, so a centering
+    // scheduled when the editor tab is backgrounded would silently never run.
+    // setTimeout fires regardless, and reading getBoundingClientRect forces the
+    // layout we need synchronously. The cap is a safety valve for a breakpoint
+    // that has no preview frame at all.
+    let timerId: ReturnType<typeof setTimeout> | undefined
+    let attempts = 0
+    const MAX_ATTEMPTS = 200 // ~3s at 16ms — frames are ready well within this
+    const RETRY_MS = 16
+    const tryCenter = () => {
+      // Read the freshest active breakpoint — the preference is applied just
+      // before the page becomes available.
+      const activeId = useEditorStore.getState().activeBreakpointId
+      if (centerOnBreakpointFrame(activeId) || attempts++ >= MAX_ATTEMPTS) return
+      timerId = setTimeout(tryCenter, RETRY_MS)
+    }
+    tryCenter()
+    return () => clearTimeout(timerId)
+  }, [canvasPageId, isLive, centerOnBreakpointFrame])
 
   // ─── Modals & overlays ─────────────────────────────────────────────────────
 

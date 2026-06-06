@@ -64,6 +64,39 @@ export function clientPointToEditorDoc(event: {
   }
 }
 
+/**
+ * Compute the pan offset that horizontally centers a breakpoint frame in the
+ * canvas viewport and aligns its top a fixed padding below the viewport top,
+ * keeping the current zoom. Returns `null` when the frame isn't measurable yet
+ * (zero-size — not laid out).
+ *
+ * Only the translate component of the layer transform is adjusted, so the math
+ * works directly in screen pixels: with `translate(pan) scale(zoom)`, changing
+ * `pan` shifts every child's on-screen rect 1:1 — translate values are NOT
+ * scaled by `zoom`, and the result is independent of the transform-origin.
+ * That lets us read the live `getBoundingClientRect()` of the frame (already
+ * reflecting the current transform) and derive the delta to apply.
+ */
+export function panToCenterBreakpointFrame(
+  canvasRoot: HTMLElement,
+  frame: HTMLElement,
+  current: { panX: number; panY: number },
+  topPadding = 48,
+): { panX: number; panY: number } | null {
+  const rootRect = canvasRoot.getBoundingClientRect()
+  const frameRect = frame.getBoundingClientRect()
+  if (frameRect.width === 0 && frameRect.height === 0) return null
+
+  const rootCenterX = rootRect.left + rootRect.width / 2
+  const frameCenterX = frameRect.left + frameRect.width / 2
+  const desiredFrameTop = rootRect.top + topPadding
+
+  return {
+    panX: current.panX + (rootCenterX - frameCenterX),
+    panY: current.panY + (desiredFrameTop - frameRect.top),
+  }
+}
+
 export function measureCanvasNodeClientUnionRect(
   viewport: HTMLElement,
   nodeIds: readonly string[],

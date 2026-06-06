@@ -27,8 +27,10 @@ import {
   applyPan,
   zoomFromWheelDelta,
   clampZoom,
+  clampPan,
   incrementalScaleFromPinchMovement,
 } from '@site/canvas/math'
+import { panToCenterBreakpointFrame } from '@site/canvas/canvasDomGeometry'
 
 interface Transform {
   zoom: number
@@ -72,6 +74,11 @@ function areCanvasTransformSnapshotsEqual(
  * `data-animating='true'` rule in CanvasTransformLayer.module.css.
  */
 const ANIMATED_TRANSFORM_MS = 220
+
+/** Escape a value for safe interpolation into an attribute-equals selector. */
+function cssAttrEscape(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+}
 
 export function useCanvas({ canvasRootRef, transformLayerRef, enabled }: UseCanvasOptions) {
   // Ref-based transform — not React state — avoids re-renders during interaction
@@ -195,6 +202,44 @@ export function useCanvas({ canvasRootRef, transformLayerRef, enabled }: UseCanv
     transformRef.current = { zoom: 1, panX: 0, panY: 0 }
     applyTransformToDOM(transformRef.current, true)
   }, [resetView, applyTransformToDOM])
+
+  /**
+   * Pan the canvas so the given breakpoint's frame is horizontally centered and
+   * its top sits just below the viewport top — keeping the current zoom. Used to
+   * honour the user's "Default viewport" preference: opening a site should focus
+   * the chosen frame instead of always landing on the left-most (mobile) frame.
+   *
+   * Returns `false` when the frame isn't in the DOM / not laid out yet, so the
+   * caller can retry on the next frame.
+   *
+   * Exception #1: referenced in CanvasRoot's initial-focus useEffect dep array,
+   * so exhaustive-deps requires a stable identity here.
+   */
+  const centerOnBreakpointFrame = useCallback(
+    (breakpointId: string, animated = false): boolean => {
+      const root = canvasRootRef.current
+      const layer = transformLayerRef.current
+      if (!root || !layer) return false
+      const frame = layer.querySelector<HTMLElement>(
+        `[data-testid="canvas-frame-${cssAttrEscape(breakpointId)}"]`,
+      )
+      if (!frame) return false
+
+      const cur = transformRef.current
+      const target = panToCenterBreakpointFrame(root, frame, cur)
+      if (!target) return false
+
+      const next = { zoom: cur.zoom, panX: clampPan(target.panX), panY: clampPan(target.panY) }
+      // Update the ref BEFORE committing to the store so the store-subscription
+      // guard sees the values already match and skips its own (animated) DOM
+      // write — this call owns the `animated` flag.
+      transformRef.current = next
+      applyTransformToDOM(next, animated)
+      setCanvasTransform(next.zoom, next.panX, next.panY)
+      return true
+    },
+    [canvasRootRef, transformLayerRef, applyTransformToDOM, setCanvasTransform],
+  )
 
   // ─── Prevent browser pinch-zoom on Mac trackpad ──────────────────────────
   //
@@ -487,6 +532,7 @@ export function useCanvas({ canvasRootRef, transformLayerRef, enabled }: UseCanv
     bind,
     handleKeyDown,
     panBy,
+    centerOnBreakpointFrame,
     /** Whether a space-pan or middle-mouse drag is in progress */
     isDragging: isDraggingRef,
   }
