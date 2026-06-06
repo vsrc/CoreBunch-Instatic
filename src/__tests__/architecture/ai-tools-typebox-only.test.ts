@@ -50,7 +50,7 @@ describe('ai-tools-typebox-only gate', () => {
     expect(violations).toHaveLength(0)
   })
 
-  it('every tool module that defines tools imports TypeBox', () => {
+  it('every tool module that defines tools sources its schemas from TypeBox', () => {
     const files = collectFiles(TOOLS_ROOT)
     // Files that DEFINE tools — i.e. construct objects matching the AiTool
     // shape — must reach for TypeBox. Heuristic: file mentions `inputSchema:`
@@ -61,9 +61,14 @@ describe('ai-tools-typebox-only gate', () => {
     })
     expect(toolFiles.length).toBeGreaterThan(0)
 
+    // A tool file satisfies the gate either by building schemas with TypeBox
+    // directly, OR by importing the shared TypeBox input schemas from the
+    // `@core/ai` leaf (`src/core/ai/toolSchemas.ts`) — the single source of
+    // truth that both the server tools and the browser executor consume. The
+    // leaf is itself TypeBox-only, and zod stays banned by the test above.
     const missingTypeBox = toolFiles.filter((f) => {
       const src = readFileSync(f, 'utf8')
-      return !/from\s+['"]@core\/utils\/typeboxHelpers['"]|from\s+['"]@sinclair\/typebox['"]/.test(src)
+      return !/from\s+['"]@core\/utils\/typeboxHelpers['"]|from\s+['"]@sinclair\/typebox['"]|from\s+['"]@core\/ai['"]/.test(src)
     })
     if (missingTypeBox.length > 0) {
       throw new Error(

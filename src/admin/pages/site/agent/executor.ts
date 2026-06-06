@@ -17,7 +17,47 @@
  */
 
 import { Type, type Static, parseValue } from '@core/utils/typeboxHelpers'
-import { aiToolError, aiToolOk, type AiToolImage, type AiToolOutput } from '@core/ai'
+import {
+  aiToolError,
+  aiToolOk,
+  type AiToolImage,
+  type AiToolOutput,
+  InsertHtmlInputSchema,
+  GetNodeHtmlInputSchema,
+  ReplaceNodeHtmlInputSchema,
+  DeleteNodeInputSchema,
+  UpdateNodePropsInputSchema,
+  MoveNodeInputSchema,
+  RenameNodeInputSchema,
+  DuplicateNodeInputSchema,
+  ApplyCssInputSchema,
+  AssignClassInputSchema,
+  RemoveClassInputSchema,
+  AddPageInputSchema,
+  DeletePageInputSchema,
+  RenamePageInputSchema,
+  DuplicatePageInputSchema,
+  SetPageTemplateInputSchema,
+  ClearPageTemplateInputSchema,
+  RenderSnapshotInputSchema,
+  type InsertHtmlInput,
+  type GetNodeHtmlInput,
+  type ReplaceNodeHtmlInput,
+  type DeleteNodeInput,
+  type UpdateNodePropsInput,
+  type MoveNodeInput,
+  type RenameNodeInput,
+  type DuplicateNodeInput,
+  type ApplyCssInput,
+  type AssignClassInput,
+  type RemoveClassInput,
+  type AddPageInput,
+  type DeletePageInput,
+  type RenamePageInput,
+  type DuplicatePageInput,
+  type SetPageTemplateInput,
+  type ClearPageTemplateInput,
+} from '@core/ai'
 import type { EditorStore } from '@site/store/types'
 import { registry } from '@core/module-engine'
 import { sanitizeRichtext, isRichtextPropKey } from '@core/sanitize'
@@ -62,117 +102,24 @@ function parseImportedStyleCss(styleCss: string): {
 }
 
 // ---------------------------------------------------------------------------
-// Per-tool TypeBox schemas
+// Tool input validation
 //
-// Tool names and shapes mirror `server/ai/tools/site/writeTools.ts`. The
-// server validates the input before sending toolRequest; this second pass is
-// defence-in-depth at the store boundary (Constraint #272).
+// The per-tool input schemas are the single source of truth in `@core/ai`
+// (`src/core/ai/toolSchemas.ts`) — the SAME schemas the server advertises as
+// each tool's `inputSchema` in `server/ai/tools/site/writeTools.ts`. The
+// executor imports them and re-validates each `toolRequest` payload here with
+// `parseValue` — defence-in-depth at the store boundary (Constraint #272).
+//
+// `render_snapshot` is the one divergence: the model-facing schema carries only
+// `breakpointId`/`nodeId`, so we compose the server-set `captureScreenshot`
+// flag (chosen from the model's vision capability — non-vision models skip the
+// expensive html-to-image capture) on top of the shared shape here.
 // ---------------------------------------------------------------------------
 
-const insertHtmlSchema = Type.Object({
-  parentId: Type.String({ minLength: 1 }),
-  index: Type.Optional(Type.Integer({ minimum: 0 })),
-  html: Type.String({ minLength: 1 }),
-})
-
-const getNodeHtmlSchema = Type.Object({
-  nodeId: Type.String({ minLength: 1 }),
-})
-
-const replaceNodeHtmlSchema = Type.Object({
-  nodeId: Type.String({ minLength: 1 }),
-  html: Type.String({ minLength: 1 }),
-})
-
-const deleteNodeSchema = Type.Object({
-  nodeId: Type.String({ minLength: 1 }),
-})
-
-const updateNodePropsSchema = Type.Object({
-  nodeId: Type.String({ minLength: 1 }),
-  breakpointId: Type.Optional(Type.String({ minLength: 1 })),
-  patch: Type.Record(Type.String(), Type.Unknown()),
-})
-
-const moveNodeSchema = Type.Object({
-  nodeId: Type.String({ minLength: 1 }),
-  newParentId: Type.String({ minLength: 1 }),
-  newIndex: Type.Integer({ minimum: 0 }),
-})
-
-const renameNodeSchema = Type.Object({
-  nodeId: Type.String({ minLength: 1 }),
-  label: Type.String({ minLength: 1 }),
-})
-
-const applyCssSchema = Type.Object({
-  css: Type.String({ minLength: 1 }),
-})
-
-const assignClassSchema = Type.Object({
-  nodeId: Type.String({ minLength: 1 }),
-  classId: Type.String({ minLength: 1 }),
-})
-
-const removeClassSchema = Type.Object({
-  nodeId: Type.String({ minLength: 1 }),
-  classId: Type.String({ minLength: 1 }),
-})
-
-const addPageSchema = Type.Object({
-  title: Type.String({ minLength: 1 }),
-  slug: Type.Optional(Type.String()),
-})
-
-const deletePageSchema = Type.Object({
-  pageId: Type.String({ minLength: 1 }),
-})
-
-const renamePageSchema = Type.Object({
-  pageId: Type.String({ minLength: 1 }),
-  title: Type.String({ minLength: 1 }),
-  slug: Type.Optional(Type.String()),
-})
-
-const duplicatePageSchema = Type.Object({
-  pageId: Type.String({ minLength: 1 }),
-  title: Type.String({ minLength: 1 }),
-  slug: Type.Optional(Type.String()),
-})
-
-const duplicateNodeSchema = Type.Object({
-  nodeId: Type.String({ minLength: 1 }),
-  count: Type.Optional(Type.Integer({ minimum: 1, maximum: 50 })),
-})
-
-const templateTargetSchema = Type.Union([
-  Type.Object({ kind: Type.Literal('everywhere') }),
-  Type.Object({
-    kind: Type.Literal('postTypes'),
-    tableSlugs: Type.Array(Type.String({ minLength: 1 }), { minItems: 1 }),
-  }),
+const renderSnapshotSchema = Type.Composite([
+  RenderSnapshotInputSchema,
+  Type.Object({ captureScreenshot: Type.Optional(Type.Boolean()) }),
 ])
-
-const setPageTemplateSchema = Type.Object({
-  pageId: Type.String({ minLength: 1 }),
-  target: templateTargetSchema,
-  priority: Type.Optional(Type.Number()),
-})
-
-const clearPageTemplateSchema = Type.Object({
-  pageId: Type.String({ minLength: 1 }),
-})
-
-const renderSnapshotSchema = Type.Object({
-  breakpointId: Type.Optional(Type.String({ minLength: 1 })),
-  // Scope the capture to a single node's subtree (sharper, cheaper than the
-  // whole page). Omit to capture the full breakpoint frame.
-  nodeId: Type.Optional(Type.String({ minLength: 1 })),
-  // Set by the server (not the model) based on the active model's vision
-  // capability — non-vision models skip the expensive html-to-image capture
-  // and receive the layout report only.
-  captureScreenshot: Type.Optional(Type.Boolean()),
-})
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -353,7 +300,7 @@ function targetNodeIdFromInput(raw: unknown): string | undefined {
  *   3. insertImportedNodes(parentId, fragment, { index, styleRules, conditions })
  *      — nodes, <style> rules, and class-token binding in one undo step.
  */
-function runInsertHtml(input: Static<typeof insertHtmlSchema>): AiToolOutput {
+function runInsertHtml(input: InsertHtmlInput): AiToolOutput {
   // (1) Parse and walk the HTML to produce a flat node fragment + any <style> CSS
   const { nodes, rootIds, styleCss } = importHtml(input.html)
   const { rules, conditions } = parseImportedStyleCss(styleCss)
@@ -388,7 +335,7 @@ function runInsertHtml(input: Static<typeof insertHtmlSchema>): AiToolOutput {
  * Render the subtree at `nodeId` to HTML using the publisher's renderNode.
  * Read-only — no store mutation.
  */
-function runGetNodeHtml(input: Static<typeof getNodeHtmlSchema>): AiToolOutput {
+function runGetNodeHtml(input: GetNodeHtmlInput): AiToolOutput {
   const store = getStoreState()
   const site = store.site
   if (!site) return aiToolError('No active site.')
@@ -426,7 +373,7 @@ function runGetNodeHtml(input: Static<typeof getNodeHtmlSchema>): AiToolOutput {
  * children (and their full subtrees) are deleted, then the imported HTML is
  * inserted in their place.
  */
-function runReplaceNodeHtml(input: Static<typeof replaceNodeHtmlSchema>): AiToolOutput {
+function runReplaceNodeHtml(input: ReplaceNodeHtmlInput): AiToolOutput {
   const store = getStoreState()
   if (!store.site) return aiToolError('No active site.')
 
@@ -471,12 +418,12 @@ function runReplaceNodeHtml(input: Static<typeof replaceNodeHtmlSchema>): AiTool
   return aiToolOk({ nodeIds: insertedRootIds })
 }
 
-function runDeleteNode(input: Static<typeof deleteNodeSchema>): AiToolOutput {
+function runDeleteNode(input: DeleteNodeInput): AiToolOutput {
   getStoreState().deleteNode(input.nodeId)
   return aiToolOk()
 }
 
-function runUpdateNodeProps(input: Static<typeof updateNodePropsSchema>): AiToolOutput {
+function runUpdateNodeProps(input: UpdateNodePropsInput): AiToolOutput {
   const store = getStoreState()
   const sanitizedPatch: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(input.patch)) {
@@ -520,12 +467,12 @@ function runUpdateNodeProps(input: Static<typeof updateNodePropsSchema>): AiTool
   return aiToolOk()
 }
 
-function runMoveNode(input: Static<typeof moveNodeSchema>): AiToolOutput {
+function runMoveNode(input: MoveNodeInput): AiToolOutput {
   getStoreState().moveNode(input.nodeId, input.newParentId, input.newIndex)
   return aiToolOk()
 }
 
-function runRenameNode(input: Static<typeof renameNodeSchema>): AiToolOutput {
+function runRenameNode(input: RenameNodeInput): AiToolOutput {
   getStoreState().renameNode(input.nodeId, input.label)
   return aiToolOk()
 }
@@ -541,7 +488,7 @@ function runRenameNode(input: Static<typeof renameNodeSchema>): AiToolOutput {
  * Re-applying an existing selector EDITS it; this is what `updateClassStyles`
  * could not do for descendant/pseudo selectors.
  */
-function runApplyCss(input: Static<typeof applyCssSchema>): AiToolOutput {
+function runApplyCss(input: ApplyCssInput): AiToolOutput {
   const { rules, conditions } = parseImportedStyleCss(input.css)
   if (rules.length === 0 && conditions.length === 0) {
     return aiToolError(
@@ -553,7 +500,7 @@ function runApplyCss(input: Static<typeof applyCssSchema>): AiToolOutput {
   return aiToolOk({ cssRulesCreated: created, cssRulesUpdated: updated })
 }
 
-function runAssignClass(input: Static<typeof assignClassSchema>): AiToolOutput {
+function runAssignClass(input: AssignClassInput): AiToolOutput {
   const store = getStoreState()
   const classId = resolveClassId(store, input.classId)
   if (!classId) return aiToolError(`Class not found: ${input.classId}`)
@@ -561,7 +508,7 @@ function runAssignClass(input: Static<typeof assignClassSchema>): AiToolOutput {
   return aiToolOk()
 }
 
-function runRemoveClass(input: Static<typeof removeClassSchema>): AiToolOutput {
+function runRemoveClass(input: RemoveClassInput): AiToolOutput {
   const store = getStoreState()
   const classId = resolveClassId(store, input.classId)
   if (!classId) return aiToolError(`Class not found: ${input.classId}`)
@@ -569,14 +516,14 @@ function runRemoveClass(input: Static<typeof removeClassSchema>): AiToolOutput {
   return aiToolOk()
 }
 
-function runAddPage(input: Static<typeof addPageSchema>): AiToolOutput {
+function runAddPage(input: AddPageInput): AiToolOutput {
   const page = getStoreState().addPage(input.title, input.slug)
   // rootNodeId is the parent to pass to insertHtml — a pageId is NOT a node id.
   // addPage also makes the new page active, so the insert targets it.
   return aiToolOk({ pageId: page.id, rootNodeId: page.rootNodeId })
 }
 
-function runDeletePage(input: Static<typeof deletePageSchema>): AiToolOutput {
+function runDeletePage(input: DeletePageInput): AiToolOutput {
   const store = getStoreState()
   const site = store.site
   if (!site) return aiToolError('No active site.')
@@ -590,7 +537,7 @@ function runDeletePage(input: Static<typeof deletePageSchema>): AiToolOutput {
   return aiToolOk()
 }
 
-function runRenamePage(input: Static<typeof renamePageSchema>): AiToolOutput {
+function runRenamePage(input: RenamePageInput): AiToolOutput {
   const store = getStoreState()
   const site = store.site
   if (!site) return aiToolError('No active site.')
@@ -601,7 +548,7 @@ function runRenamePage(input: Static<typeof renamePageSchema>): AiToolOutput {
   return aiToolOk()
 }
 
-function runDuplicatePage(input: Static<typeof duplicatePageSchema>): AiToolOutput {
+function runDuplicatePage(input: DuplicatePageInput): AiToolOutput {
   const store = getStoreState()
   const site = store.site
   if (!site) return aiToolError('No active site.')
@@ -612,7 +559,7 @@ function runDuplicatePage(input: Static<typeof duplicatePageSchema>): AiToolOutp
   return aiToolOk({ pageId: newPage.id })
 }
 
-function runSetPageTemplate(input: Static<typeof setPageTemplateSchema>): AiToolOutput {
+function runSetPageTemplate(input: SetPageTemplateInput): AiToolOutput {
   const store = getStoreState()
   const site = store.site
   if (!site) return aiToolError('No active site.')
@@ -628,7 +575,7 @@ function runSetPageTemplate(input: Static<typeof setPageTemplateSchema>): AiTool
   return aiToolOk()
 }
 
-function runClearPageTemplate(input: Static<typeof clearPageTemplateSchema>): AiToolOutput {
+function runClearPageTemplate(input: ClearPageTemplateInput): AiToolOutput {
   const store = getStoreState()
   const site = store.site
   if (!site) return aiToolError('No active site.')
@@ -641,7 +588,7 @@ function runClearPageTemplate(input: Static<typeof clearPageTemplateSchema>): Ai
   return aiToolOk()
 }
 
-function runDuplicateNode(input: Static<typeof duplicateNodeSchema>): AiToolOutput {
+function runDuplicateNode(input: DuplicateNodeInput): AiToolOutput {
   const store = getStoreState()
   const count = input.count ?? 1
   const newIds: string[] = []
@@ -729,39 +676,39 @@ export async function executeAgentTool(
 
     switch (toolName) {
       case 'insertHtml':
-        return runInsertHtml(parseValue(insertHtmlSchema, rawInput))
+        return runInsertHtml(parseValue(InsertHtmlInputSchema, rawInput))
       case 'getNodeHtml':
-        return runGetNodeHtml(parseValue(getNodeHtmlSchema, rawInput))
+        return runGetNodeHtml(parseValue(GetNodeHtmlInputSchema, rawInput))
       case 'replaceNodeHtml':
-        return runReplaceNodeHtml(parseValue(replaceNodeHtmlSchema, rawInput))
+        return runReplaceNodeHtml(parseValue(ReplaceNodeHtmlInputSchema, rawInput))
       case 'deleteNode':
-        return runDeleteNode(parseValue(deleteNodeSchema, rawInput))
+        return runDeleteNode(parseValue(DeleteNodeInputSchema, rawInput))
       case 'updateNodeProps':
-        return runUpdateNodeProps(parseValue(updateNodePropsSchema, rawInput))
+        return runUpdateNodeProps(parseValue(UpdateNodePropsInputSchema, rawInput))
       case 'moveNode':
-        return runMoveNode(parseValue(moveNodeSchema, rawInput))
+        return runMoveNode(parseValue(MoveNodeInputSchema, rawInput))
       case 'renameNode':
-        return runRenameNode(parseValue(renameNodeSchema, rawInput))
+        return runRenameNode(parseValue(RenameNodeInputSchema, rawInput))
       case 'applyCss':
-        return runApplyCss(parseValue(applyCssSchema, rawInput))
+        return runApplyCss(parseValue(ApplyCssInputSchema, rawInput))
       case 'assignClass':
-        return runAssignClass(parseValue(assignClassSchema, rawInput))
+        return runAssignClass(parseValue(AssignClassInputSchema, rawInput))
       case 'removeClass':
-        return runRemoveClass(parseValue(removeClassSchema, rawInput))
+        return runRemoveClass(parseValue(RemoveClassInputSchema, rawInput))
       case 'addPage':
-        return runAddPage(parseValue(addPageSchema, rawInput))
+        return runAddPage(parseValue(AddPageInputSchema, rawInput))
       case 'deletePage':
-        return runDeletePage(parseValue(deletePageSchema, rawInput))
+        return runDeletePage(parseValue(DeletePageInputSchema, rawInput))
       case 'renamePage':
-        return runRenamePage(parseValue(renamePageSchema, rawInput))
+        return runRenamePage(parseValue(RenamePageInputSchema, rawInput))
       case 'duplicatePage':
-        return runDuplicatePage(parseValue(duplicatePageSchema, rawInput))
+        return runDuplicatePage(parseValue(DuplicatePageInputSchema, rawInput))
       case 'setPageTemplate':
-        return runSetPageTemplate(parseValue(setPageTemplateSchema, rawInput))
+        return runSetPageTemplate(parseValue(SetPageTemplateInputSchema, rawInput))
       case 'clearPageTemplate':
-        return runClearPageTemplate(parseValue(clearPageTemplateSchema, rawInput))
+        return runClearPageTemplate(parseValue(ClearPageTemplateInputSchema, rawInput))
       case 'duplicateNode':
-        return runDuplicateNode(parseValue(duplicateNodeSchema, rawInput))
+        return runDuplicateNode(parseValue(DuplicateNodeInputSchema, rawInput))
       case 'set_color_tokens':
         return runSetColorTokens(rawInput)
       case 'set_font_tokens':

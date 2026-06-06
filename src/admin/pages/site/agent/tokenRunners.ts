@@ -15,8 +15,16 @@
  * into the library, then binds the token to it.
  */
 
-import { Type, type Static, parseValue } from '@core/utils/typeboxHelpers'
-import { aiToolError, aiToolOk, type AiToolOutput } from '@core/ai'
+import { Type, parseValue } from '@core/utils/typeboxHelpers'
+import {
+  aiToolError,
+  aiToolOk,
+  type AiToolOutput,
+  SetColorTokensInputSchema,
+  SetFontTokensInputSchema,
+  SetTypeScaleInputSchema,
+  SetSpacingScaleInputSchema,
+} from '@core/ai'
 import { apiRequest } from '@core/http'
 import { getErrorMessage } from '@core/utils/errorMessage'
 import { normalizeFrameworkColorSlug } from '@core/framework'
@@ -26,61 +34,10 @@ import { getAgentStoreApi } from './storeRef'
 
 const getStoreState = (): EditorStore => getAgentStoreApi<EditorStore>().getState()
 
-// ---------------------------------------------------------------------------
-// Schemas (mirror server/ai/tools/site/writeTools.ts)
-// ---------------------------------------------------------------------------
-
-const setColorTokensSchema = Type.Object({
-  tokens: Type.Array(
-    Type.Object({
-      slug: Type.String({ minLength: 1 }),
-      lightValue: Type.String({ minLength: 1 }),
-      category: Type.Optional(Type.String()),
-      darkValue: Type.Optional(Type.String()),
-      darkModeEnabled: Type.Optional(Type.Boolean()),
-    }),
-    { minItems: 1 },
-  ),
-})
-
-const setFontTokensSchema = Type.Object({
-  tokens: Type.Array(
-    Type.Object({
-      name: Type.String({ minLength: 1 }),
-      variable: Type.Optional(Type.String()),
-      fallback: Type.Optional(Type.String()),
-      googleFamily: Type.Optional(Type.String()),
-      variants: Type.Optional(Type.Array(Type.String({ minLength: 1 }))),
-      subsets: Type.Optional(Type.Array(Type.String({ minLength: 1 }))),
-      familyId: Type.Optional(Type.String({ minLength: 1 })),
-    }),
-    { minItems: 1 },
-  ),
-})
-
-const scaleBreakpointSchema = (sizeKey: 'fontSize' | 'size') =>
-  Type.Object({
-    [sizeKey]: Type.Optional(Type.Number()),
-    scaleRatio: Type.Optional(Type.Union([Type.Number(), Type.String()])),
-  })
-
-const setTypeScaleSchema = Type.Object({
-  groupId: Type.Optional(Type.String({ minLength: 1 })),
-  namingConvention: Type.Optional(Type.String({ minLength: 1 })),
-  steps: Type.Optional(Type.String({ minLength: 1 })),
-  baseScaleIndex: Type.Optional(Type.Integer({ minimum: 0 })),
-  min: Type.Optional(scaleBreakpointSchema('fontSize')),
-  max: Type.Optional(scaleBreakpointSchema('fontSize')),
-})
-
-const setSpacingScaleSchema = Type.Object({
-  groupId: Type.Optional(Type.String({ minLength: 1 })),
-  namingConvention: Type.Optional(Type.String({ minLength: 1 })),
-  steps: Type.Optional(Type.String({ minLength: 1 })),
-  baseScaleIndex: Type.Optional(Type.Integer({ minimum: 0 })),
-  min: Type.Optional(scaleBreakpointSchema('size')),
-  max: Type.Optional(scaleBreakpointSchema('size')),
-})
+// The token tool input schemas are the single source of truth in `@core/ai`
+// (`src/core/ai/toolSchemas.ts`) — the SAME schemas the server advertises in
+// `server/ai/tools/site/writeTools.ts`. Imported above; validated with
+// `parseValue` below.
 
 /** Validates the `/admin/api/cms/fonts/install` 201 body. */
 const FontInstallResponseSchema = Type.Object({ font: FontEntrySchema })
@@ -99,7 +56,7 @@ function generatedScaleVars(namingConvention: string, steps: string): string[] {
 }
 
 export function runSetColorTokens(rawInput: unknown): AiToolOutput {
-  const input = parseValue(setColorTokensSchema, rawInput) as Static<typeof setColorTokensSchema>
+  const input = parseValue(SetColorTokensInputSchema, rawInput)
   const store = getStoreState()
   if (!store.site) return aiToolError('No active site.')
   const results: Array<{ slug: string; ref: string; action: 'created' | 'updated' }> = []
@@ -128,7 +85,7 @@ export function runSetColorTokens(rawInput: unknown): AiToolOutput {
 }
 
 export async function runSetFontTokens(rawInput: unknown): Promise<AiToolOutput> {
-  const input = parseValue(setFontTokensSchema, rawInput) as Static<typeof setFontTokensSchema>
+  const input = parseValue(SetFontTokensInputSchema, rawInput)
   const store = getStoreState()
   if (!store.site) return aiToolError('No active site.')
   const results: Array<{
@@ -207,7 +164,7 @@ export async function runSetFontTokens(rawInput: unknown): Promise<AiToolOutput>
 }
 
 export function runSetTypeScale(rawInput: unknown): AiToolOutput {
-  const input = parseValue(setTypeScaleSchema, rawInput) as Static<typeof setTypeScaleSchema>
+  const input = parseValue(SetTypeScaleInputSchema, rawInput)
   const store = getStoreState()
   if (!store.site) return aiToolError('No active site.')
 
@@ -244,7 +201,7 @@ export function runSetTypeScale(rawInput: unknown): AiToolOutput {
 }
 
 export function runSetSpacingScale(rawInput: unknown): AiToolOutput {
-  const input = parseValue(setSpacingScaleSchema, rawInput) as Static<typeof setSpacingScaleSchema>
+  const input = parseValue(SetSpacingScaleInputSchema, rawInput)
   const store = getStoreState()
   if (!store.site) return aiToolError('No active site.')
 
