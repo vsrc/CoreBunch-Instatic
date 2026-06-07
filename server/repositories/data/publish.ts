@@ -22,7 +22,8 @@ import { normalizeRouteBase } from '@core/templates/templateMatching'
 import { resolveTemplateChain } from '@core/templates'
 import { readFeaturedMediaCell } from '@core/data/cells'
 import { getDataRow } from './rows'
-import { toIso } from './shared'
+import { nextDataRowVersionNumber } from './versions'
+import { isoDate } from '@core/utils/isoDate'
 import { getLatestPublishedSiteSnapshot } from '../publish'
 import {
   renderPublishedDataRowTemplate,
@@ -143,7 +144,7 @@ async function publishDataRowLocked(
     if (!row) throw new Error('data row not found')
 
     capturedPreviousRoute = await readPreviousPublishedRoute(tx, rowId)
-    const versionNumber = await nextVersionNumber(tx, rowId)
+    const versionNumber = await nextDataRowVersionNumber(tx, rowId)
     const versionId = nanoid()
 
     await tx`
@@ -356,15 +357,6 @@ async function readPreviousPublishedRoute(
   return rows[0] ?? null
 }
 
-async function nextVersionNumber(db: DbClient, rowId: string): Promise<number> {
-  const { rows } = await db<{ next_version: number }>`
-    select coalesce(max(version_number), 0) + 1 as next_version
-    from data_row_versions
-    where row_id = ${rowId}
-  `
-  return Number(rows[0]?.next_version ?? 1)
-}
-
 // ---------------------------------------------------------------------------
 // Public-route lookups
 // ---------------------------------------------------------------------------
@@ -461,8 +453,8 @@ export async function getPublishedDataRowByRoute(
     publishedByName: queryRow.published_by_display_name ?? null,
     publishedByRoleSlug: queryRow.published_by_role_slug ?? null,
     publishedByRoleName: queryRow.published_by_role_name ?? null,
-    publishedAt: toIso(queryRow.published_at),
-    createdAt: toIso(queryRow.created_at),
+    publishedAt: isoDate(queryRow.published_at),
+    createdAt: isoDate(queryRow.created_at),
   }
 }
 

@@ -3,11 +3,12 @@
  *
  * Split into four modules by responsibility:
  *
- *   shared.ts  — shared mapper helpers (userRefAt, toIso, toIsoOrNull, types)
- *   tables.ts  — data_tables CRUD
- *   rows/      — data_rows repository, split by responsibility (read, search,
- *                filter, mutations, bulk, schedule, import); see rows/index.ts
- *   publish.ts — data_row_versions + redirects + public-route lookups
+ *   shared.ts   — shared mapper helpers (userRefAt, join-column types)
+ *   versions.ts — version-number allocation for data_row_versions
+ *   tables.ts   — data_tables CRUD
+ *   rows/       — data_rows repository, split by responsibility (read, search,
+ *                 filter, mutations, bulk, schedule, import); see rows/index.ts
+ *   publish.ts  — data_row_versions + redirects + public-route lookups
  *
  * Domain types (`DataRow`, `DataTable`, `PublishedDataRow`, `DataRowRedirect`,
  * `DataRowVersion`, `DataUserReference`) are TypeBox schemas in
@@ -58,3 +59,5 @@ export {
   ensureDefaultEntryTemplate,
   backfillDefaultEntryTemplates,
 } from './templateSeeding'
+
+export { nextDataRowVersionNumber } from './versions'

@@ -8,16 +8,22 @@
  *                             and maps each row through `mapRow`
  *   mapRow                  — DataRowRow → DataRow domain shape
  *   isOwnedByUser           — effective-owner predicate for visibility filters
- *   placeholder             — dialect-aware positional placeholder for the
- *                             `db.unsafe()` paths (filter + hydrated select)
+ *   placeholder             — re-exported from db/client (the single home) for
+ *                             the `db.unsafe()` paths (filter + hydrated select)
  *
  * Nothing here is part of the repository's public surface — the barrel
  * (`./index`) does not re-export this module. Sibling query modules import
  * these helpers directly.
  */
-import type { DbClient, Dialect } from '../../../db/client'
+import { placeholder, type DbClient } from '../../../db/client'
 import type { DataRow, DataRowCells, DataRowStatus } from '@core/data/schemas'
-import { userRefAt, toIso, toIsoOrNull, type UserJoinColumns } from '../shared'
+import { userRefAt, type UserJoinColumns } from '../shared'
+import { isoDate, isoDateOrNull } from '@core/utils/isoDate'
+
+// Re-exported so the sibling rows/ query modules (filter, read) keep one
+// local entry point for the dialect-aware placeholder; the single definition
+// lives in db/client.
+export { placeholder }
 
 // ---------------------------------------------------------------------------
 // Input shapes (shared by the single-row and bulk write modules)
@@ -80,11 +86,11 @@ export function mapRow(row: DataRowRow): DataRow {
     createdBy: userRefAt(row, 'created_by'),
     updatedBy: userRefAt(row, 'updated_by'),
     publishedBy: userRefAt(row, 'published_by'),
-    createdAt: toIso(row.created_at),
-    updatedAt: toIso(row.updated_at),
-    publishedAt: toIsoOrNull(row.published_at),
-    scheduledPublishAt: toIsoOrNull(row.scheduled_publish_at),
-    deletedAt: toIsoOrNull(row.deleted_at),
+    createdAt: isoDate(row.created_at),
+    updatedAt: isoDate(row.updated_at),
+    publishedAt: isoDateOrNull(row.published_at),
+    scheduledPublishAt: isoDateOrNull(row.scheduled_publish_at),
+    deletedAt: isoDateOrNull(row.deleted_at),
   }
 }
 
@@ -97,11 +103,6 @@ export function isOwnedByUser(row: DataRow, ownerUserId: string): boolean {
 // ---------------------------------------------------------------------------
 // Hydrated SELECT (single source of the row + user-ref join column list)
 // ---------------------------------------------------------------------------
-
-/** Dialect-aware positional placeholder for `db.unsafe()` SQL strings. */
-export function placeholder(dialect: Dialect, index: number): string {
-  return dialect === 'postgres' ? `$${index}` : '?'
-}
 
 /** The full hydrated column list, including the four user-ref joins. */
 const DATA_ROW_COLUMNS = `data_rows.id,

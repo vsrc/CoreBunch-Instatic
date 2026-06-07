@@ -21,7 +21,7 @@ import type {
   DataTableKind,
   DataTableListItem,
 } from '@core/data/schemas'
-import { toIso } from './shared'
+import { isoDate } from '@core/utils/isoDate'
 
 interface CreateDataTableInput {
   id?: string
@@ -68,7 +68,7 @@ interface DataTableRow {
   updated_by_user_id: string | null
   /**
    * Adapters normalize: PG returns Date, SQLite returns ISO string, test fakes
-   * may return either. The mapper coerces both via `toIso` below.
+   * may return either. The mapper coerces both via `isoDate` below.
    */
   created_at: string | Date
   updated_at: string | Date
@@ -88,8 +88,8 @@ function mapTable(row: DataTableRow): DataTable {
     system: Boolean(row.system),
     createdByUserId: row.created_by_user_id ?? null,
     updatedByUserId: row.updated_by_user_id ?? null,
-    createdAt: toIso(row.created_at),
-    updatedAt: toIso(row.updated_at),
+    createdAt: isoDate(row.created_at),
+    updatedAt: isoDate(row.updated_at),
   }
 }
 

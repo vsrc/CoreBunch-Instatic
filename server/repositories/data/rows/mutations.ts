@@ -21,7 +21,7 @@ import type { DbClient } from '../../../db/client'
 import type { DataRow, DataRowStatus, DeletedRowSummary } from '@core/data/schemas'
 import { bumpPublishVersion, withPublishLock } from '../../../publish/publishState'
 import { type InsertDataRowInput, type UpdateDataRowDraftInput } from './mapper'
-import { toIsoOrNull } from '../shared'
+import { isoDateOrNull } from '@core/utils/isoDate'
 import { getDataRow } from './read'
 
 export type UpdateDataRowTableResult =
@@ -121,7 +121,7 @@ export async function softDeleteDataRow(
     tableId: row.table_id,
     slug: row.slug,
     status: row.status,
-    deletedAt: toIsoOrNull(row.deleted_at),
+    deletedAt: isoDateOrNull(row.deleted_at),
   }
 }
 

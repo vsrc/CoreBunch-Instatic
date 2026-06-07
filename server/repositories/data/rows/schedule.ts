@@ -10,7 +10,7 @@
  */
 import type { DbClient } from '../../../db/client'
 import type { DataRow } from '@core/data/schemas'
-import { toIso } from '../shared'
+import { isoDate } from '@core/utils/isoDate'
 import { getDataRow } from './read'
 
 /**
@@ -123,6 +123,6 @@ export async function listDuePublishSchedules(
   return rows.map((row) => ({
     rowId: row.id,
     tableId: row.table_id,
-    scheduledPublishAt: toIso(row.scheduled_publish_at),
+    scheduledPublishAt: isoDate(row.scheduled_publish_at),
   }))
 }

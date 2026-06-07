@@ -4,9 +4,9 @@
  * `userRefAt` extracts a `DataUserReference` from a row for one of the four
  * user-ref joins (author / created_by / updated_by / published_by). Each prefix
  * has its own accessor reading the concrete named columns, so the column access
- * is type-checked and an unknown prefix is a compile error. `toIso` coerces DB
- * date columns to ISO strings regardless of whether the adapter returned a
- * `Date` (PG, test fakes) or a `string` (SQLite).
+ * is type-checked and an unknown prefix is a compile error. DB date columns are
+ * coerced to ISO strings via `isoDate`/`isoDateOrNull` from `@core/utils/isoDate`
+ * — the one server-wide date-coercion helper.
  */
 
 import type { DataUserReference } from '@core/data/schemas'
@@ -39,15 +39,6 @@ export interface UserJoinColumns {
   published_by_display_name: string | null
   published_by_role_slug: string | null
   published_by_role_name: string | null
-}
-
-export function toIso(value: string | Date): string {
-  return typeof value === 'string' ? value : value.toISOString()
-}
-
-export function toIsoOrNull(value: string | Date | null | undefined): string | null {
-  if (value === null || value === undefined) return null
-  return toIso(value)
 }
 
 /** Build a `DataUserReference` from one join's already-resolved columns. */

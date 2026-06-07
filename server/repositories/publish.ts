@@ -20,7 +20,7 @@ import { normalizeSiteRuntimeConfig } from '@core/site-runtime'
 import { registry } from '@core/module-engine'
 import type { DbClient } from '../db/client'
 import { getDraftSite } from './site'
-import { listDataRows } from './data'
+import { listDataRows, nextDataRowVersionNumber } from './data'
 import { pageFromRow } from '../../src/core/data/pageFromRow'
 import { visualComponentFromRow } from '../../src/core/data/componentFromRow'
 import { validateVisualComponents } from '../../src/core/persistence/validate'
@@ -105,15 +105,6 @@ function createSnapshot(
     ...(runtimeAssets && runtimeAssets.scripts.length > 0 ? { runtimeAssets } : {}),
     ...(runtimePackageImportmap ? { runtimePackageImportmap } : {}),
   }
-}
-
-async function nextVersionNumber(db: DbClient, rowId: string): Promise<number> {
-  const { rows } = await db<{ next_version: number }>`
-    select coalesce(max(version_number), 0) + 1 as next_version
-    from data_row_versions
-    where row_id = ${rowId}
-  `
-  return Number(rows[0]?.next_version ?? 1)
 }
 
 // ---------------------------------------------------------------------------
@@ -238,7 +229,7 @@ async function publishDraftSiteLocked(
     // published pages serve their scripts straight off disk (not the DB).
     const runtimeAssetFiles: Array<{ publicPath: string; bytes: Uint8Array }> = []
     for (const page of publishedSite.pages) {
-      const version = await nextVersionNumber(tx, page.id)
+      const version = await nextDataRowVersionNumber(tx, page.id)
       const versionId = nanoid()
       const runtimeBuild = await buildSiteRuntimeScripts({
         site: publishedSite,
@@ -385,6 +376,23 @@ export async function getPublishedPageBySlug(
     join data_row_versions on data_row_versions.id = data_rows.active_version_id
     where data_rows.table_id = 'pages'
       and data_rows.slug = ${slug}
+      and data_rows.status = 'published'
+      and data_rows.deleted_at is null
+    limit 1
+  `
+  return rows[0]?.snapshot_json ?? null
+}
+
+export async function getPublishedPageSnapshotById(
+  db: DbClient,
+  pageId: string,
+): Promise<PublishedPageSnapshot | null> {
+  const { rows } = await db<{ snapshot_json: PublishedPageSnapshot }>`
+    select data_row_versions.snapshot_json
+    from data_rows
+    join data_row_versions on data_row_versions.id = data_rows.active_version_id
+    where data_rows.id = ${pageId}
+      and data_rows.table_id = 'pages'
       and data_rows.status = 'published'
       and data_rows.deleted_at is null
     limit 1

@@ -6,7 +6,7 @@
  */
 import type { DbClient } from '../../../db/client'
 import type { DataRowStatus } from '@core/data/schemas'
-import { toIso } from '../shared'
+import { isoDate } from '@core/utils/isoDate'
 
 /**
  * A lightweight row summary returned by spotlight content search.
@@ -92,7 +92,7 @@ export async function searchDataRows(
       tableName: r.table_name,
       slug: r.slug,
       status: r.status,
-      updatedAt: toIso(r.updated_at),
+      updatedAt: isoDate(r.updated_at),
     },
   }))
   if (visibility.ownerUserId) {

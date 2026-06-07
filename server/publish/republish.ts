@@ -16,6 +16,7 @@
  */
 
 import type { DbClient } from '../db/client'
+import { getPublishedPageSnapshotById } from '../repositories/publish'
 import { renderPublishedSnapshot } from './publicRenderer'
 import { applyPublishedHtmlPipeline } from './publishedHtmlPipeline'
 
@@ -47,25 +48,13 @@ export class PageNotPublishedError extends Error {
  * currently published.
  */
 export async function republishSinglePage(db: DbClient, pageId: string): Promise<void> {
-  const { rows } = await db<{ snapshot_json: { cmsSnapshotVersion: 1; pageRowId: string; site: unknown; runtimeAssets?: unknown; runtimePackageImportmap?: unknown } }>`
-    select data_row_versions.snapshot_json
-    from data_rows
-    join data_row_versions on data_row_versions.id = data_rows.active_version_id
-    where data_rows.id = ${pageId}
-      and data_rows.table_id = 'pages'
-      and data_rows.status = 'published'
-      and data_rows.deleted_at is null
-    limit 1
-  `
-
-  const snapshot = rows[0]?.snapshot_json
+  // Typed read through the publish repository — the snapshot column is parsed
+  // by the DbClient (`*_json` auto-parse) and typed as `PublishedPageSnapshot`,
+  // so there is no boundary cast here.
+  const snapshot = await getPublishedPageSnapshotById(db, pageId)
   if (!snapshot) {
     throw new PageNotPublishedError(pageId)
   }
-
-  // Cast is safe: the snapshot was written by publishDraftSite, validated at
-  // write time, and re-read via the same DbClient that parsed the JSON column.
-  const typedSnapshot = snapshot as import('../repositories/publish').PublishedPageSnapshot
 
   // Synthetic URL for background republish. The URL object is used by
   // renderPublishedSnapshot for pagination helpers and {route.*} bindings.
@@ -76,7 +65,7 @@ export async function republishSinglePage(db: DbClient, pageId: string): Promise
   // publish.html filter → publish.after). The returned HTML is discarded —
   // the side-effects are what the caller actually needs (lets plugins
   // catch up on pages published before they were activated).
-  const rendered = await renderPublishedSnapshot(typedSnapshot, { db, url: syntheticUrl })
+  const rendered = await renderPublishedSnapshot(snapshot, { db, url: syntheticUrl })
   await applyPublishedHtmlPipeline(rendered, db)
 }
 
