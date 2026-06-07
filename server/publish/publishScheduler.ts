@@ -16,9 +16,10 @@
  *     log captures the publish event itself via the existing
  *     `auditEvent('row.publish.scheduled')` we record next to the call.
  *
- * HA-safety: same Postgres advisory-lock leader election as the plugin
- * scheduler (`pg_try_advisory_lock`). Only ONE host instance ticks at a
- * time; SQLite is single-process so the lock is a no-op sentinel.
+ * HA-safety: leader election via the shared `withSchedulerLeaderLock`
+ * (`server/db/advisoryLock.ts`), same as the plugin scheduler. Only ONE host
+ * instance ticks at a time; SQLite is single-process so the lock is a no-op
+ * sentinel.
  *
  * Failure policy: when `publishDataRow` throws (e.g. validation fails,
  * the row got deleted between selection and publish), the row is
@@ -29,6 +30,7 @@
  * manually.
  */
 import type { DbClient } from '../db/client'
+import { withSchedulerLeaderLock } from '../db/advisoryLock'
 import { publishDataRow } from '../repositories/data/publish'
 import { emitContentEntryUpdated } from './contentEvents'
 import {
@@ -99,16 +101,12 @@ export function stopPublishScheduler(): void {
  * `startPublishScheduler` and lets `setInterval` drive.
  */
 export async function tickPublishScheduler(db: DbClient, uploadsDir?: string): Promise<void> {
-  const leaderToken = await tryAcquireLeader(db)
-  if (!leaderToken) return
-  try {
+  await withSchedulerLeaderLock(db, ADVISORY_LOCK_KEY, '[publish-scheduler]', async () => {
     const due = await listDuePublishSchedules(db, new Date().toISOString(), TICK_BATCH_LIMIT)
     for (const entry of due) {
       await fireOne(db, entry.rowId, uploadsDir)
     }
-  } finally {
-    await releaseLeader(db, leaderToken)
-  }
+  })
 }
 
 /**
@@ -135,42 +133,5 @@ async function fireOne(db: DbClient, rowId: string, uploadsDir?: string): Promis
     await cancelScheduledPublish(db, rowId, null).catch((cancelErr) => {
       console.error(`[publish-scheduler] failed to revert row ${rowId} after publish error:`, cancelErr)
     })
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Leader election (mirrors server/plugins/scheduler.ts pattern)
-// ---------------------------------------------------------------------------
-
-/**
- * Token returned by `tryAcquireLeader`. Opaque to the caller; only used
- * to round-trip into `releaseLeader`. `null` means we couldn't get the
- * lock (another instance is the leader for this tick).
- *
- * For SQLite (single-instance), `tryAcquireLeader` always returns the
- * sentinel `'sqlite-leader'`.
- */
-type LeaderToken = string | null
-
-async function tryAcquireLeader(db: DbClient): Promise<LeaderToken> {
-  // Same trick as the plugin scheduler: probe for the PG-only
-  // `pg_try_advisory_lock`. SQLite throws on the call; we catch and
-  // fall through to the sentinel.
-  try {
-    const { rows } = await db<{ got: boolean }>`
-      select pg_try_advisory_lock(${ADVISORY_LOCK_KEY}) as got
-    `
-    return rows[0]?.got ? 'pg-advisory' : null
-  } catch {
-    return 'sqlite-leader'
-  }
-}
-
-async function releaseLeader(db: DbClient, token: LeaderToken): Promise<void> {
-  if (token !== 'pg-advisory') return
-  try {
-    await db`select pg_advisory_unlock(${ADVISORY_LOCK_KEY})`
-  } catch (err) {
-    console.error('[publish-scheduler] failed to release advisory lock:', err)
   }
 }

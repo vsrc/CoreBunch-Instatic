@@ -25,7 +25,12 @@ import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { SiteDependencyLock } from '@core/site-runtime'
-import { runtimeDependencyLockHash, type RuntimeDependencyCache } from './dependencyCache'
+import {
+  nodeModulesDirForHash,
+  runtimeDependencyLockHash,
+  sentinelPathForHash,
+  type RuntimeDependencyCache,
+} from './dependencyCache'
 
 export interface RuntimePackageImportmap {
   /** JSON-serializable importmap body. */
@@ -205,16 +210,12 @@ export async function buildRuntimePackageImportmapFromLock(
   lock: SiteDependencyLock,
   options: BuildPackageImportmapOptions & { cacheRoot?: string } = {},
 ): Promise<RuntimePackageImportmap | null> {
-  const cacheRoot = options.cacheRoot
-    ?? process.env.RUNTIME_CACHE_DIR
-    ?? join((await import('node:os')).tmpdir(), 'instatic-runtime-cache')
   const hash = runtimeDependencyLockHash(lock)
-  const cacheDir = join(cacheRoot, 'deps', hash)
-  if (!existsSync(join(cacheDir, '.instatic-install-complete'))) return null
+  if (!existsSync(sentinelPathForHash(hash, options.cacheRoot))) return null
 
   return buildRuntimePackageImportmap(
     lock,
-    { hash, nodeModulesDir: join(cacheDir, 'node_modules') },
+    { hash, nodeModulesDir: nodeModulesDirForHash(hash, options.cacheRoot) },
     options,
   )
 }

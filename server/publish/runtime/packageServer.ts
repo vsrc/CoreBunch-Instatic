@@ -31,16 +31,11 @@
  * can keep responses indefinitely.
  */
 import { existsSync } from 'node:fs'
-import { resolve as resolvePath, join } from 'node:path'
-import { tmpdir } from 'node:os'
+import { resolve as resolvePath } from 'node:path'
+import { nodeModulesDirForHash, sentinelPathForHash } from './dependencyCache'
 
 const RUNTIME_PACKAGE_PREFIX = '/_instatic/runtime/cache/'
 const HASH_PATTERN = /^[0-9a-f]{24}$/
-const SENTINEL_FILE = '.instatic-install-complete'
-
-function getCacheRoot(): string {
-  return process.env.RUNTIME_CACHE_DIR || join(tmpdir(), 'instatic-runtime-cache')
-}
 
 function contentTypeForPath(path: string): string {
   if (path.endsWith('.js') || path.endsWith('.mjs')) return 'text/javascript; charset=utf-8'
@@ -77,9 +72,7 @@ function resolveCacheFilePath(pathname: string): { hash: string; absPath: string
   if (subPath.includes('..') || subPath.includes('\0')) return null
   if (subPath.length === 0) return null
 
-  const cacheRoot = getCacheRoot()
-  const cacheDir = join(cacheRoot, 'deps', hash)
-  const nodeModulesDir = join(cacheDir, 'node_modules')
+  const nodeModulesDir = nodeModulesDirForHash(hash)
   const absPath = resolvePath(nodeModulesDir, subPath)
 
   // Final containment check — the resolved path must live inside
@@ -96,10 +89,9 @@ export async function tryServeRuntimePackage(req: Request, pathname: string): Pr
   const resolved = resolveCacheFilePath(pathname)
   if (!resolved) return new Response('not found', { status: 404 })
 
-  const cacheDir = join(getCacheRoot(), 'deps', resolved.hash)
   // Refuse to serve from an in-progress / abandoned install. The sentinel is
   // written atomically *after* `bun install` succeeds (see dependencyCache.ts).
-  if (!existsSync(join(cacheDir, SENTINEL_FILE))) {
+  if (!existsSync(sentinelPathForHash(resolved.hash))) {
     return new Response('runtime dependency cache not ready', { status: 404 })
   }
 

@@ -70,8 +70,38 @@ export function runtimeDependencyLockHash(lock: SiteDependencyLock): string {
   return createHash('sha256').update(payload).digest('hex').slice(0, 24)
 }
 
-function defaultCacheRoot(): string {
+// ---------------------------------------------------------------------------
+// On-disk cache layout — the single owner of the cache path contract.
+//
+// The writer (`performInstall`) and every reader (`packageServer.ts`,
+// `packageImportmap.ts`) MUST derive paths through these accessors. Changing
+// the env var, the `deps/` segment, the node_modules location, or the sentinel
+// filename here updates writer and readers together — they can never disagree.
+// ---------------------------------------------------------------------------
+
+/** Root of the runtime dependency cache. Overridable via `RUNTIME_CACHE_DIR`. */
+export function cacheRootDir(): string {
   return process.env.RUNTIME_CACHE_DIR || join(tmpdir(), 'instatic-runtime-cache')
+}
+
+/** Directory holding all per-hash workspaces under a cache root. */
+function depsDir(cacheRoot: string): string {
+  return join(cacheRoot, 'deps')
+}
+
+/** Content-addressed workspace dir for a given lock hash. */
+export function workspaceDirForHash(hash: string, cacheRoot: string = cacheRootDir()): string {
+  return join(depsDir(cacheRoot), hash)
+}
+
+/** Installed-packages dir for a given lock hash. */
+export function nodeModulesDirForHash(hash: string, cacheRoot: string = cacheRootDir()): string {
+  return join(workspaceDirForHash(hash, cacheRoot), 'node_modules')
+}
+
+/** Path to the install-complete sentinel for a given lock hash. */
+export function sentinelPathForHash(hash: string, cacheRoot: string = cacheRootDir()): string {
+  return join(workspaceDirForHash(hash, cacheRoot), INSTALL_SENTINEL_FILE)
 }
 
 async function defaultRunInstall(command: string[], options: RuntimeInstallOptions): Promise<void> {
@@ -122,7 +152,7 @@ function tempWorkspaceDir(cacheRoot: string, hash: string): string {
   // requests racing to populate the same lock hash. See INSTALL_SENTINEL_FILE
   // comment for why a fixed-name workspace dir was unsafe.
   const random = randomBytes(6).toString('hex')
-  return join(cacheRoot, 'deps', `.tmp-${hash}-${process.pid}-${random}`)
+  return join(depsDir(cacheRoot), `.tmp-${hash}-${process.pid}-${random}`)
 }
 
 async function removeIfExists(path: string): Promise<void> {
@@ -142,10 +172,10 @@ async function performInstall(
   options: EnsureRuntimeDependencyCacheOptions,
 ): Promise<RuntimeDependencyCache> {
   const hash = runtimeDependencyLockHash(lock)
-  const cacheRoot = options.cacheRoot ?? defaultCacheRoot()
-  const workspaceDir = join(cacheRoot, 'deps', hash)
-  const nodeModulesDir = join(workspaceDir, 'node_modules')
-  const sentinelPath = join(workspaceDir, INSTALL_SENTINEL_FILE)
+  const cacheRoot = options.cacheRoot ?? cacheRootDir()
+  const workspaceDir = workspaceDirForHash(hash, cacheRoot)
+  const nodeModulesDir = nodeModulesDirForHash(hash, cacheRoot)
+  const sentinelPath = sentinelPathForHash(hash, cacheRoot)
 
   // Fast path: cache is intact — install completed and the sentinel marker
   // proves it.

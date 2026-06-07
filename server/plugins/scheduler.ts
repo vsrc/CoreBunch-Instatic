@@ -16,14 +16,15 @@
  *   3. **Tick** — every `TICK_INTERVAL_MS` (default 10s), select due
  *      schedules and dispatch each to its plugin's worker. Atomic claim
  *      via `tryClaimSchedule` so two HA instances can't fire the same
- *      schedule twice. The leader-election layer above (`tryAcquireLeader`)
- *      is the FIRST gate; per-row claim is the second.
+ *      schedule twice. The shared leader-election layer
+ *      (`withSchedulerLeaderLock` in `server/db/advisoryLock.ts`) is the
+ *      FIRST gate; per-row claim is the second.
  *
- *   4. **HA leader election** — when running against Postgres, use
- *      `pg_try_advisory_lock` so only ONE host instance ticks at a time.
- *      Against SQLite (single-instance by definition) this is a no-op.
- *      The lock is released between ticks so a leader crash hands off
- *      naturally to the next tick on another instance.
+ *   4. **HA leader election** — via the shared `withSchedulerLeaderLock`
+ *      (`server/db/advisoryLock.ts`), so only ONE host instance ticks at a
+ *      time when running against Postgres. Against SQLite (single-instance by
+ *      definition) this is a no-op. The lock is released between ticks so a
+ *      leader crash hands off naturally to the next tick on another instance.
  *
  *   5. **Failure cap + auto-pause** — after FAILURE_CAP consecutive
  *      failures, the schedule is paused (enabled=false) and the
@@ -35,6 +36,7 @@
  */
 import { nanoid } from 'nanoid'
 import type { DbClient } from '../db/client'
+import { withSchedulerLeaderLock } from '../db/advisoryLock'
 import {
   finalizeScheduleRun,
   insertScheduleRun,
@@ -135,9 +137,7 @@ export function startScheduler(db: DbClient): void {
  *   └── (next instance ticks next interval)
  */
 export async function tickPluginScheduler(db: DbClient): Promise<void> {
-  const leaderToken = await tryAcquireLeader(db)
-  if (!leaderToken) return
-  try {
+  await withSchedulerLeaderLock(db, ADVISORY_LOCK_KEY, '[plugin-scheduler]', async () => {
     const now = new Date()
     const due = await selectDueSchedules(db, now.toISOString(), TICK_BATCH_LIMIT)
     for (const sched of due) {
@@ -152,9 +152,7 @@ export async function tickPluginScheduler(db: DbClient): Promise<void> {
         console.error('[plugin-scheduler] history trim failed:', err)
       })
     }
-  } finally {
-    await releaseLeader(db, leaderToken)
-  }
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -238,44 +236,4 @@ async function fireSchedule(
   }
 
   return outcome
-}
-
-// ---------------------------------------------------------------------------
-// HA leader election
-// ---------------------------------------------------------------------------
-
-/**
- * Token returned by `tryAcquireLeader`. Opaque to the caller; only used to
- * round-trip into `releaseLeader`. `null` means we couldn't get the lock
- * (another instance is the leader for this tick).
- *
- * For SQLite (single-instance), `tryAcquireLeader` always returns the
- * sentinel `'sqlite-leader'` because there's no one else to coordinate
- * with.
- */
-type LeaderToken = string | null
-
-async function tryAcquireLeader(db: DbClient): Promise<LeaderToken> {
-  // Best-effort detection of Postgres via probing for a PG-only function.
-  // `pg_try_advisory_lock` returns true if we got the lock, false if
-  // someone else is holding it. SQLite throws on the call; we catch and
-  // fall through to the sentinel.
-  try {
-    const { rows } = await db<{ got: boolean }>`
-      select pg_try_advisory_lock(${ADVISORY_LOCK_KEY}) as got
-    `
-    return rows[0]?.got ? 'pg-advisory' : null
-  } catch {
-    // SQLite path — single instance by definition, so we're always leader.
-    return 'sqlite-leader'
-  }
-}
-
-async function releaseLeader(db: DbClient, token: LeaderToken): Promise<void> {
-  if (token !== 'pg-advisory') return
-  try {
-    await db`select pg_advisory_unlock(${ADVISORY_LOCK_KEY})`
-  } catch (err) {
-    console.error('[plugin-scheduler] failed to release advisory lock:', err)
-  }
 }
