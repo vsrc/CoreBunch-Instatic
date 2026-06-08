@@ -12,6 +12,13 @@
 
 import { Type, type Static, withFallback } from '@core/utils/typeboxHelpers'
 import { compiledCheck } from '@core/utils/typeboxCompiler'
+import {
+  onlyStrings,
+  parseBreakpointStylesBag,
+  parseStylesBag,
+  requireArrayField,
+  requireStringField,
+} from './parseHelpers'
 
 // ---------------------------------------------------------------------------
 // PropBinding — used by both BaseNode (propBindings field) and VCNodeSchema
@@ -139,4 +146,51 @@ export function parsePropBindings(
     }
   }
   return Object.keys(out).length > 0 ? out : undefined
+}
+
+// ---------------------------------------------------------------------------
+// parseBaseNodeFields — the single tolerant parser for the shared BaseNode shape
+//
+// Both PageNode and VCNode are structurally BaseNode. This is the ONE place
+// that normalises a persisted node's shared fields:
+//   - id / moduleId / children are required (throws `<path>.<field>: …`)
+//   - props / breakpointOverrides / classIds / inlineStyles / propBindings
+//     get their tolerant `withFallback` defaults via the shared parseHelpers
+//     primitives, so a fix to that tolerance lands once for pages and VCs.
+//
+// `parsePageNode` (in ./pageNode) layers the page-only `dynamicBindings` field
+// on top; `parseVCNode` (in visualComponents/schemas) uses it as-is, converting
+// a thrown required-field error into a `null` drop.
+// ---------------------------------------------------------------------------
+
+/**
+ * Parse the shared BaseNode fields from an already-narrowed record `r`.
+ * Throws `Error('<path>.<field>: …')` when a required field (id, moduleId,
+ * children) is absent or the wrong type; returns the normalised BaseNode
+ * otherwise. `parentId` is intentionally omitted — it is recomputed by
+ * `reindexNodeParents` after the whole tree is parsed.
+ */
+export function parseBaseNodeFields(r: Record<string, unknown>, path: string): BaseNode {
+  const id = requireStringField(r, 'id', path)
+  const moduleId = requireStringField(r, 'moduleId', path)
+  const rawChildren = requireArrayField(r, 'children', path)
+
+  const propBindings = parsePropBindings(r.propBindings)
+  // Inline styles — same tolerant bag parser as props/class styles. Dropped
+  // when missing or empty so nodes without inline styles stay lean.
+  const inlineStyles = parseStylesBag(r.inlineStyles)
+
+  return {
+    id,
+    moduleId,
+    props: parseStylesBag(r.props),
+    breakpointOverrides: parseBreakpointStylesBag(r.breakpointOverrides),
+    children: onlyStrings(rawChildren),
+    classIds: Array.isArray(r.classIds) ? onlyStrings(r.classIds) : [],
+    ...(typeof r.label === 'string' ? { label: r.label } : {}),
+    ...(typeof r.locked === 'boolean' ? { locked: r.locked } : {}),
+    ...(typeof r.hidden === 'boolean' ? { hidden: r.hidden } : {}),
+    ...(propBindings !== undefined ? { propBindings } : {}),
+    ...(Object.keys(inlineStyles).length > 0 ? { inlineStyles } : {}),
+  }
 }

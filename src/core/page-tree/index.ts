@@ -10,7 +10,8 @@
 
 // Schemas — exported as both runtime constants (for parse/compiled validation)
 // and types (via Static<typeof X>).
-export { BaseNodeSchema, parsePropBindings } from './baseNode'
+export { BaseNodeSchema, parsePropBindings, parseBaseNodeFields } from './baseNode'
+export { asPlainObject } from './parseHelpers'
 export { NodeTreeSchema } from './treeSchema'
 export { PageNodeSchema } from './pageNode'
 export {

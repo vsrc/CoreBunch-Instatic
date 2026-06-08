@@ -10,6 +10,7 @@
  */
 
 import type { SiteDocument } from '@core/page-tree'
+import { forEachVCRef } from './vcRefs'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -65,45 +66,39 @@ export function previewVCDeletion(
 
   const usages: VCRefUsage[] = []
 
-  // Walk pages
+  // Walk pages — forEachVCRef owns the "is this a VC ref to vcId" predicate.
   for (const page of site.pages) {
-    for (const node of Object.values(page.nodes)) {
-      if (
-        node.moduleId === 'base.visual-component-ref' &&
-        node.props.componentId === vcId
-      ) {
-        usages.push({
-          source: {
-            kind: 'page',
-            pageId: page.id,
-            pageTitle: page.title,
-            nodeId: node.id,
-            nodeLabel: node.label ?? node.moduleId,
-          },
-        })
-      }
-    }
+    forEachVCRef(page.nodes, ({ nodeId, componentId }) => {
+      if (componentId !== vcId) return
+      const node = page.nodes[nodeId]
+      usages.push({
+        source: {
+          kind: 'page',
+          pageId: page.id,
+          pageTitle: page.title,
+          nodeId,
+          nodeLabel: node.label ?? node.moduleId,
+        },
+      })
+    })
   }
 
   // Walk other VCs (skip self to exclude self-references)
   for (const otherVc of site.visualComponents) {
     if (otherVc.id === vcId) continue
-    for (const node of Object.values(otherVc.tree.nodes)) {
-      if (
-        node.moduleId === 'base.visual-component-ref' &&
-        node.props.componentId === vcId
-      ) {
-        usages.push({
-          source: {
-            kind: 'visualComponent',
-            vcId: otherVc.id,
-            vcName: otherVc.name,
-            nodeId: node.id,
-            nodeLabel: node.label ?? node.moduleId,
-          },
-        })
-      }
-    }
+    forEachVCRef(otherVc.tree.nodes, ({ nodeId, componentId }) => {
+      if (componentId !== vcId) return
+      const node = otherVc.tree.nodes[nodeId]
+      usages.push({
+        source: {
+          kind: 'visualComponent',
+          vcId: otherVc.id,
+          vcName: otherVc.name,
+          nodeId,
+          nodeLabel: node.label ?? node.moduleId,
+        },
+      })
+    })
   }
 
   if (usages.length === 0) return null

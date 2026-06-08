@@ -19,6 +19,9 @@ export { validateComponentName, validateParamName } from './nameValidation'
 
 export { getReferencedComponentIds, wouldCreateCycle } from './recursionGuard'
 
+export { forEachVCRef, collectVCRefs } from './vcRefs'
+export type { VCRef } from './vcRefs'
+
 export { syncSlotInstances, applySlotSyncResult } from './slotSync'
 
 export { previewVCDeletion } from './deletionImpact'

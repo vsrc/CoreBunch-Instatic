@@ -11,16 +11,9 @@
  */
 
 import { Type, type Static } from '@core/utils/typeboxHelpers'
-import { BaseNodeSchema, parsePropBindings } from './baseNode'
+import { BaseNodeSchema, parseBaseNodeFields } from './baseNode'
 import { DynamicPropBindingSchema, parseDynamicBindings } from './dynamicBinding'
-import {
-  asPlainObject,
-  onlyStrings,
-  parseBreakpointStylesBag,
-  parseStylesBag,
-  requireArrayField,
-  requireStringField,
-} from './parseHelpers'
+import { asPlainObject } from './parseHelpers'
 
 // ---------------------------------------------------------------------------
 // PageNodeSchema
@@ -59,29 +52,15 @@ export function parsePageNode(raw: unknown, nodePath: string): PageNode {
   const r = asPlainObject(raw)
   if (!r) throw new Error(`${nodePath}: not an object`)
 
-  const id = requireStringField(r, 'id', nodePath)
-  const moduleId = requireStringField(r, 'moduleId', nodePath)
-  const rawChildren = requireArrayField(r, 'children', nodePath)
+  // Shared BaseNode fields (id/moduleId/children/props/breakpointOverrides/
+  // classIds/inlineStyles/propBindings) come from the one tolerant base parser.
+  const base = parseBaseNodeFields(r, nodePath)
 
-  const props = parseStylesBag(r.props)
-  const propBindings = parsePropBindings(r.propBindings)
+  // Page-only overlay: template data-binding map. Silently dropped if invalid.
   const dynamicBindings = parseDynamicBindings(r.dynamicBindings)
-  // Inline styles — same tolerant bag parser as props/class styles. Dropped
-  // when missing or empty so nodes without inline styles stay lean.
-  const inlineStyles = parseStylesBag(r.inlineStyles)
 
   return {
-    id,
-    moduleId,
-    props,
-    breakpointOverrides: parseBreakpointStylesBag(r.breakpointOverrides),
-    children: onlyStrings(rawChildren),
-    classIds: Array.isArray(r.classIds) ? onlyStrings(r.classIds) : [],
-    ...(typeof r.label === 'string' ? { label: r.label } : {}),
-    ...(typeof r.locked === 'boolean' ? { locked: r.locked } : {}),
-    ...(typeof r.hidden === 'boolean' ? { hidden: r.hidden } : {}),
-    ...(propBindings !== undefined ? { propBindings } : {}),
+    ...base,
     ...(dynamicBindings !== undefined ? { dynamicBindings } : {}),
-    ...(Object.keys(inlineStyles).length > 0 ? { inlineStyles } : {}),
   }
 }

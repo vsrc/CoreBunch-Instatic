@@ -26,6 +26,8 @@
  * Constraint #269: This file must NOT import from editor/ or editor-store/.
  */
 
+import { forEachVCRef } from './vcRefs'
+
 // ---------------------------------------------------------------------------
 // getReferencedComponentIds
 // ---------------------------------------------------------------------------
@@ -46,30 +48,14 @@ export function getReferencedComponentIds(vc: unknown): Set<string> {
   const result = new Set<string>()
   if (!vc || typeof vc !== 'object' || Array.isArray(vc)) return result
 
-  const vcObj = vc as Record<string, unknown>
-  const tree = vcObj.tree
+  const tree = (vc as Record<string, unknown>).tree
   if (!tree || typeof tree !== 'object' || Array.isArray(tree)) return result
 
-  const treeObj = tree as Record<string, unknown>
-  const nodes = treeObj.nodes
-  if (!nodes || typeof nodes !== 'object' || Array.isArray(nodes)) return result
-
-  for (const node of Object.values(nodes as Record<string, unknown>)) {
-    if (!node || typeof node !== 'object' || Array.isArray(node)) continue
-    const n = node as Record<string, unknown>
-
-    if (
-      n.moduleId === 'base.visual-component-ref' &&
-      n.props &&
-      typeof n.props === 'object' &&
-      !Array.isArray(n.props)
-    ) {
-      const componentId = (n.props as Record<string, unknown>).componentId
-      if (typeof componentId === 'string' && componentId.length > 0) {
-        result.add(componentId)
-      }
-    }
-  }
+  // forEachVCRef owns the "what is a VC ref" predicate and tolerates the
+  // untyped node map handed in by validateSite / wouldCreateCycle.
+  forEachVCRef((tree as Record<string, unknown>).nodes, ({ componentId }) => {
+    result.add(componentId)
+  })
 
   return result
 }

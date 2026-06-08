@@ -206,10 +206,10 @@ export function evaluateCondition(
     return props[condition.field] !== condition.notEq
   }
   if ('in' in condition) {
-    return (condition as { field: string; in: unknown[] }).in.includes(props[condition.field])
+    return condition.in.includes(props[condition.field])
   }
   if ('notIn' in condition) {
-    return !(condition as { field: string; notIn: unknown[] }).notIn.includes(props[condition.field])
+    return !condition.notIn.includes(props[condition.field])
   }
   return true
 }

@@ -9,7 +9,7 @@
  */
 
 import { Type, type Static, withFallback } from '@core/utils/typeboxHelpers'
-import { BaseNodeSchema, NodeTreeSchema, type BaseNode, parsePropBindings, reindexNodeParents } from '@core/page-tree'
+import { BaseNodeSchema, NodeTreeSchema, type BaseNode, asPlainObject, parseBaseNodeFields, reindexNodeParents } from '@core/page-tree'
 
 // ---------------------------------------------------------------------------
 // VCParamType — valid param type values
@@ -109,66 +109,31 @@ function parseVCParam(raw: unknown): VCParam | null {
 // ---------------------------------------------------------------------------
 // parseVCNode — tolerant flat VCNode parser
 //
-// Replicates the Zod .catch() fallback behaviour for fields that use
-// withFallback() in BaseNodeSchema (props, breakpointOverrides, classIds).
-// Required by parseVisualComponent to handle persisted data where nodes
-// may have been stored without classIds or other optional-with-fallback fields.
+// VCNode IS BaseNode, so there is no VC-specific field handling: the shared
+// parseBaseNodeFields (page-tree) normalises every field, and the only VC
+// difference is the tolerance contract — a structurally invalid node is
+// dropped from the tree (null) rather than failing the whole component.
 // ---------------------------------------------------------------------------
 
 /**
  * Tolerant parser for a single VCNode (used by parseVisualComponent).
  *
- * Unlike strict schema validation, this function handles:
- *   - Missing classIds → default []
- *   - Missing/invalid props → default {}
- *   - Missing/invalid breakpointOverrides → default {}
- *   - propBindings: per-entry filtered via parsePropBindings
+ * Delegates field normalisation to the shared `parseBaseNodeFields`; converts
+ * its thrown required-field error (missing/invalid id, moduleId, or children)
+ * into a `null` drop so parseVisualComponent can skip the bad node without
+ * discarding the rest of the tree.
  *
- * Returns null when required fields (id, moduleId, children) are invalid.
  * VCNode is a flat node in a flat-map tree (no recursive nesting).
  */
 function parseVCNode(raw: unknown): VCNode | null {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
-  const r = raw as Record<string, unknown>
-  if (typeof r.id !== 'string') return null
-  if (typeof r.moduleId !== 'string') return null
-  if (!Array.isArray(r.children)) return null
-
-  const props: Record<string, unknown> =
-    r.props && typeof r.props === 'object' && !Array.isArray(r.props)
-      ? (r.props as Record<string, unknown>)
-      : {}
-
-  const breakpointOverrides: Record<string, Record<string, unknown>> =
-    r.breakpointOverrides && typeof r.breakpointOverrides === 'object' && !Array.isArray(r.breakpointOverrides)
-      ? (r.breakpointOverrides as Record<string, Record<string, unknown>>)
-      : {}
-
-  const children = r.children.filter((c): c is string => typeof c === 'string')
-
-  const classIds = Array.isArray(r.classIds)
-    ? r.classIds.filter((c): c is string => typeof c === 'string')
-    : []
-
-  const propBindings = parsePropBindings(r.propBindings)
-
-  const inlineStyles =
-    r.inlineStyles && typeof r.inlineStyles === 'object' && !Array.isArray(r.inlineStyles)
-      ? (r.inlineStyles as Record<string, unknown>)
-      : {}
-
-  return {
-    id: r.id,
-    moduleId: r.moduleId,
-    props,
-    breakpointOverrides,
-    children,
-    classIds,
-    ...(typeof r.label === 'string' ? { label: r.label } : {}),
-    ...(typeof r.locked === 'boolean' ? { locked: r.locked } : {}),
-    ...(typeof r.hidden === 'boolean' ? { hidden: r.hidden } : {}),
-    ...(propBindings !== undefined ? { propBindings } : {}),
-    ...(Object.keys(inlineStyles).length > 0 ? { inlineStyles } : {}),
+  const r = asPlainObject(raw)
+  if (!r) return null
+  try {
+    return parseBaseNodeFields(r, 'node')
+  } catch (_err) {
+    // Tolerant drop: a node missing a required field is omitted from the VC
+    // tree rather than rejecting the whole VisualComponent.
+    return null
   }
 }
 
