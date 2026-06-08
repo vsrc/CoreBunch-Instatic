@@ -9,14 +9,14 @@
  * Generated utility classes (those gated by `isGeneratedClassLocked`) render
  * a locked-state empty card instead of editable surfaces.
  */
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { SearchBar } from '@ui/components/SearchBar'
-import { useEditorPreference } from '@site/preferences/editorPreferences'
 import { isGeneratedClassLocked, styleRuleSelector } from '@core/page-tree'
 import type { StyleRule } from '@core/page-tree'
 import { StyleRuleComposer } from './StyleRuleComposer'
 import { StyleCategoryRail } from './StyleCategoryRail'
 import { GeneratedUtilityLockedState } from './StyleSurface'
+import { useScrollSpy } from './useScrollSpy'
 import {
   CLASS_STYLE_SECTIONS,
   getClassStyleSectionSetCounts,
@@ -33,51 +33,14 @@ interface SelectorInspectorProps {
 
 export function SelectorInspector({ cls, activeBreakpointId }: SelectorInspectorProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
-  const [activeAnchorId, setActiveAnchorId] = useState<string>(FIRST_STYLE_SECTION_ID)
   const [styleQuery, setStyleQuery] = useState('')
   const clearStyleQuery = () => setStyleQuery('')
   const selectorLabel = styleRuleSelector(cls)
-  // Smooth-scroll behaviour gated by the `propertiesSmoothScroll` preference.
-  const propertiesSmoothScroll = useEditorPreference('propertiesSmoothScroll')
 
-  // Derive active anchor from scroll position.
-  useEffect(() => {
-    const container = scrollRef.current
-    if (!container) return
-
-    function updateActive() {
-      if (!container) return
-      const sections = container.querySelectorAll<HTMLElement>('[data-style-section]')
-      const containerRect = container.getBoundingClientRect()
-      let activeId = FIRST_STYLE_SECTION_ID
-      let closestAboveTop = -Infinity
-      for (const section of Array.from(sections)) {
-        const id = section.getAttribute('data-style-section')
-        if (!id) continue
-        const relTop = section.getBoundingClientRect().top - containerRect.top
-        if (relTop <= 1 && relTop > closestAboveTop) {
-          closestAboveTop = relTop
-          activeId = id
-        }
-      }
-      setActiveAnchorId(activeId)
-    }
-
-    container.addEventListener('scroll', updateActive, { passive: true })
-    return () => container.removeEventListener('scroll', updateActive)
-  }, [])
-
-  const handleSectionClick = (sectionId: string) => {
-    const container = scrollRef.current
-    if (!container) return
-    const behavior: ScrollBehavior = propertiesSmoothScroll ? 'smooth' : 'auto'
-    setActiveAnchorId(sectionId)
-    const el = container.querySelector<HTMLElement>(`[data-style-section="${sectionId}"]`)
-    if (!el) return
-    const containerRect = container.getBoundingClientRect()
-    const rect = el.getBoundingClientRect()
-    container.scrollTo({ top: rect.top - containerRect.top + container.scrollTop, behavior })
-  }
+  // Active section + click-to-scroll behaviour (shared with StyleSurface).
+  const { activeId: activeAnchorId, scrollTo: handleSectionClick } = useScrollSpy(scrollRef, {
+    initialId: FIRST_STYLE_SECTION_ID,
+  })
 
   if (isGeneratedClassLocked(cls)) {
     return (

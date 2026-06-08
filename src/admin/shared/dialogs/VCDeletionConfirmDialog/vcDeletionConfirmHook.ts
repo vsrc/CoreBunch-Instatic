@@ -3,11 +3,12 @@
  *
  * Lives in its own (non-component) file so the provider component module can
  * keep Fast Refresh-friendly "components-only" exports. Same split-file layout
- * as `frameworkChangeConfirmHook.ts`.
+ * as `frameworkChangeConfirmHook.ts`; the shared pending / confirm / cancel
+ * lifecycle comes from `createConfirmContext`.
  */
 
-import { createContext, use } from 'react'
 import type { VCDeletionImpact } from '@core/visualComponents'
+import { createConfirmContext } from '../confirmContextFactory'
 
 export interface ConfirmVCDeletionRequest {
   /** ID of the visual component to delete. */
@@ -20,18 +21,13 @@ export interface ConfirmVCDeletionRequest {
   commit: () => void
 }
 
-export interface VCDeletionConfirmContextValue {
-  confirm: (request: ConfirmVCDeletionRequest) => void
-}
+const vcDeletionConfirm = createConfirmContext<
+  ConfirmVCDeletionRequest,
+  VCDeletionImpact
+>()
 
-export interface PendingVCDeletionState {
-  request: ConfirmVCDeletionRequest
-  /** Captured at preview time so the dialog renders stable data. */
-  impact: VCDeletionImpact
-}
-
-export const VCDeletionConfirmContext =
-  createContext<VCDeletionConfirmContextValue | null>(null)
+export const VCDeletionConfirmContext = vcDeletionConfirm.Context
+export const useVCDeletionConfirmController = vcDeletionConfirm.useConfirmController
 
 /**
  * Returns `confirmVCDeletion(request)` from the nearest
@@ -41,8 +37,4 @@ export const VCDeletionConfirmContext =
  *
  * Falls back to immediate commit when no provider is mounted (test isolation).
  */
-export function useVCDeletionConfirm(): (request: ConfirmVCDeletionRequest) => void {
-  const ctx = use(VCDeletionConfirmContext)
-  if (ctx) return ctx.confirm
-  return (request) => request.commit()
-}
+export const useVCDeletionConfirm = vcDeletionConfirm.useConfirm

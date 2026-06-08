@@ -21,7 +21,7 @@
  *   Module section and Module rail button are hidden.
  */
 
-import { useState, useRef, useEffect, type ReactNode } from 'react'
+import { useState, useRef, type ReactNode } from 'react'
 import { useEditorStore } from '@site/store/store'
 import type { AnyModuleDefinition } from '@core/module-engine'
 import type { StyleRule, CSSPropertyBag } from '@core/page-tree'
@@ -33,6 +33,7 @@ import { StyleRuleComposer } from './StyleRuleComposer'
 import { InlineStyleComposer } from './InlineStyleComposer'
 import { ClassPropertyRow } from './ClassPropertyRow'
 import { StyleCategoryRail, MODULE_CATEGORY_ID } from './StyleCategoryRail'
+import { useScrollSpy } from './useScrollSpy'
 import {
   CLASS_STYLE_SECTIONS,
   getCSSPropertyDefaultValue,
@@ -90,8 +91,17 @@ export function StyleSurface({
 }: StyleSurfaceProps) {
   // scrollRef → outer grid which is also the scroll container
   const scrollRef = useRef<HTMLDivElement>(null)
-  const [activeAnchorId, setActiveAnchorId] = useState<string>(MODULE_CATEGORY_ID)
   const [styleQuery, setStyleQuery] = useState('')
+
+  // Active section + click-to-scroll behaviour (shared with SelectorInspector).
+  // The Module anchor is both the initial active section and the "scroll to
+  // absolute top" target (so the sticky search bar above it is revealed); the
+  // active anchor resets to it whenever the selected node changes.
+  const { activeId: activeAnchorId, scrollTo: handleSectionClick } = useScrollSpy(scrollRef, {
+    initialId: MODULE_CATEGORY_ID,
+    scrollTopId: MODULE_CATEGORY_ID,
+    resetKey: nodeId,
+  })
 
   // Reset search query when active class changes (no state leak between pills).
   const [lastActiveClassId, setLastActiveClassId] = useState<string | null>(null)
@@ -105,79 +115,10 @@ export function StyleSurface({
   const inlineStyleEditing = useEditorStore((s) => s.inlineStyleEditing)
   const setInlineStyleEditing = useEditorStore((s) => s.setInlineStyleEditing)
 
-  // Reset active anchor on node change ("update during render").
-  const [lastNodeId, setLastNodeId] = useState<string | null>(null)
-  if (lastNodeId !== nodeId) {
-    setLastNodeId(nodeId)
-    setActiveAnchorId(MODULE_CATEGORY_ID)
-  }
-
-  // Scroll back to top on node change (DOM mutation — safe in effect).
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ top: 0 })
-  }, [nodeId])
-
-  // Derive active anchor from scroll position via passive scroll listener.
-  // Set up once (ref element is stable for the lifetime of this mount).
-  useEffect(() => {
-    const container = scrollRef.current
-    if (!container) return
-
-    function updateActive() {
-      if (!container) return
-      const sections = container.querySelectorAll<HTMLElement>('[data-style-section]')
-      const containerRect = container.getBoundingClientRect()
-      let activeId = MODULE_CATEGORY_ID
-      let closestAboveTop = -Infinity
-      for (const section of Array.from(sections)) {
-        const id = section.getAttribute('data-style-section')
-        if (!id) continue
-        const relTop = section.getBoundingClientRect().top - containerRect.top
-        if (relTop <= 1 && relTop > closestAboveTop) {
-          closestAboveTop = relTop
-          activeId = id
-        }
-      }
-      setActiveAnchorId(activeId)
-    }
-
-    container.addEventListener('scroll', updateActive, { passive: true })
-    return () => container.removeEventListener('scroll', updateActive)
-  }, [])
-
-  // Smooth-scroll behaviour gated by the `propertiesSmoothScroll` preference.
-  // Read fresh inside the handler so toggling the pref takes effect on the
-  // very next click without re-binding the callback.
-  const propertiesSmoothScroll = useEditorPreference('propertiesSmoothScroll')
-
   // Default open/closed state for every property section (Module + CSS), driven
   // by the `propertiesSectionsExpanded` preference. Read once here; the CSS
   // sections receive it through StyleRuleComposer → StyleSectionsEditor.
   const sectionsExpanded = useEditorPreference('propertiesSectionsExpanded')
-
-  // Scroll to the section corresponding to the clicked rail button.
-  function handleSectionClick(sectionId: string) {
-    const container = scrollRef.current
-    if (!container) return
-
-    const behavior: ScrollBehavior = propertiesSmoothScroll ? 'smooth' : 'auto'
-
-    if (sectionId === MODULE_CATEGORY_ID) {
-      setActiveAnchorId(MODULE_CATEGORY_ID)
-      container.scrollTo({ top: 0, behavior })
-      return
-    }
-
-    setActiveAnchorId(sectionId)
-    const el = container.querySelector<HTMLElement>(`[data-style-section="${sectionId}"]`)
-    if (!el) return
-    const containerRect = container.getBoundingClientRect()
-    const rect = el.getBoundingClientRect()
-    container.scrollTo({
-      top: rect.top - containerRect.top + container.scrollTop,
-      behavior,
-    })
-  }
 
   const clearStyleQuery = () => setStyleQuery('')
 

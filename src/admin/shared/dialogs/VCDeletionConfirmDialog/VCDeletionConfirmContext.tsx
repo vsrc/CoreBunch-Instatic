@@ -16,69 +16,55 @@
  * One provider mounted alongside `<FrameworkChangeConfirmProvider/>` in the
  * left sidebar replaces any ad-hoc confirmation state in SiteExplorerPanel.
  *
- * The hook + types + context object live next door in `vcDeletionConfirmHook.ts`
- * so this file remains a pure component module (Fast Refresh requires component
- * files to export only components).
+ * The shared pending / confirm / cancel lifecycle lives in
+ * `createConfirmContext`; this module supplies only the impact computation
+ * (`resolve`) and the dialog body. The hook + types + context object live next
+ * door in `vcDeletionConfirmHook.ts` so this file remains a pure component
+ * module (Fast Refresh requires component files to export only components).
  */
 
-import {
-  useState,
-  type ReactNode,
-} from 'react'
+import { type ReactNode } from 'react'
 import { useEditorStore } from '@site/store/store'
 import { useConfirmDelete } from '@admin/shared/dialogs/ConfirmDeleteDialog'
 import { previewVCDeletion } from '@core/visualComponents'
 import { VCDeletionConfirmDialog } from './VCDeletionConfirmDialog'
 import {
   VCDeletionConfirmContext,
+  useVCDeletionConfirmController,
   type ConfirmVCDeletionRequest,
-  type VCDeletionConfirmContextValue,
-  type PendingVCDeletionState,
 } from './vcDeletionConfirmHook'
 
 export function VCDeletionConfirmProvider({ children }: { children: ReactNode }) {
   const site = useEditorStore((s) => s.site)
   const confirmDelete = useConfirmDelete()
-  const [pending, setPending] = useState<PendingVCDeletionState | null>(null)
 
-  const confirm = (request: ConfirmVCDeletionRequest) => {
-    if (!site) {
-      // No site loaded — commit immediately
-      request.commit()
-      return
-    }
+  const { confirm, pending, handleCancel, handleConfirm } =
+    useVCDeletionConfirmController((request: ConfirmVCDeletionRequest) => {
+      if (!site) {
+        // No site loaded — commit immediately.
+        request.commit()
+        return { status: 'handled' }
+      }
 
-    const impact = previewVCDeletion(site, request.vcId)
+      const impact = previewVCDeletion(site, request.vcId)
 
-    if (!impact) {
-      // No usages — fall through to the generic confirm-delete flow which
-      // respects the confirmBeforeDelete editor preference.
-      confirmDelete({
-        title: 'Delete component?',
-        confirmLabel: 'Delete component',
-        commit: request.commit,
-      })
-      return
-    }
+      if (!impact) {
+        // No usages — fall through to the generic confirm-delete flow which
+        // respects the confirmBeforeDelete editor preference.
+        confirmDelete({
+          title: 'Delete component?',
+          confirmLabel: 'Delete component',
+          commit: request.commit,
+        })
+        return { status: 'handled' }
+      }
 
-    // Usages found — show the impact dialog
-    setPending({ request, impact })
-  }
-
-  const value: VCDeletionConfirmContextValue = { confirm }
-
-  const handleCancel = () => {
-    setPending(null)
-  }
-
-  const handleConfirm = () => {
-    if (!pending) return
-    pending.request.commit()
-    setPending(null)
-  }
+      // Usages found — show the impact dialog.
+      return { status: 'confirm', impact }
+    })
 
   return (
-    <VCDeletionConfirmContext.Provider value={value}>
+    <VCDeletionConfirmContext.Provider value={{ confirm }}>
       {children}
       {pending && (
         <VCDeletionConfirmDialog
