@@ -93,11 +93,13 @@ The release workflow should:
 
 - run tests and build checks
 - log in to GitHub Container Registry with `GITHUB_TOKEN`
-- build `Dockerfile` for `linux/amd64` and `linux/arm64` (multi-arch via QEMU + Buildx)
+- build `Dockerfile` for `linux/amd64`
 - push a semver tag for `v*` tags
 - push `latest` for tagged releases
 - create a release bundle with the Compose files and deployment docs
 - skip the Docker Hub mirror cleanly when `DOCKERHUB_USERNAME` or `DOCKERHUB_TOKEN` is missing
+
+The first release targets `linux/amd64` because QEMU-based arm64 publishing made the tagged workflow too slow to use as a release gate. Add arm64 as a separate native-runner build before advertising multi-arch images.
 
 ## Docker Hub Mirror
 

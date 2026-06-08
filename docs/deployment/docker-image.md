@@ -47,7 +47,7 @@ docker pull corebunch/instatic:0.0.1
 
 When both registries are available, prefer GHCR in Compose files because it is produced directly by the release workflow.
 
-The published image is built for `linux/amd64` and `linux/arm64`. Docker pulls the correct variant automatically based on the host's architecture — no `--platform` flag is needed on either x86_64 servers or ARM64 hosts (Apple Silicon, AWS Graviton, Oracle Ampere, Raspberry Pi 4+).
+The v0.0.1 published image is built for `linux/amd64`. Use it on Railway and x86_64 VPS/container hosts. ARM64 hosts should build from source for now, or wait for the native arm64 release job before pulling GHCR images directly.
 
 ## Run With SQLite
 
