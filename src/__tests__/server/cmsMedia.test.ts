@@ -110,10 +110,11 @@ function makeFakeDb() {
       return { rows: [], rowCount: 1 }
     }
 
-    // Folder join lookups are issued by `loadFolderIdsForAssets` once per
-    // asset id during list/get/update paths. None of the assets in this
-    // suite are assigned to a folder; return an empty result set.
-    if (normalized.includes('select folder_id from media_asset_folders')) {
+    // Folder membership lookup — `loadFolderIdsForAssets` issues a single
+    // batched `… from media_asset_folders where asset_id in (…)` during
+    // list/get/update paths. None of the assets in this suite are assigned to
+    // a folder; return an empty result set.
+    if (normalized.includes('from media_asset_folders')) {
       return { rows: [], rowCount: 0 }
     }
 

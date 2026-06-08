@@ -88,6 +88,13 @@ function makeFakeDb(snapshot: PublishedPageSnapshot | null): DbClient {
     return { rows: [], rowCount: 0 }
   }
 
+  // getPublishedDataRowByRoute runs through db.unsafe (it splices the shared
+  // user-ref join fragments) — no content row in this fixture.
+  handle.unsafe = async <Row extends Record<string, unknown> = Record<string, unknown>>(
+    _sql: string,
+    _params?: unknown[],
+  ): Promise<DbResult<Row>> => ({ rows: [], rowCount: 0 })
+
   handle.transaction = async <T>(cb: (tx: DbClient) => Promise<T>): Promise<T> =>
     cb(handle as unknown as DbClient)
 
@@ -107,10 +114,6 @@ function makeRedirectDb(): DbClient {
     if (normalized.includes('select data_row_versions.snapshot_json')) {
       return { rows: [], rowCount: 0 }
     }
-    // getPublishedDataRowByRoute → not found (no content row)
-    if (normalized.includes('from data_rows') && normalized.includes('join data_tables')) {
-      return { rows: [], rowCount: 0 }
-    }
     // getDataRowRedirectByRoute → return a redirect
     if (normalized.includes('from data_row_redirects')) {
       return {
@@ -128,6 +131,13 @@ function makeRedirectDb(): DbClient {
     }
     return { rows: [], rowCount: 0 }
   }
+  // getPublishedDataRowByRoute → not found (no content row). It runs through
+  // db.unsafe (shared user-ref join fragments), so the not-found branch lives
+  // here, letting resolvePublicRoute fall through to the redirect lookup.
+  handle.unsafe = async <Row extends Record<string, unknown> = Record<string, unknown>>(
+    _sql: string,
+    _params?: unknown[],
+  ): Promise<DbResult<Row>> => ({ rows: [], rowCount: 0 })
   handle.transaction = async <T>(cb: (tx: DbClient) => Promise<T>): Promise<T> =>
     cb(handle as unknown as DbClient)
   return handle as DbClient

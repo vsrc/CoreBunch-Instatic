@@ -17,7 +17,7 @@
  */
 import { placeholder, type DbClient } from '../../../db/client'
 import type { DataRow, DataRowCells, DataRowStatus } from '@core/data/schemas'
-import { userRefAt, type UserJoinColumns } from '../shared'
+import { userRefAt, userRefColumns, userRefJoin, type UserJoinColumns } from '../shared'
 import { isoDate, isoDateOrNull } from '@core/utils/isoDate'
 
 // Re-exported so the sibling rows/ query modules (filter, read) keep one
@@ -104,7 +104,11 @@ export function isOwnedByUser(row: DataRow, ownerUserId: string): boolean {
 // Hydrated SELECT (single source of the row + user-ref join column list)
 // ---------------------------------------------------------------------------
 
-/** The full hydrated column list, including the four user-ref joins. */
+/**
+ * The full hydrated column list, including the four user-ref joins. The
+ * `<prefix>_*` alias groups are built from the shared `userRefColumns` fragment
+ * (the single source for the user-ref alias set, also spliced by `publish.ts`).
+ */
 const DATA_ROW_COLUMNS = `data_rows.id,
        data_rows.table_id,
        data_rows.cells_json,
@@ -114,22 +118,10 @@ const DATA_ROW_COLUMNS = `data_rows.id,
        data_rows.created_by_user_id,
        data_rows.updated_by_user_id,
        data_rows.published_by_user_id,
-       author_users.email as author_email,
-       author_users.display_name as author_display_name,
-       author_roles.slug as author_role_slug,
-       author_roles.name as author_role_name,
-       creator_users.email as created_by_email,
-       creator_users.display_name as created_by_display_name,
-       creator_roles.slug as created_by_role_slug,
-       creator_roles.name as created_by_role_name,
-       updater_users.email as updated_by_email,
-       updater_users.display_name as updated_by_display_name,
-       updater_roles.slug as updated_by_role_slug,
-       updater_roles.name as updated_by_role_name,
-       publisher_users.email as published_by_email,
-       publisher_users.display_name as published_by_display_name,
-       publisher_roles.slug as published_by_role_slug,
-       publisher_roles.name as published_by_role_name,
+       ${userRefColumns('author')},
+       ${userRefColumns('created_by')},
+       ${userRefColumns('updated_by')},
+       ${userRefColumns('published_by')},
        data_rows.created_at,
        data_rows.updated_at,
        data_rows.published_at,
@@ -138,14 +130,10 @@ const DATA_ROW_COLUMNS = `data_rows.id,
 
 /** The `from data_rows` clause with the four user-ref left joins. */
 const DATA_ROW_JOINS = `from data_rows
-    left join users author_users on author_users.id = data_rows.author_user_id
-    left join roles author_roles on author_roles.id = author_users.role_id
-    left join users creator_users on creator_users.id = data_rows.created_by_user_id
-    left join roles creator_roles on creator_roles.id = creator_users.role_id
-    left join users updater_users on updater_users.id = data_rows.updated_by_user_id
-    left join roles updater_roles on updater_roles.id = updater_users.role_id
-    left join users publisher_users on publisher_users.id = data_rows.published_by_user_id
-    left join roles publisher_roles on publisher_roles.id = publisher_users.role_id`
+    ${userRefJoin('author', 'data_rows.author_user_id')}
+    ${userRefJoin('created_by', 'data_rows.created_by_user_id')}
+    ${userRefJoin('updated_by', 'data_rows.updated_by_user_id')}
+    ${userRefJoin('published_by', 'data_rows.published_by_user_id')}`
 
 /**
  * Shape of a hydrated data-row query. Every clause is spliced verbatim into the

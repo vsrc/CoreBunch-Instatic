@@ -120,6 +120,23 @@ async function queryUsers(
   return rows
 }
 
+/**
+ * Shared tail for every "mutate one user row, then return the refreshed public
+ * view" repository action. The UPDATE/INSERT itself carries no `returning` — the
+ * 21-column user shape is hydrated through the three-table `findUserById` join,
+ * so re-selecting is cheaper and keeps a single source for the hydration. A zero
+ * `rowCount` (row missing or soft-deleted) maps to `null`.
+ */
+async function reloadPublicUser(
+  db: DbClient,
+  userId: string,
+  rowCount: number,
+): Promise<CmsUser | null> {
+  if (rowCount === 0) return null
+  const refreshed = await findUserById(db, userId)
+  return refreshed ? toPublicUser(refreshed) : null
+}
+
 const RecoveryCodeHashSchema = Type.String()
 
 export class UserMutationError extends Error {
@@ -264,12 +281,11 @@ export async function createUser(
     throw new UserMutationError('Owner role is setup-only')
   }
 
-  const { rows } = await db<UserRow>`
+  await db`
     insert into users (id, email, email_normalized, display_name, password_hash, status, role_id)
     values (${id}, ${email}, ${emailNormalized}, ${displayName}, ${input.passwordHash}, ${status}, ${input.roleId})
-    returning id, email, email_normalized, display_name, password_hash, status, role_id, last_login_at, failed_login_count, locked_until, avatar_media_id, password_updated_at, mfa_enabled, mfa_enabled_at, mfa_totp_secret, mfa_recovery_code_hashes_json, step_up_auth_mode, step_up_window_minutes, created_at, updated_at, deleted_at
   `
-  const created = await findUserById(db, rows[0]!.id)
+  const created = await findUserById(db, id)
   if (!created) throw new UserMutationError('User was not created', 500)
   return toPublicUser(created)
 }
@@ -299,7 +315,7 @@ export async function updateUser(
   const passwordHash = input.passwordHash ?? current.passwordHash
   const passwordUpdatedAt = input.passwordHash === undefined ? current.passwordUpdatedAt : new Date()
 
-  const { rows } = await db<UserRow>`
+  const result = await db`
     update users
     set email = ${email},
         email_normalized = ${emailNormalized},
@@ -311,12 +327,8 @@ export async function updateUser(
         updated_at = current_timestamp
     where id = ${userId}
       and deleted_at is null
-    returning id, email, email_normalized, display_name, password_hash, status, role_id, last_login_at, failed_login_count, locked_until, avatar_media_id, password_updated_at, mfa_enabled, mfa_enabled_at, mfa_totp_secret, mfa_recovery_code_hashes_json, step_up_auth_mode, step_up_window_minutes, created_at, updated_at, deleted_at
   `
-  if (!rows[0]) return null
-  const updated = await findUserById(db, rows[0].id)
-  if (!updated) return null
-  return toPublicUser(updated)
+  return reloadPublicUser(db, userId, result.rowCount)
 }
 
 /**
@@ -336,9 +348,7 @@ export async function setUserAvatarMediaId(
     where id = ${userId}
       and deleted_at is null
   `
-  if (result.rowCount === 0) return null
-  const refreshed = await findUserById(db, userId)
-  return refreshed ? toPublicUser(refreshed) : null
+  return reloadPublicUser(db, userId, result.rowCount)
 }
 
 export async function updateUserPasswordHash(
@@ -354,9 +364,7 @@ export async function updateUserPasswordHash(
     where id = ${userId}
       and deleted_at is null
   `
-  if (result.rowCount === 0) return null
-  const refreshed = await findUserById(db, userId)
-  return refreshed ? toPublicUser(refreshed) : null
+  return reloadPublicUser(db, userId, result.rowCount)
 }
 
 export async function enableUserTotpMfa(
@@ -377,9 +385,7 @@ export async function enableUserTotpMfa(
     where id = ${userId}
       and deleted_at is null
   `
-  if (result.rowCount === 0) return null
-  const refreshed = await findUserById(db, userId)
-  return refreshed ? toPublicUser(refreshed) : null
+  return reloadPublicUser(db, userId, result.rowCount)
 }
 
 export async function disableUserTotpMfa(
@@ -396,9 +402,7 @@ export async function disableUserTotpMfa(
     where id = ${userId}
       and deleted_at is null
   `
-  if (result.rowCount === 0) return null
-  const refreshed = await findUserById(db, userId)
-  return refreshed ? toPublicUser(refreshed) : null
+  return reloadPublicUser(db, userId, result.rowCount)
 }
 
 export async function replaceUserRecoveryCodeHashes(
@@ -414,9 +418,7 @@ export async function replaceUserRecoveryCodeHashes(
       and deleted_at is null
       and mfa_enabled = ${true}
   `
-  if (result.rowCount === 0) return null
-  const refreshed = await findUserById(db, userId)
-  return refreshed ? toPublicUser(refreshed) : null
+  return reloadPublicUser(db, userId, result.rowCount)
 }
 
 export async function updateUserStepUpPolicy(
@@ -435,9 +437,7 @@ export async function updateUserStepUpPolicy(
     where id = ${userId}
       and deleted_at is null
   `
-  if (result.rowCount === 0) return null
-  const refreshed = await findUserById(db, userId)
-  return refreshed ? toPublicUser(refreshed) : null
+  return reloadPublicUser(db, userId, result.rowCount)
 }
 
 export async function consumeUserRecoveryCodeHash(

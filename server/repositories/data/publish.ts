@@ -16,7 +16,8 @@
  *                                   previously-published slug
  */
 import { nanoid } from 'nanoid'
-import type { DbClient } from '../../db/client'
+import { placeholder, type DbClient } from '../../db/client'
+import { userRefColumns, userRefJoin } from './shared'
 import type { DataRow, DataRowVersion, DataRowRedirect, PublishedDataRow } from '@core/data/schemas'
 import { normalizeRouteBase } from '@core/templates/templateMatching'
 import { resolveTemplateChain } from '@core/templates'
@@ -378,8 +379,15 @@ export async function getPublishedDataRowByRoute(
 ): Promise<PublishedDataRow | null> {
   const normalizedBase = normalizeRouteBase(tableRouteBase)
 
-  const { rows } = await db<PublishedDataRowQueryRow>`
-    select data_row_versions.id,
+  // The author/publisher user-ref joins reuse the shared `userRefColumns` /
+  // `userRefJoin` fragments (the single source, also spliced by the hydrated
+  // data-row SELECT in `rows/mapper.ts`). The publisher join targets
+  // `data_row_versions.published_by_user_id` — the per-version publisher — not
+  // `data_rows.published_by_user_id`. SQL stays dialect-naive (ANSI joins,
+  // positional `placeholder()` binds).
+  const p = (n: number) => placeholder(db.dialect, n)
+  const { rows } = await db.unsafe<PublishedDataRowQueryRow>(
+    `select data_row_versions.id,
            data_row_versions.row_id,
            data_rows.table_id,
            data_tables.slug as table_slug,
@@ -389,29 +397,24 @@ export async function getPublishedDataRowByRoute(
            data_row_versions.cells_json,
            data_row_versions.slug,
            data_rows.author_user_id,
-           author_users.display_name as author_display_name,
-           author_roles.slug as author_role_slug,
-           author_roles.name as author_role_name,
+           ${userRefColumns('author')},
            data_row_versions.published_by_user_id,
-           publisher_users.display_name as published_by_display_name,
-           publisher_roles.slug as published_by_role_slug,
-           publisher_roles.name as published_by_role_name,
+           ${userRefColumns('published_by')},
            data_row_versions.published_at,
            data_row_versions.created_at
     from data_rows
     join data_tables on data_tables.id = data_rows.table_id
     join data_row_versions on data_row_versions.id = data_rows.active_version_id
-    left join users author_users on author_users.id = data_rows.author_user_id
-    left join roles author_roles on author_roles.id = author_users.role_id
-    left join users publisher_users on publisher_users.id = data_row_versions.published_by_user_id
-    left join roles publisher_roles on publisher_roles.id = publisher_users.role_id
-    where data_tables.route_base = ${normalizedBase}
-      and data_row_versions.slug = ${rowSlug}
+    ${userRefJoin('author', 'data_rows.author_user_id')}
+    ${userRefJoin('published_by', 'data_row_versions.published_by_user_id')}
+    where data_tables.route_base = ${p(1)}
+      and data_row_versions.slug = ${p(2)}
       and data_rows.status = 'published'
       and data_rows.deleted_at is null
       and data_tables.deleted_at is null
-    limit 1
-  `
+    limit 1`,
+    [normalizedBase, rowSlug],
+  )
 
   if (!rows[0]) return null
 

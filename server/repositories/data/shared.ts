@@ -109,3 +109,35 @@ export function userRefAt(
 ): DataUserReference | null {
   return userRefAccessors[prefix](row)
 }
+
+// ---------------------------------------------------------------------------
+// SQL fragment builders — the single source of the four user-ref joins
+// ---------------------------------------------------------------------------
+//
+// Both the hydrated data-row SELECT (`rows/mapper.ts`) and the published-row
+// read (`publish.ts`) splice these so the join shape + alias set live in exactly
+// one place. Table aliases are `<prefix>_users` / `<prefix>_roles`, matching the
+// aliases `userRefColumns` reads back into `UserJoinColumns`. The fragments are
+// raw SQL text spliced into `db.unsafe()` strings — bind values still flow
+// through positional `placeholder()` params, never through these constants.
+
+/**
+ * SELECT alias fragment for one user-ref prefix — the four
+ * `<prefix>_email / _display_name / _role_slug / _role_name` columns that
+ * `userRefAt` reads back.
+ */
+export function userRefColumns(prefix: UserJoinPrefix): string {
+  return `${prefix}_users.email as ${prefix}_email,
+       ${prefix}_users.display_name as ${prefix}_display_name,
+       ${prefix}_roles.slug as ${prefix}_role_slug,
+       ${prefix}_roles.name as ${prefix}_role_name`
+}
+
+/**
+ * LEFT JOIN fragment for one user-ref prefix against a source id expression
+ * (e.g. `data_rows.author_user_id` or `data_row_versions.published_by_user_id`).
+ */
+export function userRefJoin(prefix: UserJoinPrefix, sourceIdExpr: string): string {
+  return `left join users ${prefix}_users on ${prefix}_users.id = ${sourceIdExpr}
+    left join roles ${prefix}_roles on ${prefix}_roles.id = ${prefix}_users.role_id`
+}

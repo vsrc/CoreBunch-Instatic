@@ -111,17 +111,18 @@ async function loadFolderIdsForAssets(
   if (assetIds.length === 0) return map
   for (const id of assetIds) map.set(id, [])
 
-  // Cross-dialect IN-list: SQLite has no native array binding and PG only
-  // takes arrays via `= any($n)`. The shared `DbClient` tagged-template form
-  // can't expand a JS array into a SQL IN list directly — so we do the
-  // expansion explicitly: one row-fetch per asset id (still one DB-conn
-  // round-trip per asset, but trivially fast in practice; batch sizes are
-  // the visible page slice, ≤ 200).
-  for (const assetId of assetIds) {
-    const { rows } = await db<{ folder_id: string }>`
-      select folder_id from media_asset_folders where asset_id = ${assetId}
-    `
-    map.set(assetId, rows.map((r) => r.folder_id))
+  // Cross-dialect IN-list: SQLite has no native array binding and the shared
+  // `DbClient` tagged-template form can't expand a JS array into a SQL IN list.
+  // So we build the placeholder list explicitly through `placeholder()` and
+  // group in JS — one round-trip for the whole batch, dialect-naive ANSI SQL.
+  const placeholders = assetIds.map((_, i) => placeholder(db.dialect, i + 1)).join(', ')
+  const { rows } = await db.unsafe<{ asset_id: string; folder_id: string }>(
+    `select asset_id, folder_id from media_asset_folders
+     where asset_id in (${placeholders})`,
+    assetIds,
+  )
+  for (const row of rows) {
+    map.get(row.asset_id)?.push(row.folder_id)
   }
   return map
 }
