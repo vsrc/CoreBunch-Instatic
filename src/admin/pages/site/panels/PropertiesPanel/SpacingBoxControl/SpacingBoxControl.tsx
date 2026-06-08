@@ -40,30 +40,17 @@
  *     time (see `bagToCSS` in `core/publisher/classCss.ts`).
  */
 
-import {
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from 'react'
-import { createPortal } from 'react-dom'
+import { useRef, useState } from 'react'
 import type { CSSPropertyBag } from '@core/page-tree'
 import { Button } from '@ui/components/Button'
-import { Input } from '@ui/components/Input'
-import { Tooltip } from '@ui/components/Tooltip'
-import { ContextMenu, ContextMenuItem } from '@ui/components/ContextMenu'
 import { LinkIcon } from 'pixel-art-icons/icons/link'
 import { CloseIcon } from 'pixel-art-icons/icons/close'
 import { cn } from '@ui/cn'
-import { useEditorPreference } from '@site/preferences/editorPreferences'
 import {
-  displayTokenValue,
-  isLivePreviewable,
-  looksLikeDirectValue,
-  resolveTokenValue,
-  useSpacingTokens,
-  type Token,
-} from '@site/property-controls/tokenUtils'
+  TokenAwareInput,
+  type TokenAwareInputHandle,
+} from '@site/property-controls/TokenAwareInput'
+import { useSpacingTokens, type Token } from '@site/property-controls/tokenUtils'
 import styles from './SpacingBoxControl.module.css'
 
 // ---------------------------------------------------------------------------
@@ -448,113 +435,13 @@ function SideInput({
   onPreview,
   onClearPreview,
 }: SideInputProps) {
-  const display = displayTokenValue(value, tokens)
-  const placeholderDisplay = displayTokenValue(placeholder, tokens) || '0'
-
-  // The shared "preview suggestions on hover" preference. When off, hovering
-  // a token in the dropdown does NOT trigger the canvas preview — but typing
-  // a value still does (live as-you-type preview is a separate UX feature
-  // that the user did not opt out of).
-  const hoverPreviewEnabled = useEditorPreference('hoverPreview')
-
-  // Local draft so we don't fire onChange on every keystroke (which would
-  // round-trip through Immer + re-validate every press).
-  const [draft, setDraft] = useState(display)
-  const [isEditing, setIsEditing] = useState(false)
-
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  // The side input is a fixed 38px transparent field, so long values
-  // (e.g. a full `clamp(...)` expression) get visually truncated. Track
-  // whether the rendered text overflows so we can surface the full value
-  // in a hover tooltip — but only while the field isn't being edited.
-  const [isOverflowing, setIsOverflowing] = useState(false)
-  useLayoutEffect(() => {
-    const el = inputRef.current
-    if (!el) return
-    setIsOverflowing(el.scrollWidth > el.clientWidth + 1)
-  }, [draft])
-
-  // Sync external value → draft when not actively editing. React 19 idiom:
-  // adjust state during render by tracking the previous external value.
-  const [lastExternalDisplay, setLastExternalDisplay] = useState(display)
-  if (!isEditing && display !== lastExternalDisplay) {
-    setLastExternalDisplay(display)
-    setDraft(display)
-  }
-
-  // Filter tokens by typed prefix for the autocomplete dropdown.
-  // When there's no query, the "Suggested" section is hidden entirely —
-  // returning [] here lets the "Tokens" section render the full scale.
-  const suggestionQuery = draft.trim().toLowerCase()
-  const suggestions = suggestionQuery
-    ? tokens
-        .filter(
-          (t) =>
-            t.step.toLowerCase().startsWith(suggestionQuery) ||
-            t.step.toLowerCase().includes(suggestionQuery),
-        )
-        .slice(0, 8)
-    : []
-
-  const commit = (raw: string) => {
-    const resolved = resolveTokenValue(raw, tokens)
-    onClearPreview()
-    onCommit(resolved)
-    setIsEditing(false)
-  }
-
-  // Preview a hovered token's value on the canvas. Only the resolved value
-  // is forwarded — the parent decides which sides the preview affects
-  // (single side or all four, depending on the linked toggle).
-  //
-  // Gated by the `hoverPreview` preference so users who don't want the
-  // canvas to flicker as they scan the autocomplete list can opt out.
-  // Note: this only gates HOVER previews — the as-you-type preview below
-  // (`previewDraft`) is intentionally always on, since it reflects an
-  // explicit edit the user is making.
-  const previewToken = (rawValue: string) => {
-    if (!hoverPreviewEnabled) return
-    const resolved = resolveTokenValue(rawValue, tokens)
-    onPreview(resolved)
-  }
-
-  // Defensive: if the preference is toggled off while a hover preview is
-  // active (e.g. user flips the toggle in another tab), clear the canvas
-  // preview so it doesn't stick around. Mirrors the same pattern in
-  // ClassPicker.
-  useEffect(() => {
-    if (!hoverPreviewEnabled) onClearPreview()
-  }, [hoverPreviewEnabled, onClearPreview])
-
-  // Live-preview a typed draft. Updates the canvas on every keystroke so
-  // users see their values applied without having to press Enter / Tab /
-  // blur — matches the behaviour of every modern visual builder. When the
-  // current draft is provably incomplete (e.g. `var(--spa`), we skip the
-  // update and keep the last valid preview on screen instead of writing
-  // garbage to the engine.
-  const previewDraft = (rawValue: string) => {
-    if (!isLivePreviewable(rawValue)) return
-    const resolved = resolveTokenValue(rawValue, tokens)
-    onPreview(resolved)
-  }
-
-  // Hide the dropdown when the user is typing a direct CSS value
-  // (numbers, units, "auto", calc(...), etc.) — non-token typing should
-  // commit on Enter/Tab/Blur without the menu intercepting outside-clicks.
-  // Also hide it when there are no spacing tokens at all — otherwise the
-  // menu renders as an empty floating box with nothing to pick.
-  const isDirectValue = looksLikeDirectValue(draft)
-  const showMenu = isEditing && !isDirectValue && tokens.length > 0
-
-  // Split tokens into "Suggested" (matching the typed query) and "All" (the
-  // remaining tokens) so users always see the full scale even when they
-  // haven't started typing.
-  const queryTrim = draft.trim().toLowerCase()
-  const suggestedSet = new Set(suggestions.map((t) => t.varName))
-  const allOthers = tokens.filter((t) => !suggestedSet.has(t.varName))
-  const showSuggestedHeader = queryTrim.length > 0 && suggestions.length > 0
-  const showAllHeader = allOthers.length > 0
+  // The segment provides the hit area; the input is an absolutely-positioned
+  // overlay (see `.sideInput` / `.segment--*` in the CSS module). The whole
+  // token-autocomplete behaviour — draft state, suggestion filtering, commit,
+  // hover/typed preview, the Suggested/All dropdown — lives in the shared
+  // TokenAwareInput primitive. The only spacing-specific bits are the xs
+  // size, the overflow tooltip, and the overlay positioning, passed as props.
+  const inputRef = useRef<TokenAwareInputHandle>(null)
 
   return (
     <div
@@ -567,111 +454,22 @@ function SideInput({
       data-state={isSet ? 'set' : 'unset'}
       onClick={() => inputRef.current?.focus()}
     >
-      <Tooltip
-        content={draft}
-        side="top"
-        disabled={!isOverflowing || isEditing || !draft}
-      >
-        <Input
-          ref={inputRef}
-          type="text"
-          fieldSize="xs"
-          value={draft}
-          placeholder={placeholderDisplay}
-          spellCheck={false}
-          autoComplete="off"
-          aria-label={`${box} ${side}`}
-          className={styles.sideInput}
-          onFocus={() => {
-            setIsEditing(true)
-            onFocus()
-          }}
-          onChange={(e) => {
-            const next = e.target.value
-            setDraft(next)
-            previewDraft(next)
-          }}
-          onBlur={(e) => commit(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault()
-              ;(e.target as HTMLInputElement).blur()
-            } else if (e.key === 'Escape') {
-              e.preventDefault()
-              setDraft(display)
-              setIsEditing(false)
-              ;(e.target as HTMLInputElement).blur()
-            } else if (e.key === 'Tab') {
-              // Allow default tab behaviour but commit the current value.
-              commit((e.target as HTMLInputElement).value)
-            }
-          }}
-        />
-      </Tooltip>
-
-      {showMenu &&
-        createPortal(
-          <ContextMenu
-            anchorRef={inputRef}
-            side="auto"
-            align="start"
-            offset={4}
-            matchAnchorWidth
-            minWidth={132}
-            ariaLabel={`${box} ${side} spacing tokens`}
-            triggerRef={inputRef}
-            onClose={() => {
-              onClearPreview()
-            }}
-            onMouseLeave={() => onClearPreview()}
-          >
-            {showSuggestedHeader && (
-              <div className={styles.sideMenuHeader} aria-hidden="true">
-                Suggested
-              </div>
-            )}
-            {showSuggestedHeader &&
-              suggestions.map((t) => (
-                <ContextMenuItem
-                  key={`suggested-${t.varName}`}
-                  onMouseDown={(e) => {
-                    // mousedown beats blur — commits the token before the input loses focus.
-                    e.preventDefault()
-                    commit(t.step)
-                  }}
-                  onMouseEnter={() => previewToken(t.step)}
-                  className={styles.sideMenuItem}
-                >
-                  <span className={styles.sideMenuToken}>{t.step}</span>
-                  <span className={styles.sideMenuVar} title={t.valueExpr}>
-                    {t.varName}
-                  </span>
-                </ContextMenuItem>
-              ))}
-            {showAllHeader && (
-              <div className={styles.sideMenuHeader} aria-hidden="true">
-                {showSuggestedHeader ? 'All tokens' : 'Tokens'}
-              </div>
-            )}
-            {(showAllHeader ? allOthers : tokens).map((t) => (
-              <ContextMenuItem
-                key={`all-${t.varName}`}
-                onMouseDown={(e) => {
-                  e.preventDefault()
-                  commit(t.step)
-                }}
-                onMouseEnter={() => previewToken(t.step)}
-                className={styles.sideMenuItem}
-              >
-                <span className={styles.sideMenuToken}>{t.step}</span>
-                <span className={styles.sideMenuVar} title={t.valueExpr}>
-                  {t.varName}
-                </span>
-              </ContextMenuItem>
-            ))}
-          </ContextMenu>,
-          document.body,
-        )}
+      <TokenAwareInput
+        ref={inputRef}
+        value={value}
+        placeholder={placeholder || '0'}
+        tokens={tokens}
+        fieldSize="xs"
+        overlay
+        tooltipOnOverflow
+        aria-label={`${box} ${side}`}
+        menuAriaLabel={`${box} ${side} spacing tokens`}
+        inputClassName={styles.sideInput}
+        onCommit={onCommit}
+        onFocus={onFocus}
+        onPreview={onPreview}
+        onClearPreview={onClearPreview}
+      />
     </div>
   )
 }

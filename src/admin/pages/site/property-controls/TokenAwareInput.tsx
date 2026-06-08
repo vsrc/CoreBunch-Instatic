@@ -22,6 +22,7 @@
 import {
   useEffect,
   useImperativeHandle,
+  useLayoutEffect,
   useRef,
   useState,
   type CSSProperties,
@@ -29,6 +30,7 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import { Input } from '@ui/components/Input'
+import { Tooltip } from '@ui/components/Tooltip'
 import { ContextMenu, ContextMenuItem } from '@ui/components/ContextMenu'
 import { useEditorPreference } from '@site/preferences/editorPreferences'
 import { cn } from '@ui/cn'
@@ -45,7 +47,7 @@ import styles from './TokenAwareInput.module.css'
 // Public types
 // ---------------------------------------------------------------------------
 
-interface TokenAwareInputHandle {
+export interface TokenAwareInputHandle {
   /** Focus the underlying input. */
   focus(): void
 }
@@ -66,6 +68,8 @@ interface TokenAwareInputProps {
    */
   onPreview?: (resolved: string | undefined) => void
   onClearPreview?: () => void
+  /** Side-effect fired when the input gains focus (e.g. tracking last-focused field). */
+  onFocus?: () => void
   fieldSize?: 'xs' | 'sm' | 'md'
   /** Aria label for the input — required when there's no visible label. */
   'aria-label': string
@@ -81,6 +85,19 @@ interface TokenAwareInputProps {
   autoComplete?: string
   disabled?: boolean
   'data-testid'?: string
+  /**
+   * Render the input as a caller-positioned overlay: the wrapper uses
+   * `display: contents` so it establishes no box, letting the caller
+   * absolutely position the input against its own container (used by the
+   * spacing box's per-side segments). Defaults to a block wrapper.
+   */
+  overlay?: boolean
+  /**
+   * When true, wrap the input in a Tooltip that surfaces the full draft
+   * value on hover whenever the rendered text overflows the field and the
+   * field isn't being edited (used by the narrow per-side spacing inputs).
+   */
+  tooltipOnOverflow?: boolean
   /** React 19: ref is a regular prop on function components. */
   ref?: Ref<TokenAwareInputHandle>
 }
@@ -96,6 +113,7 @@ export function TokenAwareInput({
   onCommit,
   onPreview,
   onClearPreview,
+  onFocus,
   fieldSize = 'sm',
   'aria-label': ariaLabel,
   className,
@@ -106,6 +124,8 @@ export function TokenAwareInput({
   autoComplete = 'off',
   disabled,
   'data-testid': dataTestId,
+  overlay = false,
+  tooltipOnOverflow = false,
   ref,
 }: TokenAwareInputProps) {
     const display = displayTokenValue(value, tokens)
@@ -125,6 +145,18 @@ export function TokenAwareInput({
     useImperativeHandle(ref, () => ({
       focus: () => inputRef.current?.focus(),
     }))
+
+    // Narrow overlay fields (e.g. the spacing box's 38px sides) visually
+    // truncate long values like a full `clamp(...)`. Track overflow so the
+    // optional tooltip can surface the full value on hover — only measured
+    // when the caller opts in via `tooltipOnOverflow`.
+    const [isOverflowing, setIsOverflowing] = useState(false)
+    useLayoutEffect(() => {
+      if (!tooltipOnOverflow) return
+      const el = inputRef.current
+      if (!el) return
+      setIsOverflowing(el.scrollWidth > el.clientWidth + 1)
+    }, [draft, tooltipOnOverflow])
 
     // Sync external value → draft when not actively editing. React 19 idiom:
     // adjust state during render by tracking the previous external value.
@@ -200,42 +232,62 @@ export function TokenAwareInput({
     const showSuggestedHeader = queryTrim.length > 0 && suggestions.length > 0
     const showAllHeader = allOthers.length > 0
 
+    const inputEl = (
+      <Input
+        ref={inputRef}
+        type="text"
+        fieldSize={fieldSize}
+        value={draft}
+        placeholder={placeholderDisplay}
+        spellCheck={spellCheck}
+        autoComplete={autoComplete}
+        aria-label={ariaLabel}
+        disabled={disabled}
+        data-testid={dataTestId}
+        className={cn(styles.input, inputClassName)}
+        onFocus={() => {
+          setIsEditing(true)
+          onFocus?.()
+        }}
+        onChange={(e) => {
+          const next = e.target.value
+          setDraft(next)
+          previewDraft(next)
+        }}
+        onBlur={(e) => commit(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault()
+            ;(e.target as HTMLInputElement).blur()
+          } else if (e.key === 'Escape') {
+            e.preventDefault()
+            setDraft(display)
+            setIsEditing(false)
+            ;(e.target as HTMLInputElement).blur()
+          } else if (e.key === 'Tab') {
+            // Allow default tab behaviour but commit the current value.
+            commit((e.target as HTMLInputElement).value)
+          }
+        }}
+      />
+    )
+
     return (
-      <div className={cn(styles.wrapper, className)} style={style}>
-        <Input
-          ref={inputRef}
-          type="text"
-          fieldSize={fieldSize}
-          value={draft}
-          placeholder={placeholderDisplay}
-          spellCheck={spellCheck}
-          autoComplete={autoComplete}
-          aria-label={ariaLabel}
-          disabled={disabled}
-          data-testid={dataTestId}
-          className={cn(styles.input, inputClassName)}
-          onFocus={() => setIsEditing(true)}
-          onChange={(e) => {
-            const next = e.target.value
-            setDraft(next)
-            previewDraft(next)
-          }}
-          onBlur={(e) => commit(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault()
-              ;(e.target as HTMLInputElement).blur()
-            } else if (e.key === 'Escape') {
-              e.preventDefault()
-              setDraft(display)
-              setIsEditing(false)
-              ;(e.target as HTMLInputElement).blur()
-            } else if (e.key === 'Tab') {
-              // Allow default tab behaviour but commit the current value.
-              commit((e.target as HTMLInputElement).value)
-            }
-          }}
-        />
+      <div
+        className={cn(overlay ? styles.wrapperOverlay : styles.wrapper, className)}
+        style={style}
+      >
+        {tooltipOnOverflow ? (
+          <Tooltip
+            content={draft}
+            side="top"
+            disabled={!isOverflowing || isEditing || !draft}
+          >
+            {inputEl}
+          </Tooltip>
+        ) : (
+          inputEl
+        )}
 
         {showMenu &&
           createPortal(
