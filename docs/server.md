@@ -149,44 +149,88 @@ const response =
 
 Each group module owns its URL matching and returns `Response | null`. The first non-null wins. Order matters — handler order comments in `index.ts` document the load-bearing precedence (e.g. media folder/storage routes must run before `/media/:id` because that pattern would otherwise eat them).
 
-### Handler shape
+### Route dispatch — `routeTable.ts`
 
-Every handler module in `server/handlers/cms/` follows the same skeleton:
+Every handler group uses the shared `runRouteTable` dispatcher from `server/handlers/cms/routeTable.ts` rather than hand-rolling its own `(method, path)` matching. Each group declares a flat `Route[]` table and hands it to `runRouteTable`:
 
 ```ts
+const PAGES_ROUTES: readonly Route<[]>[] = [
+  { method: 'GET', pattern: `${CMS_API_PREFIX}/pages`, handler: handleListPages },
+  { method: 'PUT', pattern: `${CMS_API_PREFIX}/pages`, handler: handleUpdatePages },
+]
+
 export async function handlePagesRoutes(req: Request, db: DbClient): Promise<Response | null> {
-  const url = new URL(req.url)
-  if (url.pathname !== `${CMS_API_PREFIX}/pages`) return null
+  return runRouteTable(req, db, PAGES_ROUTES)
+}
+```
 
-  if (req.method === 'GET') {
-    const user = await requireCapability(req, db, 'site.read')
-    if (user instanceof Response) return user      // 401 / 403 — return early
+`runRouteTable` implements the one correct 404-vs-405 rule in a single place:
 
-    const rows = await listDataRows(db, 'pages')
-    return jsonResponse({ rows })
-  }
+- Path matches some route, but no route has the right method → **405 Method Not Allowed**
+- No route's pattern matches the path → **`null`**, so the CMS entry point tries the next group and ultimately 404s.
 
-  if (req.method === 'PUT') {
-    const user = await requireCapability(req, db, 'site.structure.edit')
-    if (user instanceof Response) return user
+Parameterised routes use a `RegExp` with **named capture groups** (`(?<id>[^/]+)`). The dispatcher decodes each captured value once via `decodeURIComponent`, so handlers receive already-decoded params and never call `decodeURIComponent` themselves.
 
-    const BodySchema = Type.Object({ pages: Type.Array(Type.Unknown()), /* … */ })
-    const body = await readValidatedBody(req, BodySchema)
-    if (!body) return badRequest('Invalid request body')
-    // … mutate via repository, return jsonResponse(…)
-  }
+Handler groups that need per-request context beyond `(req, db)` (e.g. `CmsHandlerOptions`) pass it as a variadic `...extra` argument through both the route table and the individual handlers:
 
-  return methodNotAllowed()
+```ts
+// Handler signature — three fixed args, then the typed extra
+async function handleInstallFont(
+  req: Request,
+  db: DbClient,
+  _params: RouteParams,
+  options: CmsHandlerOptions,
+): Promise<Response> { … }
+
+// Route table — typed with the extra tuple
+const FONTS_ROUTES: readonly Route<[CmsHandlerOptions]>[] = [
+  { method: 'POST', pattern: `${CMS_API_PREFIX}/fonts/install`, handler: handleInstallFont },
+]
+
+export async function handleFontsRoutes(
+  req: Request,
+  db: DbClient,
+  options: CmsHandlerOptions,
+): Promise<Response | null> {
+  return runRouteTable(req, db, FONTS_ROUTES, options)
+}
+```
+
+### Handler shape
+
+Every per-route handler in `server/handlers/cms/` follows the same skeleton:
+
+```ts
+async function handleListPages(req: Request, db: DbClient, _params: RouteParams): Promise<Response> {
+  const user = await requireCapability(req, db, 'site.read')
+  if (user instanceof Response) return user      // 401 / 403 — return early
+
+  const rows = await listDataRows(db, 'pages')
+  return jsonResponse({ rows })
+}
+
+async function handleUpdatePages(
+  req: Request,
+  db: DbClient,
+  _params: RouteParams,
+): Promise<Response> {
+  const user = await requireCapability(req, db, 'site.structure.edit')
+  if (user instanceof Response) return user
+
+  const BodySchema = Type.Object({ pages: Type.Array(Type.Unknown()), /* … */ })
+  const body = await readValidatedBody(req, BodySchema)
+  if (!body) return badRequest('Invalid request body')
+  // … mutate via repository, return jsonResponse(…)
 }
 ```
 
 Conventions:
 
-- **Match path first**, return `null` on miss so the next group in the chain gets a chance.
-- **Require capability second**, return early on auth failure.
-- **Validate body third** via TypeBox.
-- **Talk to repositories fourth.** Handlers don't write SQL.
+- **Require capability first**, return early on auth failure.
+- **Validate body second** via TypeBox.
+- **Talk to repositories third.** Handlers don't write SQL.
 - **Return `jsonResponse({ … })` or an error envelope last.**
+- Path matching and 404/405 discrimination are handled entirely by `runRouteTable` — individual handlers never check `req.method` or `url.pathname`.
 
 ---
 
@@ -523,7 +567,7 @@ Three static handlers, in order:
    - CMS resource (e.g. `/admin/api/cms/feature`) → new handler file in `server/handlers/cms/feature.ts`, register in `server/handlers/cms/index.ts`.
    - Top-level (e.g. `/_instatic/something`) → new `tryServeX` in `server/router.ts`, add to the `routes` array in the right order.
 
-2. **Write the handler.** Match path → require capability → validate body → call repository → return `jsonResponse`.
+2. **Write the handler.** Require capability → validate body → call repository → return `jsonResponse`. One function per route. Add a `Route` entry to the group's `ROUTES` table; path matching and 404/405 discrimination are handled by `runRouteTable` — do not hand-roll `if (url.pathname !== ...)` or `return methodNotAllowed()` in the handler itself. Parameterised paths use a `RegExp` with named capture groups; the dispatcher decodes each captured value once.
 
 3. **If new SQL is needed,** add the function to the matching `server/repositories/<resource>.ts`. Do not write SQL inside the handler.
 
@@ -569,6 +613,7 @@ See [docs/reference/typebox-patterns.md](reference/typebox-patterns.md) for boun
   - `server/binary.ts` — binary response helpers (`toArrayBuffer`, `binaryResponse`)
   - `src/core/utils/errorMessage.ts` — `getErrorMessage(err, fallback)` canonical catch-block extractor
   - `server/handlers/cms/index.ts` — CMS dispatcher
+  - `server/handlers/cms/routeTable.ts` — shared `runRouteTable` dispatcher (404-vs-405 rule, named param decoding)
   - `server/auth/authz.ts` — `requireCapability` and friends
   - `server/db/client.ts` — `DbClient` interface
   - `server/db/index.ts` — adapter selection
@@ -581,3 +626,4 @@ See [docs/reference/typebox-patterns.md](reference/typebox-patterns.md) for boun
   - `src/__tests__/architecture/ai-handlers-capability-gated.test.ts`
   - `src/__tests__/architecture/ai-driver-isolation.test.ts`
   - `src/__tests__/architecture/plugin-sandbox-invariants.test.ts`
+  - `src/__tests__/server/routeTable.test.ts` — unit coverage of `runRouteTable`: dispatch, named params, 405 vs null, extra context forwarding, real-world patterns (data rows, plugins)

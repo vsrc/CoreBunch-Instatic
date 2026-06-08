@@ -379,26 +379,32 @@ A misconfigured `VITE_ALLOWED_ORIGIN` can never silently open the API up because
 
 ### Gate a new handler
 
+Each handler group uses the shared `runRouteTable` dispatcher (`server/handlers/cms/routeTable.ts`). Declare a flat route table, one entry per `(method, path)`, and call `runRouteTable`:
+
 ```ts
+async function handleListSubscribers(req: Request, db: DbClient, _params: RouteParams): Promise<Response> {
+  const user = await requireCapability(req, db, 'content.manage')
+  if (user instanceof Response) return user
+  // ... read
+}
+
+async function handleCreateSubscriber(req: Request, db: DbClient, _params: RouteParams): Promise<Response> {
+  const user = await requireAnyCapability(req, db, ['content.create', 'content.manage'])
+  if (user instanceof Response) return user
+  // ... write
+}
+
+const SUBSCRIBERS_ROUTES: readonly Route<[]>[] = [
+  { method: 'GET',  pattern: `${CMS_API_PREFIX}/subscribers`, handler: handleListSubscribers },
+  { method: 'POST', pattern: `${CMS_API_PREFIX}/subscribers`, handler: handleCreateSubscriber },
+]
+
 export async function handleSubscribersRoutes(req: Request, db: DbClient): Promise<Response | null> {
-  const url = new URL(req.url)
-  if (url.pathname !== `${CMS_API_PREFIX}/subscribers`) return null
-
-  if (req.method === 'GET') {
-    const user = await requireCapability(req, db, 'content.manage')
-    if (user instanceof Response) return user
-    // ... read
-  }
-
-  if (req.method === 'POST') {
-    const user = await requireAnyCapability(req, db, ['content.create', 'content.manage'])
-    if (user instanceof Response) return user
-    // ... write
-  }
-
-  return methodNotAllowed()
+  return runRouteTable(req, db, SUBSCRIBERS_ROUTES)
 }
 ```
+
+`runRouteTable` handles 404 vs 405 correctly in one place: a path that matches but with the wrong method returns 405; no pattern match returns `null` so the next group gets a chance. Do not hand-roll `if (url.pathname !== ...)` or `return methodNotAllowed()` in handler code.
 
 ### Add a new capability
 
