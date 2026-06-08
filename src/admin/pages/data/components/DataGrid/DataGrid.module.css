@@ -466,15 +466,15 @@
 
 .row:hover > .cell {
     background-image: linear-gradient(
-        rgba(255, 255, 255, 0.025),
-        rgba(255, 255, 255, 0.025)
+        var(--editor-overlay-white-025),
+        var(--editor-overlay-white-025)
     );
 }
 
 .row[data-checked="true"] > .cell {
     background-image: linear-gradient(
-        rgba(255, 255, 255, 0.04),
-        rgba(255, 255, 255, 0.04)
+        var(--editor-overlay-white-04),
+        var(--editor-overlay-white-04)
     );
 }
 
@@ -556,7 +556,7 @@
 .row[data-selected="true"] > .cell[data-sticky="primary"] {
     box-shadow:
         1px 0 0 var(--editor-border),
-        8px 0 12px -8px rgba(0, 0, 0, 0.5);
+        8px 0 12px -8px var(--editor-overlay-black-50);
 }
 
 /* ─── Status dot (primary cell, postType) ────────────────────────────────── */
@@ -603,15 +603,15 @@
 
 .row:hover > .actionsCell {
     background-image: linear-gradient(
-        rgba(255, 255, 255, 0.025),
-        rgba(255, 255, 255, 0.025)
+        var(--editor-overlay-white-025),
+        var(--editor-overlay-white-025)
     );
 }
 
 .row[data-checked="true"] > .actionsCell {
     background-image: linear-gradient(
-        rgba(255, 255, 255, 0.04),
-        rgba(255, 255, 255, 0.04)
+        var(--editor-overlay-white-04),
+        var(--editor-overlay-white-04)
     );
 }
 

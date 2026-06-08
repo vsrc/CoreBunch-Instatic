@@ -1,7 +1,7 @@
 .backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.55);
+    background: var(--editor-overlay-black-55);
     z-index: 200;
     display: grid;
     place-items: center;
@@ -13,7 +13,7 @@
     background: var(--editor-surface);
     border: 1px solid var(--editor-border);
     border-radius: var(--panel-radius);
-    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 12px 48px var(--editor-overlay-black-50);
     color: var(--editor-text);
     padding: 20px;
     display: grid;

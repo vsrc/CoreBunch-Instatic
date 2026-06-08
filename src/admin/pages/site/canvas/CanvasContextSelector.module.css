@@ -26,7 +26,7 @@
     color: var(--editor-success-text);
     background: var(--editor-mint-surface);
     border-radius: var(--panel-radius);
-    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.24);
+    box-shadow: 0 8px 18px var(--editor-overlay-black-24);
     font-size: 11px;
     font-weight: 620;
 }
@@ -57,7 +57,7 @@
     background: var(--breakpoint-notch-bg);
     border: 0;
     border-radius: 0 0 0 var(--breakpoint-notch-radius);
-    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.24);
+    box-shadow: 0 8px 18px var(--editor-overlay-black-24);
 }
 
 .notch > * {
@@ -121,10 +121,10 @@
     background:
         linear-gradient(
             180deg,
-            rgba(255, 255, 255, 0.1),
-            rgba(255, 255, 255, 0)
+            var(--editor-overlay-white-10),
+            transparent
         ),
-        rgba(142, 230, 200, 0.2);
+        var(--editor-mint-tint-20);
 }
 
 /* Dropdown panel — the anchored ContextMenu renders inline (not portaled), so

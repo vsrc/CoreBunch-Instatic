@@ -462,7 +462,7 @@
   display: grid;
   place-items: center;
   padding: 14px;
-  background: rgba(0, 0, 0, 0.82);
+  background: var(--editor-overlay-black-82);
 }
 .dropCard {
   display: flex;
@@ -476,7 +476,7 @@
   text-align: center;
   border: 2px dashed var(--rail-tint-sky);
   border-radius: var(--panel-radius);
-  background: rgba(155, 220, 255, 0.06);
+  background: var(--editor-sky-tint-06);
 }
 .dropIcon {
   display: grid;
@@ -484,7 +484,7 @@
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  background: rgba(155, 220, 255, 0.16);
+  background: var(--editor-sky-tint-16);
   color: var(--rail-tint-sky);
 }
 .dropTitle {

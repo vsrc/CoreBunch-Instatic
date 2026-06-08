@@ -33,7 +33,7 @@
     position: relative;
     display: block;
     border: 1px dashed var(--input-border);
-    background: rgba(255, 255, 255, 0.012);
+    background: var(--editor-overlay-white-012);
     transition: border-color 120ms ease;
 }
 
@@ -74,7 +74,7 @@
 }
 
 .diagonal {
-    stroke: rgba(255, 255, 255, 0.16);
+    stroke: var(--editor-overlay-white-16);
     stroke-width: 1;
     fill: none;
     /* preserveAspectRatio="none" stretches the line geometry to exactly
@@ -84,7 +84,7 @@
 }
 
 .diagonalDashed {
-    stroke: rgba(255, 255, 255, 0.14);
+    stroke: var(--editor-overlay-white-14);
     stroke-dasharray: 3 3;
 }
 
@@ -181,12 +181,12 @@
 }
 
 .segment:hover {
-    background-color: rgba(255, 255, 255, 0.05);
+    background-color: var(--editor-overlay-white-05);
 }
 
 .segment:focus-within,
 .segmentFocused {
-    background-color: rgba(255, 255, 255, 0.07);
+    background-color: var(--editor-overlay-white-07);
 }
 
 /* Margin trapezoids — hug the gutter between margin and padding (50% nesting). */

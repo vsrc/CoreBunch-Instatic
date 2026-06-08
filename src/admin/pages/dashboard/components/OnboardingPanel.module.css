@@ -50,8 +50,8 @@
        tone without making it feel like a banner. */
     background-image: linear-gradient(
         180deg,
-        rgba(142, 230, 200, 0.06),
-        rgba(142, 230, 200, 0) 65%
+        var(--editor-mint-tint-06),
+        transparent 65%
     );
 }
 

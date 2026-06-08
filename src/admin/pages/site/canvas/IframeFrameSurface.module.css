@@ -24,7 +24,7 @@
    * inline `height` and the frame grows to fit. */
   min-height: 100vh;
   background: var(--editor-accent);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 2px 12px var(--editor-overlay-black-30);
   /* `overflow: hidden` would clip pop-out chrome inside the iframe (e.g.
    * a sticky nav that overlaps the page bottom). We rely on the iframe's
    * height matching its content height so there's nothing to clip. */

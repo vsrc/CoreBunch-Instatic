@@ -133,11 +133,11 @@
 }
 
 .pluginButton[data-state="success"] {
-    border-color: rgba(52, 211, 153, 0.35);
+    border-color: var(--editor-success-tint-35);
 }
 
 .pluginButton[data-state="error"] {
-    border-color: rgba(239, 68, 68, 0.4);
+    border-color: var(--editor-danger-tint-40);
 }
 
 .pluginButton:disabled {
@@ -152,18 +152,18 @@
     z-index: 201;
     max-width: min(320px, calc(100vw - 24px));
     padding: 6px 10px;
-    border: 1px solid rgba(52, 211, 153, 0.35);
+    border: 1px solid var(--editor-success-tint-35);
     border-radius: 6px;
     background: var(--editor-surface);
     color: var(--editor-success-green);
     font-size: 11px;
     line-height: 1.35;
     white-space: nowrap;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 4px 12px var(--editor-overlay-black-40);
 }
 
 .pluginToastError {
-    border-color: rgba(239, 68, 68, 0.4);
+    border-color: var(--editor-danger-tint-40);
     color: var(--editor-danger-lighter);
 }
 
@@ -256,7 +256,7 @@
     width: 26px;
     border-top-left-radius: 0;
     border-bottom-left-radius: 0;
-    box-shadow: inset 1px 0 rgba(255, 255, 255, 0.06);
+    box-shadow: inset 1px 0 var(--editor-overlay-white-06);
 }
 
 .publishToast {
@@ -264,18 +264,18 @@
     top: calc(100% + 6px);
     right: 0;
     background: var(--editor-surface);
-    border: 1px solid rgba(239, 68, 68, 0.4);
+    border: 1px solid var(--editor-danger-tint-40);
     border-radius: 6px;
     padding: 6px 10px;
     font-size: 11px;
     color: var(--editor-danger-lighter);
     white-space: nowrap;
     z-index: 201;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 4px 12px var(--editor-overlay-black-40);
 }
 
 .publishToastStatus {
-    border-color: rgba(52, 211, 153, 0.35);
+    border-color: var(--editor-success-tint-35);
     color: var(--editor-success-green);
 }
 

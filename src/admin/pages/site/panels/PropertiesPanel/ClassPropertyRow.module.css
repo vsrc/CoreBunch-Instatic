@@ -33,7 +33,7 @@
     height: var(--class-remove-button-size);
     background: linear-gradient(
         90deg,
-        rgba(0, 0, 0, 0) 0%,
+        transparent 0%,
         var(--class-remove-row-bg) 48%,
         var(--class-remove-row-bg) 100%
     );

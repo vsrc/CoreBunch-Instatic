@@ -53,12 +53,12 @@
 
 .resizeHandle:hover,
 .resizeHandle:focus-visible {
-    background: rgba(255, 255, 255, 0.04);
+    background: var(--editor-overlay-white-04);
     outline: none;
 }
 
 .resizeHandle:active {
-    background: rgba(255, 255, 255, 0.08);
+    background: var(--editor-overlay-white-08);
 }
 
 .resizeGrip {
@@ -82,7 +82,7 @@
     transform: translateX(-50%);
     padding: 2px 8px;
     border-radius: 999px;
-    background: rgba(24, 24, 27, 0.82);
+    background: var(--canvas-live-scrim);
     color: var(--editor-text-secondary);
     font-size: 10px;
     font-weight: 700;

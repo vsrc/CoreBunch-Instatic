@@ -26,7 +26,7 @@ Every interactive control in `src/admin/` goes through one of these. Bare `<butt
 | `Switch`           | Boolean toggle (on / off)                                            | `checked`, `onChange`, `disabled`                          |
 | `Checkbox`         | Boolean inside a list / form                                         | `checked`, `onChange`, `indeterminate`                     |
 | `SegmentedControl` | A few mutually exclusive options shown inline; `value` can be `undefined` for an unset state where no segment appears pressed | `options`, `value`, `onChange`, `onClear?` (deselectable — clicking the active segment fires `onClear` and shows a hover close-icon overlay) |
-| `Tabs`             | Top-level tab navigation within a workspace                          | `tabs`, `activeId`, `onChange`                             |
+| `Tabs`             | Top-level tab navigation within a workspace. Compound component: `<Tabs value onChange>` → `<TabList ariaLabel>` → `<Tab value>` + `<TabPanel value>`. WAI-ARIA automatic-activation pattern; arrow keys move focus and change the active value simultaneously. | `value`, `onChange` on `<Tabs>`; `ariaLabel` on `<TabList>`; `value` on `<Tab>` / `<TabPanel>` |
 | `RangeTabs`        | Tabbed numeric range selectors (spacing scales, etc.)                | `ranges`, `value`, `onChange`                              |
 
 ### Form controls
@@ -476,6 +476,42 @@ import { Widget } from '@ui/components/Widget'
 | `peach`   | `#ffc7a8`       | "Posts / media / activity"              |
 
 `Widget` is the **canonical implementation** of the tile-card pattern — see [docs/design.md](../design.md). Build any equivalent tile by reusing `Widget`, not by recreating the pattern.
+
+---
+
+## `Tabs`
+
+ARIA-correct, keyboard-navigable tab compound component. Implements WAI-ARIA "tabs with automatic activation" — arrow keys move focus AND change the active value simultaneously. Underline-indicator style, distinct from `RangeTabs` (pill segmented control). Panel DOM nodes stay mounted (just hidden) so each panel can hold React state.
+
+```tsx
+import { Tabs, TabList, Tab, TabPanel } from '@ui/components/Tabs'
+
+const [activeTab, setActiveTab] = useState<'overview' | 'settings'>('overview')
+
+<Tabs value={activeTab} onChange={setActiveTab}>
+  <TabList ariaLabel="Plugin sections">
+    <Tab value="overview">Overview</Tab>
+    <Tab value="settings">Settings</Tab>
+  </TabList>
+  <TabPanel value="overview">
+    <OverviewContent />
+  </TabPanel>
+  <TabPanel value="settings">
+    <SettingsContent />
+  </TabPanel>
+</Tabs>
+```
+
+| Component | Required props | Notes |
+|-----------|---------------|-------|
+| `Tabs`    | `value`, `onChange` | Context provider. Generic on `TValue extends string`. |
+| `TabList` | `ariaLabel` | Renders `role="tablist"`, owns arrow-key navigation. |
+| `Tab`     | `value` | Renders a `<button role="tab">`. Active tab is in the natural focus order; inactive tabs use `tabIndex={-1}`. |
+| `TabPanel`| `value` | Renders `role="tabpanel"`, `hidden={!isActive}`. DOM stays mounted. |
+
+**Do not** hand-roll a `role="tablist"` div — this is gated by `no-plugin-tab-shells.test.ts`. Use `<Tabs>` / `<TabList>` from `@ui/components/Tabs` instead.
+
+**`RangeTabs`** is a separate compact segmented-control for numeric range pickers (spacing scales, date ranges). It is not interchangeable with `Tabs`.
 
 ---
 

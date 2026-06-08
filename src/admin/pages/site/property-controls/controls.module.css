@@ -364,7 +364,7 @@
     width: 100%;
     min-height: 32px;
     padding: 0 9px;
-    background: rgba(255, 255, 255, 0.025);
+    background: var(--editor-overlay-white-025);
     border: 1px solid var(--panel-border);
     border-radius: var(--editor-radius);
     cursor: pointer;

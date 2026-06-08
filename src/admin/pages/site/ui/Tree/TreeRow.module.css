@@ -40,19 +40,19 @@
 
 .row:hover,
 .rowHovered {
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--editor-overlay-white-10);
     color: var(--editor-text-secondary);
 }
 
 .row:focus-visible,
 .rowFocused {
-    --tree-row-focus: rgba(255, 255, 255, 0.18);
+    --tree-row-focus: var(--editor-overlay-white-18);
 }
 
 .rowSelected {
-    --tree-row-accent: rgba(255, 255, 255, 0.55);
+    --tree-row-accent: var(--editor-overlay-white-55);
 
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--editor-overlay-white-10);
     color: var(--editor-text);
 }
 

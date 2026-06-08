@@ -70,7 +70,7 @@
     width: min(240px, var(--panel-w));
     background: var(--panel-bg);
     border-radius: 12px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.32);
+    box-shadow: 0 8px 24px var(--editor-overlay-black-32);
     pointer-events: none;
 }
 

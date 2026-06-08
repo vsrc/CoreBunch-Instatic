@@ -132,7 +132,7 @@
 
 .selectorSearchBar {
     padding: 12px 14px;
-    background: rgba(255, 255, 255, 0.012);
+    background: var(--editor-overlay-white-012);
 }
 
 .selectorSurfaceLayout {

@@ -33,7 +33,7 @@
   max-height: 100%;
   object-fit: contain;
   /* Subtle shadow so white images are visible on the dark checker */
-  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.6));
+  filter: drop-shadow(0 2px 8px var(--editor-overlay-black-60));
 }
 
 /* ── Metadata footer (filename, dimensions, MIME, size) ──────────────────── */

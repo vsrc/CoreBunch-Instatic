@@ -9,7 +9,7 @@
     border: 1px solid var(--editor-border);
     border-radius: var(--panel-radius);
     background: var(--editor-surface);
-    box-shadow: 0 12px 40px -12px rgba(0, 0, 0, 0.45);
+    box-shadow: 0 12px 40px -12px var(--editor-overlay-black-45);
 }
 
 .empty {
