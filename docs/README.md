@@ -58,7 +58,8 @@ docs/
 │   ├── error-boundaries.md         ← boundary placements + error reporting
 │   ├── architecture-tests.md       ← catalog of every architecture gate
 │   ├── editor-history.md           ← patch-based undo/redo history
-│   └── react-compiler.md           ← memoization rule, three exceptions, gates
+│   ├── react-compiler.md           ← memoization rule, three exceptions, gates
+│   └── use-async-resource.md       ← canonical async load hook; when to use vs. not
 │
 ├── deployment/                 ← operator docs (running the thing)
 ├── e2e/                        ← browser test protocols (agent-run + Playwright automation)
@@ -183,6 +184,7 @@ Plans (`docs/plans/` and `docs/superpowers/`) describe in-flight work. Plans are
 | [reference/architecture-tests.md](reference/architecture-tests.md) | Catalog of every architecture gate test                       |
 | [reference/editor-history.md](reference/editor-history.md)       | Patch-based undo/redo history: `HistoryEntry`, `mutate*` helpers, coalescing |
 | [reference/react-compiler.md](reference/react-compiler.md)       | React Compiler memoization rule, three exceptions, enforcement gates |
+| [reference/use-async-resource.md](reference/use-async-resource.md) | `useAsyncResource` — canonical single-resource async load hook; when to use and when not to |
 
 ### Operations
 
