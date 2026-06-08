@@ -1,8 +1,8 @@
 # Railway Deployment
 
-This guide defines the Railway template configuration for Instatic.
+This guide defines the Railway image-source configuration for Instatic.
 
-Railway is the simplest managed target for Instatic because it can run the production Dockerfile, inject a public HTTP port, attach a persistent volume, and provision Postgres in the same project.
+Railway is the simplest managed target for Instatic because it can run the published Docker image, inject a public HTTP port, attach a persistent volume, provision Postgres in the same project, and automatically apply image updates during a maintenance window.
 
 ---
 
@@ -16,16 +16,24 @@ Railway is the simplest managed target for Instatic because it can run the produ
 Both templates use:
 
 ```txt
+Image=ghcr.io/corebunch/instatic:0.0.1
 PORT=8080
 UPLOADS_DIR=/app/storage/uploads
 STATIC_DIR=/app/dist
+INSTATIC_SECRET_KEY=<output of bun run scripts/generate-secret-key.ts>
 ```
 
 Configure the app service health check path as `/health`. If Railway asks which port the app listens on when generating a public URL, use the same value as `PORT`.
 
 ## App Service
 
-Use the root repository as the service source and build with the root `Dockerfile`. The image already runs:
+Use a Docker image source for production installs:
+
+```txt
+ghcr.io/corebunch/instatic:0.0.1
+```
+
+The image already runs:
 
 ```sh
 bun run server/index.ts
@@ -37,14 +45,16 @@ Recommended service settings:
 
 | Setting | Value |
 |---|---|
-| Source | GitHub repository or published Docker image |
-| Dockerfile path | `Dockerfile` |
+| Source | Docker image |
+| Image | `ghcr.io/corebunch/instatic:0.0.1` |
 | Public networking | HTTP enabled |
 | Target port | `8080` |
 | Healthcheck path | `/health` |
 | Volume mount path | `/app/storage` |
 
-Railway volumes mount at runtime, not build time. Instatic only writes runtime data there, so the root Docker build stays unchanged.
+Railway volumes mount at runtime, not build time. Instatic only writes runtime data there, so the published image stays unchanged across installs.
+
+Source builds from GitHub remain useful for maintainers testing release candidates, but they are not the production distribution path for user installs. Image-source services avoid creating deployment activity in the public Instatic GitHub repository and can use Railway Image Auto Updates.
 
 ## SQLite Template
 
@@ -61,6 +71,7 @@ PORT=8080
 DATABASE_URL=sqlite:/app/storage/data/cms.db
 UPLOADS_DIR=/app/storage/uploads
 STATIC_DIR=/app/dist
+INSTATIC_SECRET_KEY=<output of bun run scripts/generate-secret-key.ts>
 ```
 
 The SQLite adapter creates the parent directory for `/app/storage/data/cms.db` on boot. Media writes create subdirectories under `/app/storage/uploads` as needed.
@@ -89,6 +100,7 @@ PORT=8080
 DATABASE_URL=${{Postgres.DATABASE_URL}}
 UPLOADS_DIR=/app/storage/uploads
 STATIC_DIR=/app/dist
+INSTATIC_SECRET_KEY=<output of bun run scripts/generate-secret-key.ts>
 ```
 
 The `Postgres` prefix is the Railway service name. If the database service is renamed, update the reference to match, for example `${{instatic-postgres.DATABASE_URL}}`.
@@ -104,6 +116,15 @@ Back up both data stores:
 
 Railway volume backups apply to mounted volumes. For Postgres, use Railway's database backup/PITR tooling when enabled, or add a `pg_dump` backup service for off-platform dumps.
 
+## Updates
+
+Enable Railway Image Auto Updates on the app service:
+
+- Use `ghcr.io/corebunch/instatic:latest` when you want the service to redeploy whenever the `latest` tag moves.
+- Use a semver tag like `ghcr.io/corebunch/instatic:0.0.1` when you want Railway to stage matching patch or minor updates according to the service's auto-update preference.
+
+Set a maintenance window before enabling automatic updates on sites with attached volumes.
+
 ## Troubleshooting
 
 | Symptom | Check |
@@ -113,6 +134,8 @@ Railway volume backups apply to mounted volumes. For Postgres, use Railway's dat
 | SQLite data disappears after redeploy | `DATABASE_URL` must point under the mounted volume, e.g. `/app/storage/data/cms.db`. |
 | Uploaded files disappear after redeploy | `UPLOADS_DIR` must point under the mounted volume, e.g. `/app/storage/uploads`. |
 | Postgres app cannot connect | `DATABASE_URL` must reference the Postgres service's internal `DATABASE_URL`, not a copied local URL. |
+| Adding an AI provider credential returns 500 | Set `INSTATIC_SECRET_KEY` on the app service. Generate it with `bun run scripts/generate-secret-key.ts`; do not rotate or delete it without re-entering stored AI keys. |
+| Deployments appear in the Instatic GitHub repo | The service is connected to GitHub source. Change the service source to the published Docker image. |
 
 ## Related
 

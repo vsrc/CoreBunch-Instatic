@@ -18,6 +18,27 @@ The VPS stack uses the same production image as managed platforms. Compose only 
 SQLite is the default for most single-site installs. Postgres is for multiple simultaneous admin writers, horizontal app scale, or operators who already want Postgres.
 
 When using a published image, set `INSTATIC_IMAGE` and omit `compose.build.yml` plus `--build`.
+Before adding AI provider credentials in production, set `INSTATIC_SECRET_KEY` to the output of `bun run scripts/generate-secret-key.ts`.
+
+## Install From A Release Bundle
+
+1. Download `instatic-<version>-release-bundle.tar.gz` from the GitHub Release.
+2. Unpack it on the server.
+3. Choose SQLite or Postgres.
+
+SQLite:
+
+```sh
+INSTATIC_IMAGE=ghcr.io/corebunch/instatic:<version> docker compose -f compose.prod.yml -f compose.sqlite.yml up -d
+```
+
+Postgres:
+
+```sh
+cp .env.production.example .env
+# Set POSTGRES_PASSWORD and INSTATIC_SECRET_KEY in .env.
+INSTATIC_IMAGE=ghcr.io/corebunch/instatic:<version> docker compose -f compose.prod.yml up -d
+```
 
 ## Prerequisites
 
@@ -35,6 +56,15 @@ cd instatic
 For plain SQLite without TLS, source builds use `compose.prod.yml`, `compose.sqlite.yml`, and `compose.build.yml`. Image-pull installs use only `compose.prod.yml` and `compose.sqlite.yml`, but they still need the Compose files from a checkout or release bundle.
 
 ## SQLite Install
+
+For AI credentials, copy the env template and set `INSTATIC_SECRET_KEY` first:
+
+```sh
+cp .env.production.example .env
+bun run scripts/generate-secret-key.ts
+```
+
+Paste the printed key into `.env` as `INSTATIC_SECRET_KEY`.
 
 Run:
 
@@ -75,6 +105,7 @@ Edit `.env` and set a real password:
 
 ```txt
 POSTGRES_PASSWORD=replace-with-a-long-random-password
+INSTATIC_SECRET_KEY=replace-with-output-of-generate-secret-key
 ```
 
 Generate one with:
@@ -179,6 +210,7 @@ bun run build
 DATABASE_URL=sqlite:./data/cms.db \
   STATIC_DIR=./dist \
   UPLOADS_DIR=./uploads \
+  INSTATIC_SECRET_KEY=replace-with-output-of-generate-secret-key \
   PORT=3001 \
   bun run server/index.ts
 ```

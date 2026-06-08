@@ -219,10 +219,13 @@ both.
 Because `framework` is built by walking **every** page's node tree to harvest
 module CSS — O(all nodes across the whole site), not the rendered page — the
 published-snapshot renderer uses `buildPublishedSiteCssBundle`, which memoises
-the three page-invariant files by `publishVersion`. The all-pages walk then runs
-**once per publish** instead of once per render, so a Layer-B cache miss or a
-background republish no longer repays it per page. `userStyles` is still rebuilt
-per call (page-scoped). `bumpPublishVersion()` invalidates the memo, so a content
+the three page-invariant files by `publishVersion` + site object. The all-pages
+walk then runs **once per published snapshot object** instead of once per render,
+so a Layer-B cache miss or a background republish no longer repays it per page.
+The site-object guard matters during a full publish: HTML is baked before
+`bumpPublishVersion()`, so a new snapshot at the still-current version must not
+reuse CSS from the previous published site. `userStyles` is still rebuilt per
+call (page-scoped). `bumpPublishVersion()` invalidates the memo, so a content
 change can never serve stale framework/style CSS. Callers that pass draft or
 arbitrary sites at the live version (preview, AI render, the CSS-route fallback)
 keep using the un-memoised `buildSiteCssBundle`.

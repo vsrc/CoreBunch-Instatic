@@ -14,6 +14,7 @@ Run the image with:
 - `DATABASE_URL` pointing at SQLite or Postgres
 - `UPLOADS_DIR` mounted on persistent storage
 - `STATIC_DIR=/app/dist`
+- `INSTATIC_SECRET_KEY` set before configuring AI provider credentials
 
 Use one persistent mount root when the platform only supports one app volume:
 
@@ -30,17 +31,21 @@ docker build -t instatic:local .
 
 ## Published Image
 
-If you have access to a published image, pull it:
+GHCR is the canonical image registry:
 
 ```sh
 docker pull ghcr.io/corebunch/instatic:latest
+docker pull ghcr.io/corebunch/instatic:0.0.1
 ```
 
-Pin a version for predictable upgrades:
+Docker Hub is a discoverability mirror:
 
 ```sh
-docker pull ghcr.io/corebunch/instatic:1.0.0
+docker pull corebunch/instatic:latest
+docker pull corebunch/instatic:0.0.1
 ```
+
+When both registries are available, prefer GHCR in Compose files because it is produced directly by the release workflow.
 
 ## Run With SQLite
 
@@ -56,6 +61,7 @@ docker run -d \
   -e DATABASE_URL="sqlite:/app/storage/data/cms.db" \
   -e STATIC_DIR=/app/dist \
   -e UPLOADS_DIR=/app/storage/uploads \
+  -e INSTATIC_SECRET_KEY="replace-with-output-of-generate-secret-key" \
   -v instatic-storage:/app/storage \
   --restart unless-stopped \
   instatic:local
@@ -77,6 +83,7 @@ docker run -d \
   -e DATABASE_URL="postgres://user:password@host:5432/instatic" \
   -e STATIC_DIR=/app/dist \
   -e UPLOADS_DIR=/app/storage/uploads \
+  -e INSTATIC_SECRET_KEY="replace-with-output-of-generate-secret-key" \
   -v instatic-storage:/app/storage \
   --restart unless-stopped \
   instatic:local
@@ -86,6 +93,27 @@ The app volume is still required in Postgres mode because uploads, fonts, plugin
 
 Replace `instatic:local` with `ghcr.io/corebunch/instatic:<tag>` when deploying from a published image.
 
+## Run On Railway From The Image
+
+Create an app service from Docker image source:
+
+```txt
+ghcr.io/corebunch/instatic:0.0.1
+```
+
+Attach a Railway volume at `/app/storage`, set the health check path to `/health`, and set app variables:
+
+```txt
+PORT=8080
+DATABASE_URL=sqlite:/app/storage/data/cms.db
+UPLOADS_DIR=/app/storage/uploads
+STATIC_DIR=/app/dist
+INSTATIC_SECRET_KEY=<output of bun run scripts/generate-secret-key.ts>
+```
+
+Enable Railway Image Auto Updates when you want Railway to move the service forward automatically during a maintenance window. Use `:latest` for "always follow the newest image", or a semver tag such as `:0.0.1` if you want Railway's semver update controls.
+
+
 ## Required Runtime Variables
 
 | Variable | Required | Value |
@@ -94,8 +122,11 @@ Replace `instatic:local` with `ghcr.io/corebunch/instatic:<tag>` when deploying 
 | `UPLOADS_DIR` | Yes for durable media | Persistent upload directory |
 | `STATIC_DIR` | Yes in Docker | `/app/dist` |
 | `PORT` | Platform-dependent | HTTP listen port; defaults to `3001` |
+| `INSTATIC_SECRET_KEY` | Yes for AI credentials | Output of `bun run scripts/generate-secret-key.ts` |
 
 Managed platforms usually inject `PORT`. Do not hard-code a different listen port unless the platform asks for a fixed target port.
+
+`INSTATIC_SECRET_KEY` is the stable AES master key for encrypted Anthropic, OpenAI, and OpenRouter credentials. If it is missing in production, adding a credential fails. If it is rotated or lost, existing stored credentials must be re-entered.
 
 ## Health Check
 

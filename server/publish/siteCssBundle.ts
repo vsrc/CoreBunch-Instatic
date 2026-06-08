@@ -22,10 +22,11 @@
  * - `buildPublishedSiteCssBundle` is the hot path for the published-snapshot
  *   renderer (`publicRenderer.ts`). There the site is fixed for a given publish
  *   version, so the three page-invariant files (reset / framework / style) are
- *   memoised by `publishVersion` and reused across every render at that
- *   version — the expensive all-pages walk runs once per publish, not once per
- *   request. Only `userStyles` (page-scoped) is rebuilt per call. The memo is
- *   invalidated automatically by `bumpPublishVersion()`.
+ *   memoised by `publishVersion` + the site object being rendered and reused
+ *   across every render for that pair — the expensive all-pages walk runs once
+ *   per publish snapshot, not once per request. Only `userStyles` (page-scoped)
+ *   is rebuilt per call. The memo is invalidated automatically by
+ *   `bumpPublishVersion()`.
  */
 
 import { createHash } from 'node:crypto'
@@ -66,7 +67,7 @@ type PageInvariantBundles = Pick<SiteCssBundle, 'reset' | 'framework' | 'style'>
  * Determinism + content-hashed filenames mean two calls with the same inputs
  * always return identical filenames. This rebuilds all four files every call;
  * the published-render hot path uses `buildPublishedSiteCssBundle` instead,
- * which memoises the page-invariant trio by publish version.
+ * which memoises the page-invariant trio by publish version + site object.
  */
 export function buildSiteCssBundle(
   site: SiteDocument,
@@ -81,14 +82,16 @@ export function buildSiteCssBundle(
 
 /**
  * Published-render variant of `buildSiteCssBundle`. Memoises the three
- * page-invariant files (reset / framework / style) by `publishVersion`, so the
- * O(all-pages) module-CSS walk runs once per publish instead of once per
- * render. Only `userStyles` is rebuilt per call (it is page-scoped).
+ * page-invariant files (reset / framework / style) by `publishVersion` and
+ * site object, so the O(all-pages) module-CSS walk runs once per published
+ * snapshot instead of once per render. Only `userStyles` is rebuilt per call
+ * (it is page-scoped).
  *
- * Safe ONLY for the published-snapshot render path, where `site` is fixed for a
- * given publish version. Callers that pass draft / arbitrary sites at the live
- * version (preview, AI render, CSS-route fallback) must use `buildSiteCssBundle`
- * — sharing one version-keyed cache across them would serve stale CSS.
+ * Safe ONLY for the published-snapshot render path, where all pages in one
+ * snapshot share a single `site` object. Callers that pass draft / arbitrary
+ * sites at the live version (preview, AI render, CSS-route fallback) must use
+ * `buildSiteCssBundle` — sharing a render-path cache across them would serve
+ * stale CSS.
  */
 export function buildPublishedSiteCssBundle(
   site: SiteDocument,
@@ -116,26 +119,26 @@ function computePageInvariantBundles(
 // Page-invariant bundle memo, keyed by publish version. A bump invalidates it
 // (the next read sees a new version → recompute), so a content change can never
 // serve stale framework/style CSS. Registered with the shared test-reset hook.
-let pageInvariantCache: { version: number; bundles: PageInvariantBundles } | null = null
+let pageInvariantCache: { version: number; site: SiteDocument; bundles: PageInvariantBundles } | null = null
 registerVersionedCacheReset(() => {
   pageInvariantCache = null
 })
 
 /**
- * Return the page-invariant bundles for the current publish version, computing
- * them once per version and reusing the cached files on every later render at
- * that version.
+ * Return the page-invariant bundles for the current publish version + site
+ * object, computing them once and reusing the cached files on later renders of
+ * the same snapshot.
  */
 function memoizedPageInvariantBundles(
   site: SiteDocument,
   registry: IModuleRegistry,
 ): PageInvariantBundles {
   const version = getPublishVersion()
-  if (pageInvariantCache && pageInvariantCache.version === version) {
+  if (pageInvariantCache && pageInvariantCache.version === version && pageInvariantCache.site === site) {
     return pageInvariantCache.bundles
   }
   const bundles = computePageInvariantBundles(site, registry)
-  pageInvariantCache = { version, bundles }
+  pageInvariantCache = { version, site, bundles }
   return bundles
 }
 

@@ -2,7 +2,7 @@
 
 This index maps supported deployment targets to the files, variables, and persistence rules they need.
 
-Instatic is one Bun server packaged by the root `Dockerfile`. The server reads runtime configuration from `server/config.ts`: `PORT`, `DATABASE_URL`, `UPLOADS_DIR`, and `STATIC_DIR`. Database migrations run automatically on boot in `server/index.ts`.
+Instatic is one Bun server packaged by the root `Dockerfile`. The server reads runtime configuration from `server/config.ts`: `PORT`, `DATABASE_URL`, `UPLOADS_DIR`, and `STATIC_DIR`. AI provider credentials are encrypted with `INSTATIC_SECRET_KEY` when configured. Database migrations run automatically on boot in `server/index.ts`.
 
 ---
 
@@ -27,7 +27,10 @@ PORT          HTTP port the Bun server listens on
 DATABASE_URL  sqlite:/path/to/cms.db, file:/path/to/cms.db, postgres://..., or postgresql://...
 UPLOADS_DIR   directory for media, plugin packs, fonts, and published disk artefacts
 STATIC_DIR    built admin SPA directory; /app/dist in the Docker image
+INSTATIC_SECRET_KEY  base64 32-byte key for encrypted AI provider credentials
 ```
+
+Generate `INSTATIC_SECRET_KEY` with `bun run scripts/generate-secret-key.ts` before adding Anthropic, OpenAI, or OpenRouter credentials in production. Without it, the admin can load but saving AI credentials fails because there is no stable encryption key.
 
 The Docker image sets:
 
@@ -41,13 +44,25 @@ Managed platforms often override `PORT`. That is fine; the server uses `process.
 
 ## Image Availability
 
-Source builds are the current portable install path:
+Release bundles plus the published GHCR image are the default portable install path:
+
+```sh
+INSTATIC_IMAGE=ghcr.io/corebunch/instatic:latest docker compose -f compose.prod.yml -f compose.sqlite.yml up -d
+```
+
+Pin a semver tag for predictable upgrades:
+
+```sh
+INSTATIC_IMAGE=ghcr.io/corebunch/instatic:0.0.1 docker compose -f compose.prod.yml -f compose.sqlite.yml up -d
+```
+
+Source builds remain supported for contributors and release-candidate testing:
 
 ```sh
 docker compose -f compose.prod.yml -f compose.sqlite.yml -f compose.build.yml up -d --build
 ```
 
-When an operator has access to a published image, set `INSTATIC_IMAGE` and omit `compose.build.yml`. The maintainer release target is `ghcr.io/corebunch/instatic`, documented in [release-workflow.md](release-workflow.md).
+The maintainer release target is `ghcr.io/corebunch/instatic`, documented in [release-workflow.md](release-workflow.md).
 
 ## Database Choice
 

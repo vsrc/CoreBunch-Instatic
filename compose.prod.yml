@@ -29,6 +29,7 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER:-instatic}:${POSTGRES_PASSWORD:-CHANGEME_set_POSTGRES_PASSWORD_in_env}@postgres:5432/${POSTGRES_DB:-instatic}
       UPLOADS_DIR: /app/uploads
       STATIC_DIR: /app/dist
+      INSTATIC_SECRET_KEY: ${INSTATIC_SECRET_KEY:-}
     volumes:
       - uploads:/app/uploads
     depends_on:

@@ -103,6 +103,21 @@ describe('buildPublishedSiteCssBundle — page-invariant memo', () => {
     expect(after.style).not.toBe(before.style)
   })
 
+  it('recomputes for a different site object at the same publish version', () => {
+    const firstSite = makeMultiPageSite()
+    const secondSite = makeMultiPageSite()
+    secondSite.pages = [
+      makePage({ id: 'p4', root: { moduleId: 'base.text', props: { text: 'D' } } }),
+    ]
+
+    buildPublishedSiteCssBundle(firstSite, registry, firstSite.pages[0])
+    const callsAfterFirstSite = renderCalls
+
+    buildPublishedSiteCssBundle(secondSite, registry, secondSite.pages[0])
+
+    expect(renderCalls).toBeGreaterThan(callsAfterFirstSite)
+  })
+
   it('emits byte-identical CSS to the un-memoised builder', () => {
     const site = makeMultiPageSite()
     const page = site.pages[0]

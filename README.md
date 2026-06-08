@@ -44,39 +44,45 @@ Builds the admin SPA, then starts the server on `http://localhost:3001`. If port
 
 ## Production Deployment
 
-The default self-host install is **SQLite + one container** — recommended for most users (single sites, hobby and small-business installs, single-author or small editorial teams). From a source checkout, no `.env` file is required:
+The default self-host install is **SQLite + one container** — recommended for most users (single sites, hobby and small-business installs, single-author or small editorial teams). Download the release bundle from the latest GitHub Release, unpack it on the server, then run:
 
 ```sh
-docker compose -f compose.prod.yml -f compose.sqlite.yml -f compose.build.yml up -d --build
+INSTATIC_IMAGE=ghcr.io/corebunch/instatic:latest docker compose -f compose.prod.yml -f compose.sqlite.yml up -d
+```
+
+Pin a semver tag for predictable upgrades:
+
+```sh
+INSTATIC_IMAGE=ghcr.io/corebunch/instatic:0.0.1 docker compose -f compose.prod.yml -f compose.sqlite.yml up -d
 ```
 
 If you have a multi-author editorial team, need horizontal app scale-out, or already operate Postgres, run with bundled Postgres instead (two containers). Postgres mode requires setting `POSTGRES_PASSWORD`:
 
 ```sh
-cp .env.production.example .env       # set POSTGRES_PASSWORD to a real secret
-docker compose -f compose.prod.yml -f compose.build.yml up -d --build
+cp .env.production.example .env       # set POSTGRES_PASSWORD and INSTATIC_SECRET_KEY
+INSTATIC_IMAGE=ghcr.io/corebunch/instatic:latest docker compose -f compose.prod.yml up -d
 ```
 
 To put HTTPS in front (Caddy + Let's Encrypt, auto-provisioned), layer `compose.tls.yml` on top of either DB mode and set `DOMAIN` in `.env`:
 
 ```sh
 # SQLite + TLS (default)
-docker compose -f compose.prod.yml -f compose.sqlite.yml -f compose.tls.yml -f compose.build.yml up -d --build
+INSTATIC_IMAGE=ghcr.io/corebunch/instatic:latest docker compose -f compose.prod.yml -f compose.sqlite.yml -f compose.tls.yml up -d
 # Postgres + TLS
-docker compose -f compose.prod.yml -f compose.tls.yml -f compose.build.yml up -d --build
+INSTATIC_IMAGE=ghcr.io/corebunch/instatic:latest docker compose -f compose.prod.yml -f compose.tls.yml up -d
 ```
 
 Without `compose.tls.yml`, the app is reachable on `http://server-ip:3001/admin`. With it, only Caddy is exposed (ports 80 / 443) and the cert is auto-provisioned for `${DOMAIN}` on the first request.
 
 Engine selection is one env var (`DATABASE_URL`) — same image, same code. Docker is purely packaging; both engines also run with `bun run server/index.ts` directly on the host. See [docs/deployment/README.md](docs/deployment/README.md) for the full decision matrix.
 
-If you have access to a published Docker image, set `INSTATIC_IMAGE` and omit `compose.build.yml`. Source checkouts can build locally with:
+Source checkouts can build locally with:
 
 ```sh
-docker compose -f compose.prod.yml -f compose.build.yml up -d --build
+docker compose -f compose.prod.yml -f compose.sqlite.yml -f compose.build.yml up -d --build
 ```
 
-For managed hosts, deploy the Dockerfile from GitHub or a published image. The app selects SQLite or Postgres from `DATABASE_URL`, reads the HTTP port from `PORT`, and stores uploaded media under `UPLOADS_DIR`.
+For managed hosts, deploy the published image. The app selects SQLite or Postgres from `DATABASE_URL`, reads the HTTP port from `PORT`, and stores uploaded media under `UPLOADS_DIR`.
 
 Deployment docs:
 

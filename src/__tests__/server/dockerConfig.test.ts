@@ -22,9 +22,11 @@ describe('self-host docker config', () => {
   it('defines a production Docker image that builds assets before runtime startup', () => {
     const dockerfile = readFileSync('Dockerfile', 'utf8')
 
-    expect(dockerfile).toContain('FROM oven/bun:1.3 AS build')
+    expect(dockerfile).toContain('FROM oven/bun:1.3.11 AS build')
     expect(dockerfile).toContain('RUN bun run build')
-    expect(dockerfile).toContain('FROM oven/bun:1.3 AS runtime')
+    expect(dockerfile).toContain('FROM oven/bun:1.3.11 AS runtime')
+    expect(dockerfile).toContain('ARG INSTATIC_VERSION=dev')
+    expect(dockerfile).toContain('LABEL org.opencontainers.image.version="${INSTATIC_VERSION}"')
     expect(dockerfile).toContain('CMD ["bun", "run", "server/index.ts"]')
     expect(dockerfile).not.toContain('vite build && bun run server/index.ts')
   })
@@ -87,7 +89,10 @@ describe('self-host docker config', () => {
 
   it('defines production environment variables required by the compose stack', () => {
     const env = readFileSync('.env.production.example', 'utf8')
+    const compose = readFileSync('compose.prod.yml', 'utf8')
 
     expect(env).toContain('POSTGRES_PASSWORD=')
+    expect(env).toContain('INSTATIC_SECRET_KEY=')
+    expect(compose).toContain('INSTATIC_SECRET_KEY:')
   })
 })
