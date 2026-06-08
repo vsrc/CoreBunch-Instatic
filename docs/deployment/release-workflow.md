@@ -2,7 +2,7 @@
 
 This maintainer guide covers publishing Instatic Docker images.
 
-End users do not need this page to deploy Instatic. They follow [railway.md](railway.md), [vps.md](vps.md), or [docker-image.md](docker-image.md). Maintainers use this page to keep `ghcr.io/corebunch/instatic` release tags aligned with source tags.
+End users do not need this page to deploy Instatic. They follow [railway.md](railway.md), [render.md](render.md), [vps.md](vps.md), or [docker-image.md](docker-image.md). Maintainers use this page to keep `ghcr.io/corebunch/instatic` release tags aligned with source tags and deployment templates.
 
 ---
 
@@ -19,12 +19,30 @@ ghcr.io/corebunch/instatic:<major>.<minor>
 Release flow:
 
 1. Keep `main` releasable.
-2. Tag a version, e.g. `v0.0.1`.
-3. GitHub Actions runs `bun run build`, `bun test`, and `bun run lint`.
-4. GitHub Actions builds `Dockerfile`.
-5. GitHub Actions pushes the semver image, minor image, and `latest`.
-6. GitHub Actions mirrors to Docker Hub when Docker Hub secrets exist.
-7. GitHub Actions creates the GitHub Release and uploads the release bundle.
+2. Update deployment docs that intentionally pin the semver image tag.
+3. Tag a version, e.g. `v0.0.1`.
+4. GitHub Actions runs `bun run build`, `bun test`, and `bun run lint`.
+5. GitHub Actions builds `Dockerfile`.
+6. GitHub Actions pushes the semver image, minor image, and `latest`.
+7. GitHub Actions mirrors to Docker Hub when Docker Hub secrets exist.
+8. GitHub Actions creates the GitHub Release and uploads the release bundle.
+
+## Pre-Tag Template Updates
+
+Before tagging a release, update every checked-in deployment surface that intentionally pins the release image:
+
+```txt
+docs/deployment/railway.md
+```
+
+The checked-in Render Blueprints use `ghcr.io/corebunch/instatic:latest` for new one-click installs. `scripts/build-release-bundle.ts` rewrites the release-bundle copies to the semver image tag automatically.
+
+After the release image is published, copy the two Render Blueprint files into the dedicated template repositories as their root `render.yaml` files when their non-versioned template configuration changes:
+
+```txt
+corebunch/instatic-render-sqlite
+corebunch/instatic-render-postgres
+```
 
 ## Tag A Release
 
@@ -50,6 +68,7 @@ instatic-0.0.1-release-bundle.tar.gz
 Release notes should link to:
 
 - [railway.md](railway.md)
+- [render.md](render.md)
 - [vps.md](vps.md)
 - [docker-image.md](docker-image.md)
 - [backup-restore.md](backup-restore.md)
@@ -71,6 +90,8 @@ docker compose -f compose.prod.yml -f compose.sqlite.yml up -d
 ```
 
 Railway installs should use Docker image source and Railway Image Auto Updates rather than connecting to this GitHub repository as a service source.
+
+Render installs use image-backed Blueprints. Operators upgrade by changing the image tag in their Render service or by redeploying from an updated template repository.
 
 ## Source Build Testing
 
@@ -97,6 +118,7 @@ The release workflow should:
 - push a semver tag for `v*` tags
 - push `latest` for tagged releases
 - create a release bundle with the Compose files and deployment docs
+- include the Render Blueprint templates in the release bundle
 - skip the Docker Hub mirror cleanly when `DOCKERHUB_USERNAME` or `DOCKERHUB_TOKEN` is missing
 
 The first release targets `linux/amd64` because QEMU-based arm64 publishing made the tagged workflow too slow to use as a release gate. Add arm64 as a separate native-runner build before advertising multi-arch images.
@@ -125,5 +147,7 @@ docker pull ghcr.io/corebunch/instatic:latest
 
 - [deployment/README.md](README.md) — deployment overview
 - [docker-image.md](docker-image.md) — runtime image contract
+- [render.md](render.md) — Render Blueprint contract
 - `Dockerfile` — image build
 - `compose.prod.yml` — production image consumer
+- `docs/deployment/render/sqlite/render.yaml`, `docs/deployment/render/postgres/render.yaml` — Render Blueprint templates

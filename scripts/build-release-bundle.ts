@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
-import { cp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 
 const ROOT = resolve(import.meta.dir, '..')
@@ -26,6 +26,14 @@ const bundleFiles = [
   'docs/deployment/tls-caddy.md',
   'docs/deployment/backup-restore.md',
   'docs/deployment/railway.md',
+  'docs/deployment/render.md',
+  'docs/deployment/render/sqlite/render.yaml',
+  'docs/deployment/render/postgres/render.yaml',
+]
+
+const renderBlueprintFiles = [
+  'docs/deployment/render/sqlite/render.yaml',
+  'docs/deployment/render/postgres/render.yaml',
 ]
 
 async function copyIntoBundle(path: string): Promise<void> {
@@ -38,12 +46,27 @@ async function copyIntoBundle(path: string): Promise<void> {
   await cp(source, destination, { recursive: true })
 }
 
+async function pinRenderBlueprintImage(path: string): Promise<void> {
+  const destination = join(stagingDir, path)
+  const contents = await readFile(destination, 'utf-8')
+  const image = `ghcr.io/corebunch/instatic:${version}`
+  const updated = contents.replace(/ghcr\.io\/corebunch\/instatic:[^\s]+/g, image)
+  if (updated === contents) {
+    throw new Error(`Render Blueprint image tag was not found: ${path}`)
+  }
+  await writeFile(destination, updated, 'utf-8')
+}
+
 await rm(stagingDir, { recursive: true, force: true })
 await rm(archivePath, { force: true })
 await mkdir(stagingDir, { recursive: true })
 
 for (const file of bundleFiles) {
   await copyIntoBundle(file)
+}
+
+for (const file of renderBlueprintFiles) {
+  await pinRenderBlueprintImage(file)
 }
 
 await writeFile(
@@ -78,6 +101,16 @@ INSTATIC_SECRET_KEY=<output of bun run scripts/generate-secret-key.ts>
 \`\`\`
 
 Read \`docs/deployment/railway.md\`, \`docs/deployment/vps.md\`, and \`docs/deployment/backup-restore.md\` before running a public site.
+
+## Render Blueprint install
+
+Copy one of these files to a template repository as its root \`render.yaml\`:
+
+- \`docs/deployment/render/sqlite/render.yaml\`
+- \`docs/deployment/render/postgres/render.yaml\`
+
+These release-bundle copies are already pinned to \`ghcr.io/corebunch/instatic:${version}\`.
+Read \`docs/deployment/render.md\` before publishing a Deploy to Render button.
 `,
   'utf-8',
 )

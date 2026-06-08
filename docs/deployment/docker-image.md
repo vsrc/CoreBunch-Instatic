@@ -115,6 +115,26 @@ INSTATIC_SECRET_KEY=<output of bun run scripts/generate-secret-key.ts>
 
 Enable Railway Image Auto Updates when you want Railway to move the service forward automatically during a maintenance window. Use `:latest` for "always follow the newest image", or a semver tag such as `:0.0.1` if you want Railway's semver update controls.
 
+## Run On Render From The Image
+
+Use the checked-in Render Blueprints when creating Deploy to Render template repositories:
+
+```txt
+docs/deployment/render/sqlite/render.yaml
+docs/deployment/render/postgres/render.yaml
+```
+
+The SQLite Blueprint creates one image-backed web service and one persistent disk:
+
+```txt
+PORT=10000
+DATABASE_URL=sqlite:/app/storage/data/cms.db
+UPLOADS_DIR=/app/storage/uploads
+STATIC_DIR=/app/dist
+```
+
+The Postgres Blueprint creates one image-backed web service, one persistent disk for uploads, and one Render Postgres database. See [render.md](render.md) for the full Render contract.
+
 
 ## Required Runtime Variables
 
@@ -146,6 +166,7 @@ Expected response:
 
 - [deployment/README.md](README.md) — deployment overview
 - [railway.md](railway.md) — Railway template variables
+- [render.md](render.md) — Render Blueprint variables
 - [vps.md](vps.md) — Docker Compose install
 - [backup-restore.md](backup-restore.md) — backing up DB and uploads
 - `Dockerfile` — production image definition

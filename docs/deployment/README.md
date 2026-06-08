@@ -12,6 +12,8 @@ Instatic is one Bun server packaged by the root `Dockerfile`. The server reads r
 |---|---|---|---|---|
 | Railway SQLite template | Fastest managed install for a single site | SQLite file | One Railway app volume mounted at `/app/storage` | [railway.md](railway.md) |
 | Railway Postgres template | Managed install for teams or horizontal scale later | Railway Postgres | App volume for uploads, Postgres service volume for DB | [railway.md](railway.md) |
+| Render SQLite template | Managed Docker install outside Railway | SQLite file | One Render disk mounted at `/app/storage` | [render.md](render.md) |
+| Render Postgres template | Managed Postgres install outside Railway | Render Postgres | Render disk for uploads, Render Postgres storage for DB | [render.md](render.md) |
 | VPS Docker Compose | Self-hosted server, full control | SQLite or bundled Postgres | Docker named volumes | [vps.md](vps.md) |
 | Generic Docker host | Any platform that runs the Dockerfile/image | SQLite or external Postgres | A mounted directory/volume for DB/uploads | [docker-image.md](docker-image.md) |
 | VPS HTTPS | Public domain on a VPS | Unchanged | Caddy cert volume plus app volumes | [tls-caddy.md](tls-caddy.md) |
@@ -94,6 +96,7 @@ SQLite installs also need the SQLite database file on persistent storage. On pla
 | File | Role |
 |---|---|
 | [railway.md](railway.md) | Railway templates for SQLite and Postgres |
+| [render.md](render.md) | Render Blueprint templates for SQLite and Postgres |
 | [vps.md](vps.md) | Docker Compose on a VPS, both SQLite and Postgres |
 | [docker-image.md](docker-image.md) | Generic Docker image contract and `docker run` examples |
 | [tls-caddy.md](tls-caddy.md) | Caddy TLS overlay for VPS Compose installs |
@@ -107,3 +110,4 @@ SQLite installs also need the SQLite database file on persistent storage. On pla
 - `server/index.ts` — migrations, media storage, and server boot
 - `Dockerfile` — production image contract
 - `compose.prod.yml`, `compose.sqlite.yml`, `compose.tls.yml`, `compose.build.yml` — VPS Compose files
+- `docs/deployment/render/sqlite/render.yaml`, `docs/deployment/render/postgres/render.yaml` — Render Blueprint templates

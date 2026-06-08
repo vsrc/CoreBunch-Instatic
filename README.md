@@ -172,6 +172,7 @@ Deployment docs:
 - [Deployment overview](docs/deployment/README.md)
 - [VPS / Docker Compose](docs/deployment/vps.md)
 - [Railway](docs/deployment/railway.md)
+- [Render](docs/deployment/render.md)
 - [Generic Docker image](docs/deployment/docker-image.md)
 - [HTTPS via Caddy](docs/deployment/tls-caddy.md)
 - [Backup and restore](docs/deployment/backup-restore.md)
