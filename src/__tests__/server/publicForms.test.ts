@@ -1,12 +1,22 @@
 import { describe, expect, it } from 'bun:test'
 import type { DbResult } from '../../../server/db'
 import { handlePublicFormRequest } from '../../../server/forms/handler'
-import { issuePublicFormPageToken, resetPublicFormChallenges } from '../../../server/forms/challenge'
+import {
+  issuePublicFormChallenge,
+  issuePublicFormPageToken,
+  resetPublicFormChallenges,
+  verifyAndConsumePublicFormChallenge,
+} from '../../../server/forms/challenge'
 import { publicFormPerFormRateLimit, publicFormPerIpRateLimit } from '../../../server/forms/rateLimit'
 import { createFakeDb } from './dbTestFake'
 import type { PublishedPageSnapshot } from '../../../server/repositories/publish'
 
-function makeRequest(path: string, body: unknown, origin = 'http://cms.test') {
+function makeRequest(
+  path: string,
+  body: unknown,
+  origin = 'http://cms.test',
+  ip?: string,
+) {
   const req = new Request(`http://cms.test${path}`, {
     method: 'POST',
     headers: {
@@ -16,6 +26,7 @@ function makeRequest(path: string, body: unknown, origin = 'http://cms.test') {
   })
   req.headers.set('origin', origin)
   req.headers.set('sec-fetch-site', 'same-origin')
+  if (ip) req.headers.set('x-forwarded-for', ip)
   return req
 }
 
@@ -233,6 +244,67 @@ describe('public CMS-native form endpoint', () => {
     expect(response?.status).toBe(403)
   })
 
+  it('rejects oversized challenge payloads before accepting the request', async () => {
+    resetPublicFormChallenges()
+    const { db } = makeDb()
+    const response = await handlePublicFormRequest(
+      makeRequest('/_instatic/form/challenge', {
+        formId: 'newsletter',
+        pageId: 'page-home',
+        pageToken: pageToken(),
+        padding: 'x'.repeat(9 * 1024),
+      }, 'http://cms.test', '203.0.113.20'),
+      db,
+      new URL('http://cms.test/_instatic/form/challenge'),
+    )
+
+    expect(response?.status).toBe(413)
+  })
+
+  it('rate-limits challenge issuance per client', async () => {
+    resetPublicFormChallenges()
+    const { db } = makeDb()
+    const ip = '203.0.113.21'
+    for (let i = 0; i < 60; i++) {
+      const response = await handlePublicFormRequest(
+        makeRequest('/_instatic/form/challenge', {
+          formId: 'newsletter',
+          pageId: 'page-home',
+          pageToken: pageToken(),
+        }, 'http://cms.test', ip),
+        db,
+        new URL('http://cms.test/_instatic/form/challenge'),
+      )
+      expect(response?.status).toBe(200)
+    }
+
+    const limited = await handlePublicFormRequest(
+      makeRequest('/_instatic/form/challenge', {
+        formId: 'newsletter',
+        pageId: 'page-home',
+        pageToken: pageToken(),
+      }, 'http://cms.test', ip),
+      db,
+      new URL('http://cms.test/_instatic/form/challenge'),
+    )
+    expect(limited?.status).toBe(429)
+  })
+
+  it('keeps the in-memory challenge store bounded by evicting oldest entries', () => {
+    resetPublicFormChallenges()
+    const first = issuePublicFormChallenge({ pageId: 'page-home', formId: 'newsletter' })
+    for (let i = 0; i < 2_000; i++) {
+      issuePublicFormChallenge({ pageId: 'page-home', formId: `newsletter-${i}` })
+    }
+
+    expect(verifyAndConsumePublicFormChallenge({
+      pageId: 'page-home',
+      formId: 'newsletter',
+      challenge: first.challenge,
+      token: first.token,
+    })).toBeNull()
+  })
+
   it('creates a data row for a valid challenged submission', async () => {
     resetPublicFormChallenges()
     publicFormPerIpRateLimit.reset('unknown')
@@ -261,6 +333,31 @@ describe('public CMS-native form endpoint', () => {
     expect(createdRows).toHaveLength(1)
     expect(createdRows[0].table_id).toBe('newsletter_submissions')
     expect(createdRows[0].cells_json).toEqual({ email: 'ai@example.com' })
+  })
+
+  it('rejects oversized submit payloads before consuming form rate-limit quota', async () => {
+    resetPublicFormChallenges()
+    publicFormPerIpRateLimit.reset('203.0.113.22')
+    publicFormPerFormRateLimit.reset('203.0.113.22|newsletter')
+    const { db } = makeDb()
+
+    const response = await handlePublicFormRequest(
+      makeRequest('/_instatic/form/submit', {
+        formId: 'newsletter',
+        pageId: 'page-home',
+        token: 'missing',
+        challenge: 'missing',
+        values: { email: `${'a'.repeat(1024 * 1024)}@example.com` },
+      }, 'http://cms.test', '203.0.113.22'),
+      db,
+      new URL('http://cms.test/_instatic/form/submit'),
+    )
+
+    expect(response?.status).toBe(413)
+
+    const allowedAfterOversize = publicFormPerIpRateLimit.consume('203.0.113.22')
+    expect(allowedAfterOversize.remaining).toBe(59)
+    publicFormPerIpRateLimit.reset('203.0.113.22')
   })
 
   it('rejects system data tables as public form targets', async () => {

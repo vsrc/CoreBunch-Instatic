@@ -1,6 +1,7 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 
 const CHALLENGE_TTL_MS = 5 * 60 * 1000
+const MAX_PUBLIC_FORM_CHALLENGES = 2_000
 const fallbackSecret = randomBytes(32).toString('hex')
 const signingSecret = process.env.INSTATIC_FORM_SECRET ?? process.env.INSTATIC_SECRET_KEY ?? fallbackSecret
 
@@ -25,6 +26,7 @@ export function issuePublicFormChallenge(input: {
 }): PublicFormChallengeRecord {
   const now = input.now ?? Date.now()
   prunePublicFormChallenges(now)
+  evictOldestPublicFormChallenges()
   const challenge = randomBytes(18).toString('base64url')
   const expiresAt = now + CHALLENGE_TTL_MS
   const token = signChallenge({
@@ -93,6 +95,14 @@ export function resetPublicFormChallenges(): void {
 function prunePublicFormChallenges(now: number): void {
   for (const [challenge, record] of challenges) {
     if (record.expiresAt < now) challenges.delete(challenge)
+  }
+}
+
+function evictOldestPublicFormChallenges(): void {
+  while (challenges.size >= MAX_PUBLIC_FORM_CHALLENGES) {
+    const oldest = challenges.keys().next().value
+    if (!oldest) return
+    challenges.delete(oldest)
   }
 }
 

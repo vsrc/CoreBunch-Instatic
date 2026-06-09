@@ -63,6 +63,8 @@ The endpoint is public by necessity, so it is layered:
 - Same-origin `Origin` and Fetch Metadata checks reject ordinary cross-site browser posts.
 - Published-page tokens are HMAC-signed by the server and stamped into each rendered CMS form. The challenge endpoint rejects requests without the token.
 - Challenges are short-lived, single-use, and bound to `pageId` + `formId`. The minimum-submit-time check is measured from challenge issue time, so the runtime prefetches challenges on form attach rather than on click.
+- Challenge requests are capped at 8 KiB, submission requests at 1 MiB, before JSON validation or persistence work. Oversized payloads return `413`.
+- Challenge issuance is rate-limited per IP and per IP/form pair, and the in-memory challenge store is capped to evict oldest entries under sustained pressure.
 - The server trusts the published page snapshot, not client-declared fields or target tables.
 - Honeypot and minimum-submit-time checks run before validation.
 - Per-IP and per-IP/form rate limiters throttle repeated submissions.

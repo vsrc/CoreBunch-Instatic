@@ -11,6 +11,7 @@
  */
 
 import { nanoid } from 'nanoid'
+import { Value } from '@sinclair/typebox/value'
 import type {
   MediaAssetRole,
   MediaStorageAdapter,
@@ -21,6 +22,7 @@ import type {
   MediaStorageVerifyResult,
   MediaStorageWriteResult,
 } from '@core/plugin-sdk'
+import { MediaStorageUploadPlanSchema } from '@core/plugin-sdk'
 import { requestFromWorker } from './workerPool'
 
 export async function runMediaAdapterCallInWorker(
@@ -70,6 +72,19 @@ export async function runMediaUrlTransformerInWorker(
   return typeof result.value === 'string' ? result.value : null
 }
 
+function parsePluginUploadPlan(
+  value: unknown,
+  pluginId: string,
+  adapterId: string,
+): MediaStorageUploadPlan {
+  if (Value.Check(MediaStorageUploadPlanSchema, value)) {
+    return value
+  }
+  throw new Error(
+    `Plugin "${pluginId}" adapter "${adapterId}" returned a malformed upload plan`,
+  )
+}
+
 /**
  * Build a host-side `MediaStorageAdapter` shim that proxies every method
  * to the plugin's VM. The adapter's *contract* (servingMode, roles,
@@ -98,7 +113,7 @@ export function buildAdapterShim(args: {
     servingMode: args.servingMode,
     beginWrite: async (input: MediaStorageBeginWriteInput): Promise<MediaStorageUploadPlan> => {
       const v = await call('beginWrite', [input])
-      return v as MediaStorageUploadPlan
+      return parsePluginUploadPlan(v, args.pluginId, args.adapterId)
     },
     finalizeWrite: async (input: MediaStorageFinalizeWriteInput): Promise<MediaStorageWriteResult> => {
       const v = await call('finalizeWrite', [input])

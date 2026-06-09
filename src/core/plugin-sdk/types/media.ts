@@ -11,6 +11,8 @@
 // PLUGIN_PERMISSION_VALUES for the full mapping.
 // ---------------------------------------------------------------------------
 
+import { Type, type Static } from '@sinclair/typebox'
+
 /**
  * Asset roles the storage subsystem distinguishes. An adapter declares the
  * subset of roles it wants to handle. Different adapters may be elected
@@ -64,36 +66,44 @@ export interface MediaStorageBeginWriteInput {
   variantOf?: string
 }
 
+export const MediaStorageUploadStepSchema = Type.Object({
+  method: Type.Union([Type.Literal('PUT'), Type.Literal('POST')]),
+  url: Type.String({ minLength: 1 }),
+  headers: Type.Record(Type.String(), Type.String()),
+  range: Type.Optional(Type.Object({
+    start: Type.Number(),
+    end: Type.Number(),
+  }, { additionalProperties: false })),
+}, { additionalProperties: false })
+
 /**
  * One step in the upload plan. Most providers need a single PUT — that's
  * one entry. S3 multipart / GCS resumable need multiple steps; the host
  * walks the array in order and POSTs/PUTs each one.
  */
-export interface MediaStorageUploadStep {
-  method: 'PUT' | 'POST'
-  url: string
-  headers: Record<string, string>
-  /**
-   * For multipart uploads: which byte range of the original is sent in
-   * this step. Omit for single-part uploads — the host sends the full body.
-   */
-  range?: { start: number; end: number }
-}
+export type MediaStorageUploadStep = Static<typeof MediaStorageUploadStepSchema>
 
-export interface MediaStorageUploadPlan {
-  /**
-   * Adapter's final on-storage handle. Persisted in `media_assets.storage_path`
-   * and passed back to `finalizeWrite` / `delete` / `getReadUrl`.
-   */
-  storagePath: string
-  /**
-   * Steps the host executes in order. `[]` is legal and means "no bytes to
-   * upload" (the built-in local-disk adapter uses this — see internals).
-   */
-  steps: ReadonlyArray<MediaStorageUploadStep>
-  /** Plan expiry epoch ms; the host aborts if any step is initiated after this. */
-  expiresAt: number
-}
+export const MediaStorageUploadPlanSchema = Type.Object({
+  storagePath: Type.String({ minLength: 1 }),
+  steps: Type.Array(MediaStorageUploadStepSchema),
+  expiresAt: Type.Number(),
+}, { additionalProperties: false })
+
+/**
+ * Adapter upload plan returned from `beginWrite`.
+ *
+ * `storagePath` is the adapter's final on-storage handle. It is persisted in
+ * `media_assets.storage_path` and passed back to `finalizeWrite` / `delete` /
+ * `getReadUrl`.
+ *
+ * `steps` is the ordered list the host executes. `[]` is legal and means
+ * "no bytes to upload". The built-in local-disk adapter uses a private
+ * host-only sentinel that plugin plans cannot return.
+ *
+ * `expiresAt` is the plan expiry epoch ms; the host aborts if any step is
+ * initiated after this.
+ */
+export type MediaStorageUploadPlan = Static<typeof MediaStorageUploadPlanSchema>
 
 export interface MediaStorageFinalizeWriteInput {
   storagePath: string

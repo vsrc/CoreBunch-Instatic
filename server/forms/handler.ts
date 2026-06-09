@@ -1,6 +1,14 @@
 import type { DbClient } from '../db/client'
+import type { Static, TSchema } from '@sinclair/typebox'
 import { DEV_ORIGIN_ALLOWLIST, clientIp, expectedOrigin } from '../auth/security'
-import { badRequest, jsonResponse, methodNotAllowed, readValidatedBody } from '../http'
+import {
+  RequestBodyTooLargeError,
+  badRequest,
+  jsonResponse,
+  methodNotAllowed,
+  payloadTooLarge,
+  readValidatedBody,
+} from '../http'
 import { createDataRow, getDataTable } from '../repositories/data'
 import { getLatestPublishedSiteSnapshot } from '../repositories/publish'
 import {
@@ -17,11 +25,16 @@ import {
   verifyAndConsumePublicFormChallenge,
 } from './challenge'
 import {
+  publicFormChallengePerFormRateLimit,
+  publicFormChallengePerIpRateLimit,
   publicFormPerFormRateLimit,
   publicFormPerIpRateLimit,
 } from './rateLimit'
 
 type PublicFormRoute = 'challenge' | 'submit'
+
+const PUBLIC_FORM_CHALLENGE_MAX_BODY_BYTES = 8 * 1024
+const PUBLIC_FORM_SUBMIT_MAX_BODY_BYTES = 1024 * 1024
 
 export async function handlePublicFormRequest(
   req: Request,
@@ -39,8 +52,21 @@ export async function handlePublicFormRequest(
 }
 
 async function handleChallenge(req: Request, db: DbClient): Promise<Response> {
-  const body = await readValidatedBody(req, PublicFormChallengeBodySchema)
-  if (!body) return badRequest('Invalid form challenge payload')
+  const parsed = await readPublicFormBody(
+    req,
+    PublicFormChallengeBodySchema,
+    PUBLIC_FORM_CHALLENGE_MAX_BODY_BYTES,
+    'Invalid form challenge payload',
+  )
+  if (parsed instanceof Response) return parsed
+  const body = parsed
+
+  const ipKey = clientIp(req) ?? 'unknown'
+  const ipDecision = publicFormChallengePerIpRateLimit.consume(ipKey)
+  if (!ipDecision.ok) return rateLimited(ipDecision.retryAfterMs)
+  const formDecision = publicFormChallengePerFormRateLimit.consume(`${ipKey}|${body.formId}`)
+  if (!formDecision.ok) return rateLimited(formDecision.retryAfterMs)
+
   const snapshot = await findPublishedFormSnapshot(db, body.pageId, body.formId)
   if (!snapshot) return jsonResponse({ error: 'Form not found' }, { status: 404 })
   if (!verifyPublicFormPageToken(body)) {
@@ -55,8 +81,14 @@ async function handleChallenge(req: Request, db: DbClient): Promise<Response> {
 }
 
 async function handleSubmit(req: Request, db: DbClient): Promise<Response> {
-  const body = await readValidatedBody(req, PublicFormSubmitBodySchema)
-  if (!body) return badRequest('Invalid form submission payload')
+  const parsed = await readPublicFormBody(
+    req,
+    PublicFormSubmitBodySchema,
+    PUBLIC_FORM_SUBMIT_MAX_BODY_BYTES,
+    'Invalid form submission payload',
+  )
+  if (parsed instanceof Response) return parsed
+  const body = parsed
 
   const ipKey = clientIp(req) ?? 'unknown'
   const ipDecision = publicFormPerIpRateLimit.consume(ipKey)
@@ -107,6 +139,23 @@ async function handleSubmit(req: Request, db: DbClient): Promise<Response> {
     slug: '',
   })
   return jsonResponse({ ok: true, rowId: row.id })
+}
+
+async function readPublicFormBody<T extends TSchema>(
+  req: Request,
+  schema: T,
+  maxBytes: number,
+  invalidMessage: string,
+): Promise<Static<T> | Response> {
+  try {
+    const body = await readValidatedBody(req, schema, { maxBytes })
+    return body ?? badRequest(invalidMessage)
+  } catch (err) {
+    if (err instanceof RequestBodyTooLargeError) {
+      return payloadTooLarge('Form payload is too large.')
+    }
+    throw err
+  }
 }
 
 async function findPublishedFormSnapshot(
