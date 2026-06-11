@@ -9,8 +9,8 @@ import { getSetupStatusCached } from './repositories/setup'
 import { getPublishedRuntimeAsset } from './repositories/runtimeAsset'
 import { handleLoopRequest, isLoopRuntimeAssetPath, serveLoopRuntimeAsset } from './handlers/cms/loop'
 import { handleHoleRequest, isHoleRuntimeAssetPath, serveHoleRuntimeAsset } from './handlers/cms/hole'
+import { handleModuleJsAssetRequest, isModuleJsAssetPath } from './handlers/cms/moduleJs'
 import { handlePublicFormRequest } from './forms/handler'
-import { FORM_RUNTIME_PATH, serveFormRuntimeAsset } from './forms/formRuntime'
 import { isRuntimePackagePath, tryServeRuntimePackage } from './publish/runtime/packageServer'
 import { jsonResponse } from './http'
 import { binaryResponse, toArrayBuffer } from './binary'
@@ -70,7 +70,7 @@ const routes: readonly RouteHandler[] = [
   tryServeLoop,
   tryServeHoleRuntimeAsset,
   tryServeHole,
-  tryServePublicFormRuntimeAsset,
+  tryServeModuleJsAsset,
   tryServePublicForm,
   tryServeRuntimeAsset,
   tryServeRuntimePackageNamespace,
@@ -169,9 +169,14 @@ function tryServeHole(req: Request, runtime: ServerRuntime, url: URL, pathname: 
   return handleHoleRequest(req, url, { db: runtime.db })
 }
 
-function tryServePublicFormRuntimeAsset(req: Request, _runtime: ServerRuntime, _url: URL, pathname: string): Response | null {
-  if (req.method !== 'GET' || pathname !== FORM_RUNTIME_PATH) return null
-  return serveFormRuntimeAsset()
+/**
+ * Per-module published JS — `/_instatic/module-js/<moduleId>.js`. Prefix-
+ * namespaced: unknown paths under the prefix 404 inside the handler rather
+ * than falling through to the public-slug resolver.
+ */
+function tryServeModuleJsAsset(req: Request, runtime: ServerRuntime, url: URL, pathname: string): Promise<Response> | null {
+  if (!isModuleJsAssetPath(pathname)) return null
+  return handleModuleJsAssetRequest(req, url, { db: runtime.db })
 }
 
 function tryServePublicForm(req: Request, runtime: ServerRuntime, url: URL, pathname: string): Promise<Response | null> | null {

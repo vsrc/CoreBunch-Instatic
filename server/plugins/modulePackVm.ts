@@ -54,6 +54,7 @@ import { wrapEsmAsGlobal } from './quickjs/esmShim'
 export interface ModulePackRenderOutput {
   html: string
   css?: string
+  js?: string
 }
 
 /**
