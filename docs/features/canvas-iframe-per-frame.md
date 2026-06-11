@@ -108,7 +108,7 @@ Five `<style>` elements are injected per iframe (three from `ClassStyleInjector`
 
 | Injector | `id` attribute | Cascade layer | Purpose |
 |---|---|---|---|
-| `EditorChromeInjector` | `instatic-editor-chrome` | **unlayered** | Editor chrome: placeholder, slot-instance, unknown-module styles. Copies design tokens (`--editor-*`) from parent `:root` onto iframe `:root`. |
+| `EditorChromeInjector` | `instatic-editor-chrome` | **unlayered** | Editor chrome: placeholder, slot-instance, unknown-module styles. Copies design tokens (`--editor-*`) from parent `:root` onto iframe `:root`. The editor UI font is forwarded as a **chrome-namespaced** `--editor-chrome-font-sans` (NOT `--font-sans`): because the injector is unlayered it would otherwise clobber the site's own `--font-sans` and render all canvas content in the editor font. |
 | `ClassStyleInjector` | `mc-classes` | `@layer user-authored` | Publisher reset + framework CSS + class registry CSS |
 | `ClassStyleInjector` | `mc-classes-preview` | `@layer user-authored` | Higher-specificity preview rule (doubled selector) while a property control is hovered. Empty for state-pseudo rules — those use `mc-classes-force-state` instead. |
 | `ClassStyleInjector` | `mc-classes-force-state` | `@layer user-authored` | Force-paints the active state-pseudo rule (`.btn:hover`, `.card:focus`, etc.) onto the selected node via a doubled `[data-node-id]` selector so the state is visible/editable without physically triggering it. Mirrors the full `contextStyles` emission per breakpoint and condition. |
@@ -151,6 +151,29 @@ Live frames skip wheel/pointer/keyboard forwarding — they scroll natively, hav
 
 ---
 
+## Inline text editing (in-place `contentEditable`)
+
+Double-click a text-bearing node to edit its text **in place**: the node's own element becomes the editor. There is no overlay and no parent-document field — `NodeRenderer` hands the module an `InlineEditBinding`, and the module spreads `inlineEditableElementProps(binding)` onto its real root element, making it `contentEditable="plaintext-only"`. Because the author edits the actual published element inside the breakpoint iframe, the editing surface is byte-identical to what publishes — 100% fidelity, with no typography mirroring, no font injection, and no doubled/hidden text to reconcile. (This superseded the earlier parent-document `<textarea>`/`<input>` overlay, which had to mirror computed typography and inject site fonts into the parent doc just to approximate the real element.)
+
+- **Module contract:** `ModuleDefinition.inlineTextEdit?: { prop: string; multiline?: boolean }`. Declared by `base.text` (`text`, multiline), `base.button` (`label`), and `base.link` (`text`). Modules without the field keep the no-op double-click; the canvas has no per-module branches. A node with children never starts a session (`base.link` renders `text` only when childless), and dynamically-bound props are not literal-editable.
+- **The element IS the editor, and React must NOT own its content:** when `inlineEdit` is set on the component props, the module renders NO children and spreads `inlineEditableElementProps(inlineEdit)` (`src/modules/base/shared/inlineText.ts`) onto its element — `contentEditable="plaintext-only"` (no rich formatting / pasted markup) plus the three live-edit handlers, and crucially **no `dangerouslySetInnerHTML` and no children**. React 19 re-applies `dangerouslySetInnerHTML` on *every* commit of an element (it does not skip an unchanged `__html`), and the live-commit re-render fires one commit per keystroke — so a React-owned content prop would overwrite the user's typing and collapse the caret to the start every keystroke. Instead the canvas seeds the element's content **imperatively** once via `seedInlineEditableContent(el, initialValue)` (which sets `el.innerHTML = rawTextToBreakHtml(initialValue)` — HTML-escaped first, so the only markup is the `<br>`s, never user HTML), and React leaves the contentEditable DOM untouched for the rest of the session.
+- **Session state:** `activeInlineEdit { nodeId, prop, breakpointId, multiline, initialValue, committed }` in `store/slices/inlineEditSlice.ts`. One session globally, owned by the frame that was double-clicked (`isInlineEditing` is true only when `activeInlineEdit.breakpointId === breakpointId`). Design mode only. On session start a `useLayoutEffect` in `NodeRenderer` seeds the content, focuses the element, and drops the caret at the end before paint.
+- **Live commit:** `onInput` reads the edited text back with `readInlineEditableText(el)` (`el.innerText`, which resolves `<br>` and block boundaries to `\n`) and calls `applyInlineEditValue` → `updateNodeProps(nodeId, { [prop]: value })`. Single-field patches coalesce under `props:<nodeId>:<prop>`, so the whole burst is ONE undo entry and every OTHER frame previews the edit live. `startInlineEdit`/`endInlineEdit` reset `_historyCoalesceKey` so the session burst never folds into a Properties-panel burst for the same prop.
+- **Line breaks stored as `\n`, rendered as `<br>`:** the stored value keeps newlines as `\n`. Both render surfaces turn each `\n` into a `<br>` so a hard break shows live in the canvas AND survives publish — `base.text` render emits `textToBreakHtml(text)` (text is pre-escaped by `escapeProps`; DOMPurify's richtext config allows `<br>`), and the canvas display path uses `rawTextToBreakHtml`. A break the author types is a break everywhere.
+- **End:** for single-line modules (`base.button`, `base.link`) plain Enter commits + closes; for multiline `base.text`, plain Enter falls through so the browser inserts a hard break (stored as `\n`), and Cmd/Ctrl+Enter commits + closes. Blur commits + closes. Escape cancels: a single `undo()` iff the session committed anything.
+- **Force-close:** node deleted, document/page switch, or frame unmount (breakpoint collapsed, live-mode switch) clear `activeInlineEdit` through the slice's existing guards.
+
+Keyboard interplay: the editable element lives inside the breakpoint iframe, and its keystrokes reach the parent two ways — they bubble through React to the canvas-root handler, and `IframeFrameSurface` re-dispatches a clone on the parent `document` so native parent shortcuts work. Both paths must stand down mid-edit:
+
+- **React path:** `useCanvasKeyboardShortcuts` bails at the top (`if (useEditorStore.getState().activeInlineEdit) return`), so Delete/Cmd+D/clipboard shortcuts never fire.
+- **Forwarded path:** `IframeFrameSurface`'s `onKeyDown` returns early during a session (same guard) and never forwards the clone. This is the source fix for every native `document`/`window` listener at once — the forwarded clone's `target` is the `document`, not the cross-realm editing element, so each handler's own `target.isContentEditable` guard can't see it. Without this the spacebar would start a pan (eaten), and — the real hazard — **Cmd+Z** would run the store `undo()` (reverting the whole coalesced session) while the contentEditable DOM keeps the text, diverging store from DOM. Standing the forward layer down lets the spacebar type and Cmd+Z be the element's own native text undo.
+
+The element's own React `onKeyDown` owns Escape (cancel) and Enter (commit / break).
+
+Design doc: `docs/superpowers/specs/2026-06-10-inline-text-editing-design.md`.
+
+---
+
 ## Plugin module sandboxing (`ModuleSandboxFrame`)
 
 Plugin canvas modules render inside `ModuleSandboxFrame.tsx`, a separate component that is NOT `IframeFrameSurface`. Plugin modules run in a `sandbox="allow-scripts"` iframe with no `allow-same-origin` — they communicate with the host via `postMessage`. This is distinct from the page tree iframes described above.
@@ -158,12 +181,6 @@ Plugin canvas modules render inside `ModuleSandboxFrame.tsx`, a separate compone
 ---
 
 ## Known limitations
-
-### Inline text editing removed
-
-Double-click to edit text/button content in-place was removed when the iframe move landed. The cross-frame focus model (iframe needs system focus, body competes, React StrictMode double-mount races) made every fix fragile. Text and button content is edited through the Properties panel.
-
-When revisited, the shape worth considering is a parent-doc overlay positioned over the iframe element — a real `<input>`/`<textarea>` in the parent doc, no iframe focus negotiation needed.
 
 ### Test environment — iframe globals
 

@@ -98,3 +98,4 @@ export function unionCanvasOverlayRects(
     height: Math.max(a.y + a.height, b.y + b.height) - y,
   }
 }
+

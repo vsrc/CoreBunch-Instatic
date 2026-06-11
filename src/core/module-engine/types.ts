@@ -1,4 +1,11 @@
-import type { ComponentType, ReactNode } from 'react'
+import type {
+  ComponentType,
+  FocusEventHandler,
+  FormEventHandler,
+  KeyboardEventHandler,
+  ReactNode,
+  Ref,
+} from 'react'
 import type { IconComponent } from 'pixel-art-icons/types'
 import type { TSchema } from '@core/utils/typeboxHelpers'
 import type { PropertySchema } from './propertySchema'
@@ -106,6 +113,34 @@ export interface ModuleComponentProps<
    * — modules should treat absence as "render plain published markup".
    */
   nodeWrapperProps?: NodeWrapperProps
+  /**
+   * Present only while THIS node is being inline-edited in THIS frame (the
+   * canvas double-click editor). A text module (`inlineTextEdit` declared)
+   * MUST, when this is set, render its text element as the editable surface:
+   * spread `inlineEdit` onto the element instead of rendering the text as
+   * children. The element becomes the real editing surface — there is no
+   * overlay — so what the author edits is byte-identical to what publishes.
+   * See `inlineEditableElementProps` in `@modules/base/shared/inlineText`.
+   */
+  inlineEdit?: InlineEditBinding
+}
+
+/**
+ * What the canvas hands a text module so its own element becomes the inline
+ * editor: the module spreads these onto its element to make it
+ * `contentEditable` and wire the live-edit handlers. The canvas itself seeds
+ * the element's content imperatively (React must not own it) and reads the
+ * edited text back through `ref` + the handlers — see `inlineEditableElementProps`.
+ */
+export interface InlineEditBinding {
+  /** Ref the canvas attaches to focus + seed the element and read it on commit. */
+  ref: Ref<HTMLElement>
+  /** Fires on every edit — the canvas reads `innerText` and commits live. */
+  onInput: FormEventHandler<HTMLElement>
+  /** Escape cancels, Enter commits/breaks per the module's multiline flag. */
+  onKeyDown: KeyboardEventHandler<HTMLElement>
+  /** Blur commits and ends the session. */
+  onBlur: FocusEventHandler<HTMLElement>
 }
 
 /**
@@ -222,6 +257,19 @@ export interface ModuleDefinition<
    * All children go into a single default slot.
    */
   canHaveChildren: boolean
+
+  /**
+   * Opt-in canvas inline text editing (double-click a node on the canvas).
+   * `prop` names the single string prop edited in place; the node's own
+   * element becomes `contentEditable` (there is no overlay). `multiline: true`
+   * (e.g. `base.text`) lets plain Enter insert a hard line break; otherwise
+   * Enter commits. Modules without this field keep the no-op double-click. The
+   * canvas resolves the contract generically — no per-module branches (a node
+   * with children never starts a session, which is how `base.link`'s
+   * children-over-text render rule is honoured). See
+   * docs/features/canvas-iframe-per-frame.md → "Inline text editing".
+   */
+  inlineTextEdit?: { prop: string; multiline?: boolean }
 
   /**
    * How the publisher's node walker dispatches this module. Makes the

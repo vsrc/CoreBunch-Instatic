@@ -19,7 +19,9 @@
  *   stay referentially stable for unchanged data.
  */
 
-import { memo, use, useSyncExternalStore } from 'react'
+import { memo, use, useLayoutEffect, useRef, useSyncExternalStore } from 'react'
+import type { InlineEditBinding } from '@core/module-engine'
+import { readInlineEditableText, seedInlineEditableContent } from '@modules/base/shared/inlineText'
 import { useEditorStore, selectActiveCanvasPage } from '@site/store/store'
 import { resolveProps } from '@core/page-tree'
 import { registry } from '@core/module-engine'
@@ -71,6 +73,32 @@ export const NodeRenderer = memo(function NodeRenderer({ nodeId }: NodeRendererP
       s.hoveredNodeId === nodeId &&
       (!s.hoveredBreakpointId || s.hoveredBreakpointId === breakpointId),
   )
+  // Inline text edit session — true only in the SESSION'S frame. This frame's
+  // node becomes the contentEditable surface; every OTHER breakpoint frame
+  // keeps previewing the live-updating text normally.
+  const isInlineEditing = useEditorStore(
+    (s) =>
+      s.activeInlineEdit !== null &&
+      s.activeInlineEdit.nodeId === nodeId &&
+      s.activeInlineEdit.breakpointId === breakpointId,
+  )
+  // Session values, read as primitives so per-node memoization stays clean.
+  // Both are constant for the whole session (initialValue seeds the frozen
+  // content; multiline decides Enter's behaviour).
+  const inlineEditInitialValue = useEditorStore((s) =>
+    s.activeInlineEdit?.nodeId === nodeId && s.activeInlineEdit.breakpointId === breakpointId
+      ? s.activeInlineEdit.initialValue
+      : null,
+  )
+  const inlineEditMultiline = useEditorStore((s) =>
+    s.activeInlineEdit?.nodeId === nodeId && s.activeInlineEdit.breakpointId === breakpointId
+      ? s.activeInlineEdit.multiline
+      : false,
+  )
+  const applyInlineEditValue = useEditorStore((s) => s.applyInlineEditValue)
+  const endInlineEdit = useEditorStore((s) => s.endInlineEdit)
+  const cancelInlineEdit = useEditorStore((s) => s.cancelInlineEdit)
+  const editableRef = useRef<HTMLElement | null>(null)
   const previewClassAssignment = useEditorStore(
     (s) => s.previewClassAssignment?.nodeId === nodeId ? s.previewClassAssignment : null,
   )
@@ -137,6 +165,33 @@ export const NodeRenderer = memo(function NodeRenderer({ nodeId }: NodeRendererP
     registry.generation.bind(registry),
     registry.generation.bind(registry),
   )
+
+  // On session start, seed the editable element's content imperatively (React
+  // does NOT own it — see inlineEditableElementProps), then focus and drop the
+  // caret at the end. Layout effect → runs before paint, so the editor is live
+  // on the first frame. The element lives in the breakpoint iframe
+  // (same-origin); focusing it focuses the iframe in the parent — no
+  // cross-frame negotiation needed. Deps are constant for the whole session, so
+  // this runs once per session (never mid-edit, which would wipe the edits).
+  // Trade-off: a programmatic mutation that swaps the node's element mid-session
+  // (e.g. an RPC changing base.text's `tag`) remounts a fresh, unseeded element
+  // and is not re-seeded. Unreachable from the UI — interacting with the
+  // Properties panel blurs the editor, which ends the session first.
+  useLayoutEffect(() => {
+    if (!isInlineEditing) return
+    const el = editableRef.current
+    if (!el) return
+    seedInlineEditableContent(el, inlineEditInitialValue ?? '')
+    el.focus()
+    const doc = el.ownerDocument
+    const sel = doc.defaultView?.getSelection()
+    if (!sel) return
+    const range = doc.createRange()
+    range.selectNodeContents(el)
+    range.collapse(false)
+    sel.removeAllRanges()
+    sel.addRange(range)
+  }, [isInlineEditing, inlineEditInitialValue])
 
   if (!node) return null
   if (node.hidden) return null
@@ -247,7 +302,7 @@ export const NodeRenderer = memo(function NodeRenderer({ nodeId }: NodeRendererP
       if (isCanvasEditorControlTarget(e.target, e.currentTarget)) return
       e.preventDefault()
       e.stopPropagation()
-      onNodeDoubleClick(nodeId, e as unknown as React.MouseEvent)
+      onNodeDoubleClick(nodeId, e as unknown as React.MouseEvent, breakpointId)
     },
     onDoubleClick: (e) => {
       if (!isClosestCanvasNodeTarget(e.target, e.currentTarget)) return
@@ -257,7 +312,7 @@ export const NodeRenderer = memo(function NodeRenderer({ nodeId }: NodeRendererP
       }
       e.preventDefault()
       e.stopPropagation()
-      onNodeDoubleClick(nodeId, e as unknown as React.MouseEvent)
+      onNodeDoubleClick(nodeId, e as unknown as React.MouseEvent, breakpointId)
     },
     onContextMenuCapture: (e) => {
       if (!isClosestCanvasNodeTarget(e.target, e.currentTarget)) return
@@ -297,6 +352,47 @@ export const NodeRenderer = memo(function NodeRenderer({ nodeId }: NodeRendererP
     onMouseLeave: () => handleNodeHover(null),
   }
 
+  // Inline editing: this node's element becomes the contentEditable surface.
+  // The binding seeds it from the frozen initial value and reads edits back
+  // out; the live commit flows through `applyInlineEditValue` (coalesced into
+  // one undo entry). While editing we strip the selection/click/dblclick
+  // handlers from the element so native caret placement and text selection
+  // work — only the data attributes (needed by the selection-ring overlay)
+  // and inline style remain.
+  const inlineEditBinding: InlineEditBinding | undefined = isInlineEditing
+    ? {
+        ref: editableRef,
+        onInput: (e) => applyInlineEditValue(readInlineEditableText(e.currentTarget as HTMLElement)),
+        onKeyDown: (e) => {
+          if (e.key === 'Escape') {
+            e.preventDefault()
+            e.stopPropagation()
+            cancelInlineEdit()
+            return
+          }
+          if (e.key === 'Enter') {
+            // Cmd/Ctrl+Enter always commits. Plain Enter commits for
+            // single-line modules; for multiline it falls through so the
+            // browser inserts the hard break the author wants.
+            if (e.metaKey || e.ctrlKey || !inlineEditMultiline) {
+              e.preventDefault()
+              endInlineEdit()
+            }
+          }
+        },
+        onBlur: () => endInlineEdit(),
+      }
+    : undefined
+
+  const effectiveWrapperProps: NodeWrapperPropsType = isInlineEditing
+    ? {
+        'data-node-id': nodeId,
+        'data-module-id': node.moduleId,
+        ...(isSelected ? { 'data-canvas-selected': 'true' as const } : {}),
+        ...(inlineStyle ? { style: inlineStyle } : {}),
+      }
+    : nodeWrapperProps
+
   // Per-module isolation: a buggy module render must not collapse the
   // entire canvas. The boundary scope is per-module render path; the rest
   // of the page tree keeps working. resetKeys on the moduleId means an
@@ -324,9 +420,10 @@ export const NodeRenderer = memo(function NodeRenderer({ nodeId }: NodeRendererP
           nodeId={nodeId}
           isSelected={isSelected}
           mcClassName={mcClassName}
-          nodeWrapperProps={nodeWrapperProps}
+          nodeWrapperProps={effectiveWrapperProps}
+          inlineEdit={inlineEditBinding}
         >
-          {children}
+          {isInlineEditing ? undefined : children}
         </ComponentType>
       )}
     </ErrorBoundary>

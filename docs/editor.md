@@ -12,7 +12,7 @@ The frontend is a single React 19 + Vite SPA mounted at `/admin`. Inside it, two
 - **Router:** `src/admin/lib/routing/` — in-house router replacing `react-router-dom`. 10 routes, all wrapped in a per-route `<ErrorBoundary>` and `<Suspense>`.
 - **Cold path:** entry chunk is tiny. `AuthenticatedAdmin` is `React.lazy` and only loads post-login. Each workspace page is wrapped in `prewarmedLazy(...)`: the active page fires its import at module evaluation; the remaining pages pre-warm via `requestIdleCallback` after first paint so subsequent nav is synchronous (no Suspense flicker).
 - **Workspaces:** `dashboard`, `site` (the editor), `content`, `data`, `media`, `plugins`, `users`, `ai`, `account`, `pluginPage`. Capability-gated by `canAccessWorkspace`.
-- **Editor store** lives at `src/admin/pages/site/store/`. Zustand + Mutative (`zustand-mutative`) + `subscribeWithSelector`. 11 slices, one source of truth for the page tree. Undo/redo uses patch-based history (O(change) per step, not O(site)).
+- **Editor store** lives at `src/admin/pages/site/store/`. Zustand + Mutative (`zustand-mutative`) + `subscribeWithSelector`. 12 slices, one source of truth for the page tree. Undo/redo uses patch-based history (O(change) per step, not O(site)).
 - **Active tree routing:** `mutateActiveTree(fn)` in `siteSlice` is the **only** place that branches on page-mode vs. VC-mode. The 11 named mutation actions are one-liners that delegate to it.
 - **Canvas:** `src/admin/pages/site/canvas/` renders the page tree into per-breakpoint `IframeFrameSurface` iframes. Two views: **design** (multiple breakpoints side-by-side with pan/zoom) and **live** (single real-size editable frame with normal scrolling). Design mode paints iframe shells with detailed skeletons first, mounts the active breakpoint's node tree after the first paint, then fills inactive breakpoint frames on idle time. Three canvas ring tokens: `--canvas-selection-ring` (neon green, selected node), `--canvas-hover-ring` (neon pink, hovered node), `--canvas-selector-ring` (neon orange, selector-panel match sweep).
 - **Spotlight:** Cmd+K palette at `src/admin/spotlight/`. Always available across workspaces. Owns its own command registry, providers, and scopes.
@@ -254,7 +254,7 @@ src/admin/
 The editor is a self-contained app inside the admin shell. It owns:
 
 - A canvas that renders the page tree into per-breakpoint iframes.
-- A heavy Zustand store with 11 slices.
+- A heavy Zustand store with 12 slices.
 - Left and right sidebars with collapsible panels.
 - A toolbar with publish / save / zoom / the module inserter.
 - Property controls bound to selected nodes.
@@ -325,7 +325,7 @@ Organization is persisted in `site.explorer` on the site shell. Folders are deco
 
 **Undo/redo** uses patch-based history: every undoable mutation captures Mutative `[next, forward, inverse]` patch pairs scoped to the `SiteDocument`. Undo applies `entry.inverse`, redo applies `entry.forward` — O(change) in both time and memory, not O(site). A 50-deep history holds kilobytes of patches instead of hundreds of megabytes of full-site clones. See [`docs/reference/editor-history.md`](../reference/editor-history.md).
 
-The store is composed of **11 slices**, each created by a factory in `store/slices/`:
+The store is composed of **12 slices**, each created by a factory in `store/slices/`:
 
 | Slice                  | Owns                                                                       |
 |------------------------|----------------------------------------------------------------------------|
@@ -340,6 +340,7 @@ The store is composed of **11 slices**, each created by a factory in `store/slic
 | `agentSlice`           | AI Agent Panel state + streaming                                           |
 | `sitePanelSlice`       | Dependency manifest + site runtime settings                                |
 | `clipboardSlice`       | Copy / cut / paste of layer subtrees, persisted editor-wide                |
+| `inlineEditSlice`      | `activeInlineEdit` — the canvas inline text-edit session (double-click to edit) |
 
 The combined `EditorStore` type lives at `store/types.ts` so each slice can import it without going through `store.ts` (this eliminates the historical store ↔ slice cycles).
 
@@ -409,6 +410,10 @@ Selection rings and hover rings are absolutely-positioned overlay divs portaled 
 Ring and toolbar positions are computed on each animation frame via a RAF loop (simpler than wiring ResizeObserver/MutationObserver/IntersectionObserver to every mutation source — scroll, layout shift, zoom, content animation). The loop only starts when `hasOverlayWork` is true — at least one selection ring, hover ring, selector-affinity highlight, or toolbar is visible. When there is no overlay work the effect returns early so idle breakpoint frames incur no RAF cost. **When adding a new visible overlay type to `BreakpointSelectionOverlay`, update `hasOverlayWork`** so the loop arms correctly.
 
 Each tick is split into a read phase and a write phase to keep the loop cheap at 60fps. The read phase resolves tracked elements through a `CanvasNodeElementCache` (`canvasNodeLookup.ts` — cached until the element disconnects or the iframe swaps documents, so no per-frame `querySelector` document scans), snapshots the shared iframe/canvas-root geometry once per tick via `createCanvasOverlayMeasureSession` (`canvasOverlayGeometry.ts`), and measures every rect — the toolbar anchors to the union of the ring rects already measured, never a second query/measure pass. The write phase then applies styles, skipping any write whose rect is already applied. Steady-state frames are therefore a few cached-layout reads with zero writes, and because no write lands between reads, changing rects never force per-ring reflows. **Keep new overlay work inside this read-then-write structure.**
+
+### Inline text editing (double-click)
+
+Double-clicking a node whose module declares `inlineTextEdit` (`base.text`, `base.button`, childless `base.link`) edits the text **in place**: the node's own element inside the breakpoint iframe becomes the editor. `NodeRenderer` builds an `InlineEditBinding` and the module spreads `inlineEditableElementProps(binding)` onto its real root element, making it `contentEditable="plaintext-only"` (seeded once via `dangerouslySetInnerHTML` from the escaped initial value, with `\n` → `<br>`). There is no overlay and no typography mirroring — the author edits the actual published element, so the editing surface is byte-identical to what publishes. Every keystroke reads the text back with `readInlineEditableText(el)` (`el.innerText`) and commits live through `updateNodeProps`, so all breakpoint frames preview the edit; the burst coalesces into one undo entry. For single-line modules Enter commits + closes; for multiline `base.text`, Enter inserts a hard break (stored as `\n`, rendered as `<br>` everywhere) and Cmd/Ctrl+Enter commits. Blur commits + closes; Escape reverts via a single `undo()`. Canvas shortcuts (Delete/Cmd+D) are suppressed mid-edit by the `activeInlineEdit` guard in `useCanvasKeyboardShortcuts`. Session state is `activeInlineEdit` in `inlineEditSlice`. Full design: [`docs/features/canvas-iframe-per-frame.md`](features/canvas-iframe-per-frame.md) → "Inline text editing (in-place `contentEditable`)".
 
 ### CSS injection into the iframe
 
@@ -483,7 +488,7 @@ Canvas-internal values are not CSS tokens — they are raw integers intentionall
 | `CanvasLayerContextMenu.tsx`    | Right-click on a layer                                          |
 | `canvasDnd.ts`                  | Drag-and-drop (insert / move / wrap)                            |
 | `canvasDomGeometry.ts`          | Cross-iframe DOM measurement; `panToCenterBreakpointFrame` viewport centering geometry |
-| `canvasOverlayGeometry.ts`      | Cross-iframe element rect → canvas-root coords; CSS attribute value escaping |
+| `canvasOverlayGeometry.ts`      | Cross-iframe element rect → canvas-root coords; overlay rect union |
 | `canvasSelectionUtils.ts`       | Selection helpers                                               |
 | `BreakpointSelectionOverlay.tsx`| Selection / hover rings, selection toolbar, inspect ladder integration |
 | `CanvasInsertModuleButton.tsx`  | "Insert module" button in the canvas selection toolbar — opens `ModuleInserterDialog` |

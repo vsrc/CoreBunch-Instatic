@@ -194,6 +194,10 @@ export function clearCanvasSelectionDraft(state: EditorStore): void {
   state.hoveredNodeId = null
   state.hoveredBreakpointId = null
   state.activeClassId = null
+  // A document/page switch invalidates any inline text-edit session — the
+  // node it points at is no longer on the canvas. Live keystrokes already
+  // committed; clearing here is the spec's "force-close without committing".
+  state.activeInlineEdit = null
 }
 
 /**
@@ -209,6 +213,12 @@ export function clearCanvasSelectionDraft(state: EditorStore): void {
  */
 export function pruneCanvasSelectionDraft(state: EditorStore): void {
   const tree = getActiveTree(state)
+  // Inline edit prunes by tree-membership too — the edited node may be a
+  // descendant swept away with a deleted subtree, and it may not be part of
+  // the selection at all, so this must run before the early return below.
+  if (state.activeInlineEdit && !tree?.nodes[state.activeInlineEdit.nodeId]) {
+    state.activeInlineEdit = null
+  }
   const surviving = tree
     ? state.selectedNodeIds.filter((id) => Boolean(tree.nodes[id]))
     : []
@@ -346,8 +356,9 @@ function sameTree(state: EditorStore, existingIds: string[], id: string): boolea
  * `selectActiveCanvasPage` selector. Importing that selector would create a
  * `selectionSlice ↔ store` cycle. The returned shape is `NodeTree<PageNode>`
  * so the slice's helpers can use the page-tree selectors uniformly.
+ * Also consumed by `inlineEditSlice` (same no-cycle rationale).
  */
-function getActiveTree(state: EditorStore): NodeTree<PageNode> | null {
+export function getActiveTree(state: EditorStore): NodeTree<PageNode> | null {
   if (!state.site) return null
   const activeDocument = state.activeDocument
   if (activeDocument?.kind === 'visualComponent') {
