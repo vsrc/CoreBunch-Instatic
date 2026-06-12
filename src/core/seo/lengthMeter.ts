@@ -17,7 +17,7 @@ export const DESCRIPTION_PIXEL_BUDGET = 990
 export const TITLE_CHAR_GUIDE = 60
 export const DESCRIPTION_CHAR_GUIDE = 160
 
-const NARROW = /[iljtf.,:;'!|()\[\]{} ]/
+const NARROW = /[iljtf.,:;'!|()[\]{} ]/
 const WIDE = /[mwMW@%]/
 const UPPER = /[A-Z0-9]/
 

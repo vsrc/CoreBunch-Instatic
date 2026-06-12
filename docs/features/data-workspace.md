@@ -89,7 +89,7 @@ Three tiers for postType tables, enforced by the guard functions:
 | Tier | Field IDs | Edit affordance | Delete affordance |
 |------|-----------|-----------------|-------------------|
 | Mandatory built-in | `title`, `slug` | None — locked row, no edit/delete buttons | Blocked |
-| Optional built-in | `body`, `featuredMedia`, `seoTitle`, `seoDescription` | Description + required only; label locked | Allowed |
+| Optional built-in | `body`, `featuredMedia`, `seo` | Description + required only; label locked | Allowed |
 | Custom | all others | Fully editable | Allowed if not the primary field |
 
 ```ts

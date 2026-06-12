@@ -65,12 +65,11 @@ export function SiteDefaultsEditor({ workspace, canManage, onDirtyChange }: Site
 
   const isDirty = !sameSiteSeo(draft, baseline)
 
-  // Exception #1 (React Compiler rules): parent dirty-guard consumes this
-  // through an effect so it tracks every dirtiness flip.
+  // Parent dirty-guard notification. `onDirtyChange` is a useState setter at
+  // every call site, so including it in the deps adds no extra firings.
   useEffect(() => {
     onDirtyChange(isDirty)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- notify only when dirtiness flips
-  }, [isDirty])
+  }, [isDirty, onDirtyChange])
 
   function setField(field: SiteStringField, value: string): void {
     setDraft((current) => {

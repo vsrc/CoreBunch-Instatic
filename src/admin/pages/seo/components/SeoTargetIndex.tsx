@@ -123,7 +123,6 @@ export function SeoTargetIndex({ workspace, selectedId, siteDefaultsId, onSelect
         </div>
       )}
 
-      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- keyboard list navigation; rows themselves are buttons */}
       <div
         ref={listRef}
         className={styles.list}

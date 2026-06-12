@@ -82,12 +82,11 @@ export function useSeoDraft(
 
   const isDirty = !sameSeo(draft, baseline)
 
-  // Exception #1 (React Compiler rules): the parent's dirty-guard reads this
-  // via effect so it stays correct even when dirtiness changes from saves.
+  // Parent dirty-guard notification. `onDirtyChange` is a useState setter at
+  // every call site, so including it in the deps adds no extra firings.
   useEffect(() => {
     onDirtyChange(isDirty)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- notify only when dirtiness flips
-  }, [isDirty])
+  }, [isDirty, onDirtyChange])
 
   function update(mutate: (next: SeoMetadata) => void): void {
     setDraft((current) => {

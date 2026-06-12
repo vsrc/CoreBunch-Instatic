@@ -44,8 +44,9 @@ export function useSeoWorkspace(): SeoWorkspace {
   const [targets, setTargets] = useState<SeoTarget[]>([])
 
   useEffect(() => {
+    // `loading` initialises true and this effect runs once on mount, so no
+    // synchronous setState is needed before the fetch resolves.
     const controller = new AbortController()
-    setLoading(true)
     fetchSeoTargets(controller.signal)
       .then((payload) => {
         setSiteName(payload.siteName)

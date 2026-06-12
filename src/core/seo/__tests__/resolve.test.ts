@@ -89,7 +89,6 @@ describe('resolveSeoMetadata — canonical / absolute URLs', () => {
     expect(
       resolveSeoMetadata({
         ...BASE,
-        // eslint-disable-next-line no-script-url
         target: { canonicalUrl: 'javascript:void(0)' },
         origin: 'https://acme.com',
       }).canonicalUrl,
@@ -162,7 +161,6 @@ describe('url helpers', () => {
   test('isSafeCanonicalUrl', () => {
     expect(isSafeCanonicalUrl('https://a.com/x')).toBe(true)
     expect(isSafeCanonicalUrl('http://a.com')).toBe(true)
-    // eslint-disable-next-line no-script-url
     expect(isSafeCanonicalUrl('javascript:void(0)')).toBe(false)
     expect(isSafeCanonicalUrl('/relative')).toBe(false)
   })
