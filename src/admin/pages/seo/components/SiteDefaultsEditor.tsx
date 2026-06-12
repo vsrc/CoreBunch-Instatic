@@ -1,12 +1,13 @@
 /**
  * SiteDefaultsEditor — the pinned "Site defaults" target's workbench.
  *
- * Left rail: live previews of the HOMEPAGE resolved with the draft defaults
- * applied — the user sees exactly what a typical page inherits while they
- * type the pattern. Right: the sectioned defaults form (`site.settings.seo`:
- * title pattern, description, default social image, X handle/card, and the
- * Organization fields feeding site-wide JSON-LD). Robots/sitemap settings
- * live on the same object but are edited in their own tabs.
+ * Rendered as a fragment into MetaTab's three-column grid: the sectioned
+ * defaults form (`site.settings.seo`: title pattern, description, default
+ * social image, X handle/card, and the Organization fields feeding
+ * site-wide JSON-LD), then a rail of live previews of the HOMEPAGE
+ * resolved with the draft defaults applied — the user sees exactly what a
+ * typical page inherits while they type the pattern. Robots/sitemap
+ * settings live on the same object but are edited in their own tabs.
  */
 import { useId, useState } from 'react'
 import { Input, Textarea } from '@ui/components/Input'
@@ -164,18 +165,7 @@ export function SiteDefaultsEditor({ workspace, canManage, bridge }: SiteDefault
   )
 
   return (
-    <div className={styles.workbench}>
-      {sampleResolved && sampleTarget ? (
-        <SeoPreviewRail
-          resolved={sampleResolved}
-          workspace={workspace}
-          routePath={sampleTarget.route ?? '/'}
-          schemaTarget={sampleTarget}
-        />
-      ) : (
-        <div />
-      )}
-
+    <>
       <section className={styles.form} aria-label="Site SEO defaults">
         <header className={styles.header}>
           <div className={styles.headerText}>
@@ -301,6 +291,15 @@ export function SiteDefaultsEditor({ workspace, canManage, bridge }: SiteDefault
           onChange={(next) => setOrgField('logoUrl', next)}
         />
       </section>
-    </div>
+
+      {sampleResolved && sampleTarget && (
+        <SeoPreviewRail
+          resolved={sampleResolved}
+          workspace={workspace}
+          routePath={sampleTarget.route ?? '/'}
+          schemaTarget={sampleTarget}
+        />
+      )}
+    </>
   )
 }

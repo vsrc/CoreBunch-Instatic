@@ -1,9 +1,11 @@
 /**
  * SeoPreviewEditor — the Meta tab's workbench for one page / template / post
- * target: a sticky rail of live 1:1 platform previews on the left (Google,
- * Open Graph, X, collapsible JSON-LD) and the sectioned metadata form on the
- * right. One draft, one resolver — every keystroke re-resolves and the rail
- * re-renders, so what's previewed is exactly what the publisher will emit.
+ * target: the sectioned metadata form plus a sticky rail of live 1:1
+ * platform previews (Google, Open Graph, X, collapsible JSON-LD). Rendered
+ * as a fragment — form and rail are siblings in MetaTab's three-column
+ * grid (index | form | previews). One draft, one resolver — every
+ * keystroke re-resolves and the rail re-renders, so what's previewed is
+ * exactly what the publisher will emit.
  *
  * The header carries a live score chip and an actionable improvements list
  * (both recomputed from the draft on every keystroke — fixing a check turns
@@ -201,14 +203,7 @@ export function SeoPreviewEditor({ target, workspace, canManage, bridge }: SeoPr
   const openIssues = report.checks.filter((check) => check.status !== 'pass')
 
   return (
-    <div className={styles.workbench}>
-      <SeoPreviewRail
-        resolved={resolved}
-        workspace={workspace}
-        routePath={routePath}
-        schemaTarget={target}
-      />
-
+    <>
       <section className={styles.form} aria-label={`SEO for ${target.title}`}>
         <header className={styles.header}>
           <div className={styles.headerText}>
@@ -342,7 +337,14 @@ export function SeoPreviewEditor({ target, workspace, canManage, bridge }: SeoPr
           </>
         )}
       </section>
-    </div>
+
+      <SeoPreviewRail
+        resolved={resolved}
+        workspace={workspace}
+        routePath={routePath}
+        schemaTarget={target}
+      />
+    </>
   )
 }
 

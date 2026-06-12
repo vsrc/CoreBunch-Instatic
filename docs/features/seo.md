@@ -109,15 +109,16 @@ button, Save draft + Open live URL menu). Posts publish through the
 incremental row endpoint; everything else runs the step-up-gated full site
 publish — the same machinery as the Site toolbar, not a parallel path.
 
-- **Meta tab** — right sidebar: site-wide SEO score in a
+- **Meta tab** — one flat three-column grid. Left: site-wide SEO score in a
   `LiquidProgressRing` (tier-toned liquid, computed from one shared
   `indexSeoTargets` pass) over the target index (search,
   All/Pages/Posts/Templates/Issues filters, clickable issues line, tiered
   score pills per row, ↑/↓/Enter + `/` keyboard nav, pinned Site defaults
-  row).
-  Left: sticky preview editor with Search / Open Graph / X / Schema platform
-  views, a live score chip, and a clickable improvements list (each row
-  focuses the field it describes). Controlled `Input`/`Textarea` primitives
+  row). Middle: the editor form with a live score chip and a clickable
+  improvements list (each row focuses the field it describes). Right: the
+  sticky Search / Open Graph / X / Schema preview rail — the editors render
+  form + rail as fragment siblings so the grid stays flat.
+  Controlled `Input`/`Textarea` primitives
   (no contentEditable); empty fields show their RESOLVED fallback as
   placeholder; title/description carry ideal-band pixel meters (green only
   inside the band; inherited values render muted with an Inherited/Missing

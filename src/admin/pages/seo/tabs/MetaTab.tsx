@@ -1,15 +1,18 @@
 /**
  * MetaTab — the SEO workspace's control center.
  *
- * Two persistent columns:
- *   - Left: the active editor. Platform previews over editable snippet
- *     fields with inherited-value placeholders, ideal-band length meters,
- *     a live per-target score, and an actionable improvements list. The
- *     pinned "Site defaults" row opens the site-level editor instead.
- *   - Right: the site-wide SEO score (liquid-progress ring) over the target
+ * One flat three-column grid:
+ *   - Left: the site-wide SEO score (liquid-progress ring) over the target
  *     index — search, kind filters, dense rows with score pills, full
  *     keyboard navigation. Score and index rows derive from the same
  *     per-target reports.
+ *   - Middle: the active editor's form — snippet fields with
+ *     inherited-value placeholders, ideal-band length meters, a live
+ *     per-target score, and an actionable improvements list. The pinned
+ *     "Site defaults" row opens the site-level editor instead.
+ *   - Right: the editor's sticky platform-preview rail (Google / Open
+ *     Graph / X / JSON-LD). The editors render form + rail as fragment
+ *     siblings so the grid stays flat.
  *
  * Save/publish lives in the workspace toolbar: the active editor registers
  * itself on the save bridge passed down from SeoPage.
@@ -83,25 +86,6 @@ export function MetaTab({ workspace, canManage, bridge }: MetaTabProps) {
 
   return (
     <div className={styles.columns}>
-      <div className={styles.editorColumn}>
-        {selectedTarget ? (
-          <SeoPreviewEditor
-            key={selectedTarget.id}
-            target={selectedTarget}
-            workspace={workspace}
-            canManage={canManage}
-            bridge={bridge}
-          />
-        ) : (
-          <SiteDefaultsEditor
-            key={SITE_DEFAULTS_ID}
-            workspace={workspace}
-            canManage={canManage}
-            bridge={bridge}
-          />
-        )}
-      </div>
-
       <div className={styles.indexColumn}>
         <SeoScoreSummary indexed={indexed} />
         <SeoTargetIndex
@@ -111,6 +95,25 @@ export function MetaTab({ workspace, canManage, bridge }: MetaTabProps) {
           onSelect={handleSelect}
         />
       </div>
+
+      {/* Fragment children: the form lands in the middle column, the
+          preview rail in the right one. */}
+      {selectedTarget ? (
+        <SeoPreviewEditor
+          key={selectedTarget.id}
+          target={selectedTarget}
+          workspace={workspace}
+          canManage={canManage}
+          bridge={bridge}
+        />
+      ) : (
+        <SiteDefaultsEditor
+          key={SITE_DEFAULTS_ID}
+          workspace={workspace}
+          canManage={canManage}
+          bridge={bridge}
+        />
+      )}
 
       <Dialog
         open={pendingSelection !== null}
