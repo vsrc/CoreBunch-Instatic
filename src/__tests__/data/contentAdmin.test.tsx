@@ -49,8 +49,7 @@ const allBuiltInFields = [
   { type: 'text', id: 'slug', label: 'Slug', required: true, builtIn: true },
   { type: 'richText', id: 'body', label: 'Body', format: 'markdown', builtIn: true },
   { type: 'media', id: 'featuredMedia', label: 'Featured media', mediaKind: 'image', builtIn: true },
-  { type: 'text', id: 'seoTitle', label: 'SEO title', builtIn: true },
-  { type: 'longText', id: 'seoDescription', label: 'SEO description', builtIn: true },
+  { type: 'seoMetadata', id: 'seo', label: 'SEO', builtIn: true },
 ]
 
 const titleOnlyFields = [
@@ -121,8 +120,7 @@ function makeRow(
     slug: 'untitled',
     body: '',
     featuredMedia: null,
-    seoTitle: '',
-    seoDescription: '',
+    seo: {},
     ...cells,
   }
   return {
@@ -337,7 +335,7 @@ beforeEach(() => {
     if (url === '/admin/api/cms/data/rows/entry_1/publish' && init?.method === 'POST') {
       return json({
         row: {
-          ...makeRow('entry_1', 'posts', { title: 'My first post', slug: 'untitled', body: '## Intro', featuredMedia: null, seoTitle: '', seoDescription: '' }),
+          ...makeRow('entry_1', 'posts', { title: 'My first post', slug: 'untitled', body: '## Intro', featuredMedia: null, seo: {} }),
           status: 'published',
           updatedAt: '2026-05-01T10:02:00.000Z',
           publishedAt: '2026-05-01T10:02:00.000Z',
@@ -349,7 +347,7 @@ beforeEach(() => {
       const body = JSON.parse(String(init.body))
       return json({
         row: {
-          ...makeRow('entry_1', 'posts', { title: 'My first post', slug: 'updated-slug', body: '', featuredMedia: imageAsset.id, seoTitle: '', seoDescription: '' }),
+          ...makeRow('entry_1', 'posts', { title: 'My first post', slug: 'updated-slug', body: '', featuredMedia: imageAsset.id, seo: {} }),
           status: body.status,
           updatedAt: '2026-05-01T10:03:00.000Z',
         },
@@ -627,8 +625,7 @@ describe('ContentPage', () => {
             slug: 'authored-post',
             body: 'Body',
             featuredMedia: null,
-            seoTitle: '',
-            seoDescription: '',
+            seo: {},
           }, {
             authorUserId: editorAuthor.id,
             author: editorAuthor,
@@ -643,8 +640,7 @@ describe('ContentPage', () => {
             slug: 'authored-post',
             body: 'Body',
             featuredMedia: null,
-            seoTitle: '',
-            seoDescription: '',
+            seo: {},
           }, {
             authorUserId: adminAuthor.id,
             author: adminAuthor,
@@ -771,8 +767,7 @@ describe('ContentPage', () => {
         slug: 'untitled',
         body: '',
         featuredMedia: null,
-        seoTitle: '',
-        seoDescription: '',
+        seo: {},
       },
     }))
     expect(calls.some((call) =>
@@ -919,8 +914,7 @@ describe('ContentPage', () => {
             slug: 'portable-lamp',
             body: 'A compact lamp',
             featuredMedia: imageAsset.id,
-            seoTitle: 'SEO lamp',
-            seoDescription: 'Lamp description',
+            seo: { title: 'SEO lamp', description: 'Lamp description' },
           }, { updatedAt: '2026-05-01T10:01:00.000Z' })],
         })
       }
@@ -932,8 +926,7 @@ describe('ContentPage', () => {
             slug: 'portable-lamp',
             body: 'A compact lamp',
             featuredMedia: imageAsset.id,
-            seoTitle: 'SEO lamp',
-            seoDescription: 'Lamp description',
+            seo: { title: 'SEO lamp', description: 'Lamp description' },
           }, { updatedAt: '2026-05-01T10:05:00.000Z' }),
         })
       }
@@ -945,8 +938,7 @@ describe('ContentPage', () => {
             slug: 'portable-lamp',
             body: 'A compact lamp',
             featuredMedia: imageAsset.id,
-            seoTitle: 'SEO lamp',
-            seoDescription: 'Lamp description',
+            seo: { title: 'SEO lamp', description: 'Lamp description' },
           }, { updatedAt: '2026-05-01T10:05:00.000Z' })],
         })
       }
@@ -1005,8 +997,8 @@ describe('ContentPage', () => {
       if (url === '/admin/api/cms/data/tables/posts/rows' && init?.method === 'GET') {
         return json({
           rows: [
-            makeRow('entry_1', 'posts', { title: 'Summer sale', slug: 'summer-sale', body: 'Sale copy', featuredMedia: null, seoTitle: '', seoDescription: '' }, { updatedAt: '2026-05-01T10:01:00.000Z' }),
-            makeRow('entry_2', 'posts', { title: 'Published story', slug: 'published-story', body: 'Published copy', featuredMedia: null, seoTitle: '', seoDescription: '' }, { status: 'published', updatedAt: '2026-05-01T10:02:00.000Z', publishedAt: '2026-05-01T10:02:00.000Z' }),
+            makeRow('entry_1', 'posts', { title: 'Summer sale', slug: 'summer-sale', body: 'Sale copy', featuredMedia: null, seo: {} }, { updatedAt: '2026-05-01T10:01:00.000Z' }),
+            makeRow('entry_2', 'posts', { title: 'Published story', slug: 'published-story', body: 'Published copy', featuredMedia: null, seo: {} }, { status: 'published', updatedAt: '2026-05-01T10:02:00.000Z', publishedAt: '2026-05-01T10:02:00.000Z' }),
           ],
         })
       }
@@ -1027,20 +1019,20 @@ describe('ContentPage', () => {
 
       if (url === '/admin/api/cms/data/rows/entry_1/publish' && init?.method === 'POST') {
         return json({
-          row: makeRow('entry_1', 'posts', { title: 'Summer sale', slug: 'summer-sale', body: 'Sale copy', featuredMedia: null, seoTitle: '', seoDescription: '' }, { status: 'published', updatedAt: '2026-05-01T10:03:00.000Z', publishedAt: '2026-05-01T10:03:00.000Z' }),
+          row: makeRow('entry_1', 'posts', { title: 'Summer sale', slug: 'summer-sale', body: 'Sale copy', featuredMedia: null, seo: {} }, { status: 'published', updatedAt: '2026-05-01T10:03:00.000Z', publishedAt: '2026-05-01T10:03:00.000Z' }),
         })
       }
 
       if (url === '/admin/api/cms/data/rows/entry_2/status' && init?.method === 'PATCH') {
         const body = JSON.parse(String(init.body))
         return json({
-          row: makeRow('entry_2', 'posts', { title: 'Published story', slug: 'published-story', body: 'Published copy', featuredMedia: null, seoTitle: '', seoDescription: '' }, { status: body.status, updatedAt: '2026-05-01T10:04:00.000Z' }),
+          row: makeRow('entry_2', 'posts', { title: 'Published story', slug: 'published-story', body: 'Published copy', featuredMedia: null, seo: {} }, { status: body.status, updatedAt: '2026-05-01T10:04:00.000Z' }),
         })
       }
 
       if (url === '/admin/api/cms/data/rows/entry_1' && init?.method === 'DELETE') {
         return json({
-          row: makeRow('entry_1', 'posts', { title: 'Winter sale', slug: 'winter-sale', body: 'Sale copy', featuredMedia: null, seoTitle: '', seoDescription: '' }, { updatedAt: '2026-05-01T10:06:00.000Z', deletedAt: '2026-05-01T10:06:00.000Z' }),
+          row: makeRow('entry_1', 'posts', { title: 'Winter sale', slug: 'winter-sale', body: 'Sale copy', featuredMedia: null, seo: {} }, { updatedAt: '2026-05-01T10:06:00.000Z', deletedAt: '2026-05-01T10:06:00.000Z' }),
         })
       }
 
@@ -1129,8 +1121,7 @@ describe('ContentPage', () => {
           slug: 'winter-sale',
           body: 'Sale copy',
           featuredMedia: null,
-          seoTitle: '',
-          seoDescription: '',
+          seo: {},
         },
       })
     )).toBe(true)
@@ -1291,8 +1282,7 @@ describe('ContentPage', () => {
         slug: 'untitled',
         body: '![hero.png](/uploads/hero.png)',
         featuredMedia: null,
-        seoTitle: '',
-        seoDescription: '',
+        seo: {},
       },
     }))
   })
@@ -1346,8 +1336,7 @@ describe('ContentPage', () => {
         slug: 'updated-slug',
         body: '',
         featuredMedia: imageAsset.id,
-        seoTitle: '',
-        seoDescription: '',
+        seo: {},
       },
     }))
     expect(calls.some((call) =>
@@ -1368,8 +1357,7 @@ describe('ContentPage', () => {
             slug: 'first-post',
             body: '',
             featuredMedia: imageAsset.id,
-            seoTitle: '',
-            seoDescription: '',
+            seo: {},
           }, {
             status: 'published',
             updatedAt: '2026-05-01T10:01:00.000Z',

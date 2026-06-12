@@ -5,6 +5,7 @@ import {
 } from '@site/layout/panelLayoutStorage'
 import { useAdminUi } from '@admin/state/adminUi'
 import { readTitleCell } from '@core/data/cells'
+import { draftSeoCell } from './hooks/useContentEntryDraft'
 import type {
   DataTable,
   DataRow,
@@ -244,8 +245,7 @@ export function ContentPage() {
               ...entry.cells,
               body: draft.body,
               featuredMedia: draft.featuredMediaId,
-              seoTitle: draft.seoTitle,
-              seoDescription: draft.seoDescription,
+              seo: draftSeoCell(entry.cells, draft.seoTitle, draft.seoDescription),
             },
           }
         : entry
@@ -290,8 +290,7 @@ export function ContentPage() {
               ...entry.cells,
               body: draft.body,
               featuredMedia: draft.featuredMediaId,
-              seoTitle: draft.seoTitle,
-              seoDescription: draft.seoDescription,
+              seo: draftSeoCell(entry.cells, draft.seoTitle, draft.seoDescription),
               title: draft.title || readTitleCell(entry.cells),
             },
           }

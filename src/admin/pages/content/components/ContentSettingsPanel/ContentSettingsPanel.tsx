@@ -9,7 +9,7 @@ import { useEditorStore } from '@site/store/store'
 import { dataTableHasField } from '@core/data/fields'
 import {
   POST_TYPE_FIELD_FEATURED_MEDIA,
-  POST_TYPE_FIELD_SEO_TITLE,
+  POST_TYPE_FIELD_SEO,
   type DataTable,
   type DataRow,
   type DataRowStatus,
@@ -105,7 +105,7 @@ export function ContentSettingsPanel({
   onEditFeaturedMedia,
 }: ContentSettingsPanelProps) {
   const setPropertiesPanel = useEditorStore((s) => s.setPropertiesPanel)
-  const seoEnabled = selectedCollection ? dataTableHasField(selectedCollection, POST_TYPE_FIELD_SEO_TITLE) : false
+  const seoEnabled = selectedCollection ? dataTableHasField(selectedCollection, POST_TYPE_FIELD_SEO) : false
   const featuredMediaEnabled = selectedCollection ? dataTableHasField(selectedCollection, POST_TYPE_FIELD_FEATURED_MEDIA) : false
   const authorRoleLabel = selectedEntry ? contentAuthorRoleLabel(selectedEntry) : null
   const selectedAuthor = selectedEntry ? contentAuthor(selectedEntry) : null

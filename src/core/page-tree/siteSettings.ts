@@ -28,6 +28,7 @@ import { Type, type Static } from '@core/utils/typeboxHelpers'
 import { compiledCheck } from '@core/utils/typeboxCompiler'
 import { FrameworkSettingsSchema } from '@core/framework-schema'
 import { SiteFontsSettingsSchema, parseSiteFontsSettings } from '@core/fonts'
+import { SiteSeoSettingsSchema, parseSiteSeoSettings } from '@core/seo'
 
 // ---------------------------------------------------------------------------
 // SiteSettingsSchema
@@ -42,6 +43,8 @@ export const SiteSettingsSchema = Type.Object({
   framework: Type.Optional(FrameworkSettingsSchema),
   /** Library of installed fonts — absent when no fonts added. */
   fonts: Type.Optional(SiteFontsSettingsSchema),
+  /** Site-wide SEO defaults — absent means none configured. */
+  seo: Type.Optional(SiteSeoSettingsSchema),
   /** Keyboard shortcut overrides — defaults to {} — handled in parseSiteSettings. */
   shortcuts: Type.Record(Type.String(), Type.String()),
 })
@@ -86,6 +89,8 @@ export function parseSiteSettings(raw: unknown): SiteSettings {
 
   const fonts = r.fonts != null ? parseSiteFontsSettings(r.fonts) : undefined
 
+  const seo = parseSiteSeoSettings(r.seo)
+
   return {
     ...(typeof r.metaTitle === 'string' ? { metaTitle: r.metaTitle } : {}),
     ...(typeof r.metaDescription === 'string' ? { metaDescription: r.metaDescription } : {}),
@@ -93,6 +98,7 @@ export function parseSiteSettings(raw: unknown): SiteSettings {
     ...(typeof r.language === 'string' ? { language: r.language } : {}),
     framework,
     fonts,
+    seo,
     shortcuts,
   }
 }

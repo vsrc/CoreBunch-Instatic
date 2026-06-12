@@ -106,12 +106,12 @@ describe('buildJsonLdEntities', () => {
 
 describe('serializeJsonLd', () => {
   test('escapes script terminators and comment openers', () => {
-    const out = serializeJsonLd({ name: 'x</script><script>alert(1)</script>', note: '<!-- hi' })
+    const out = serializeJsonLd({ name: 'x</script><script>x()</script>', note: '<!-- hi' })
     expect(out).not.toContain('</script')
     expect(out).not.toContain('<!--')
     // Round-trips back to the original values
     const parsed = JSON.parse(out) as { name: string; note: string }
-    expect(parsed.name).toBe('x</script><script>alert(1)</script>')
+    expect(parsed.name).toBe('x</script><script>x()</script>')
     expect(parsed.note).toBe('<!-- hi')
   })
 })
