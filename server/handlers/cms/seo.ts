@@ -31,6 +31,7 @@ import { getDataRow, listDataRows, saveDataRowDraft } from '../../repositories/d
 import { CMS_API_PREFIX } from './shared'
 import type { CmsHandlerOptions } from './shared'
 import { runRouteTable, type Route, type RouteParams } from './routeTable'
+import { handleSeoGenerate } from './seoGenerate'
 
 // ---------------------------------------------------------------------------
 // Body schemas
@@ -220,6 +221,7 @@ const SEO_ROUTES: readonly Route<[CmsHandlerOptions]>[] = [
     handler: handlePutTarget,
   },
   { method: 'PUT', pattern: `${CMS_API_PREFIX}/seo/site`, handler: handlePutSiteSeo },
+  { method: 'POST', pattern: `${CMS_API_PREFIX}/seo/generate`, handler: handleSeoGenerate },
 ]
 
 export async function handleSeoRoutes(
