@@ -182,6 +182,12 @@ export function SeoTargetIndex({
   )
 }
 
+/** "Entry template · posts" — names the tables the template's patterns feed. */
+function templateDescriptor(target: SeoTarget): string {
+  const tables = target.templateTableSlugs ?? []
+  return tables.length > 0 ? `Entry template · ${tables.join(', ')}` : 'Entry template'
+}
+
 function TargetRow({
   target,
   report,
@@ -207,9 +213,7 @@ function TargetRow({
         {target.route !== null ? (
           <span className={styles.rowRoute}>{target.route}</span>
         ) : (
-          <span className={styles.rowDescriptor}>
-            Entry template{target.tableSlug ? ` · ${target.tableSlug}` : ''}
-          </span>
+          <span className={styles.rowDescriptor}>{templateDescriptor(target)}</span>
         )}
       </span>
       <ScorePill report={report} />

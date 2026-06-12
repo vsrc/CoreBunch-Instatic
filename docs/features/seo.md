@@ -32,7 +32,10 @@ One engine module owns everything: **`src/core/seo/`** (barrel-gated).
 - **Site defaults**: `site.settings.seo` (replaced the legacy
   `metaTitle`/`metaDescription` settings).
 - **Templates**: an entry template page row's `seo.title`/`seo.description`
-  act as token patterns for every matching post.
+  act as token patterns for every matching post. Only entry templates
+  (postTypes targets) are SEO targets — `everywhere` layout templates have
+  no route or content of their own, so the target index excludes them (the
+  wrapped pages own the metadata).
 
 ### Resolution — two-stage title
 

@@ -62,7 +62,8 @@ interface SeoTargetPayload {
   /**
    * Templates only: the postType table slugs this entry template applies
    * to. Lets the admin preview resolve a post's template title pattern
-   * exactly like the publisher does. Empty for `everywhere` templates.
+   * exactly like the publisher does. (`everywhere` layout templates are
+   * not SEO targets at all — the pages they wrap own the metadata.)
    */
   templateTableSlugs?: string[]
   seo: ReturnType<typeof readSeoCell> | null
@@ -71,7 +72,14 @@ interface SeoTargetPayload {
   publishedAt: string | null
 }
 
-function pageRowToTarget(row: DataRow): SeoTargetPayload {
+/**
+ * Map a pages-table row to a target — or null for `everywhere` layout
+ * templates: they have no route and no content of their own, so per-target
+ * metadata is meaningless (the wrapped pages own their SEO). Only entry
+ * templates (postTypes targets) are SEO targets, as token-pattern sources
+ * for their posts.
+ */
+function pageRowToTarget(row: DataRow): SeoTargetPayload | null {
   const template = row.cells.templateEnabled === true
     ? parsePageTemplate({
         enabled: true,
@@ -82,15 +90,15 @@ function pageRowToTarget(row: DataRow): SeoTargetPayload {
   // Mirrors isTemplatePage(page): parsePageTemplate only returns a config
   // for enabled templates, so a non-null config means "template page".
   const isTemplate = template !== null
+  const entryTarget = template !== null && template.target.kind === 'postTypes' ? template.target : null
+  if (isTemplate && entryTarget === null) return null
   const slug = row.slug.replace(/^\/+/, '')
   return {
     kind: isTemplate ? 'template' : 'page',
     id: row.id,
     title: readTitleCell(row.cells) || row.slug,
     route: isTemplate ? null : slug === 'index' || slug === '' ? '/' : `/${slug}`,
-    ...(isTemplate
-      ? { templateTableSlugs: template.target.kind === 'postTypes' ? template.target.tableSlugs : [] }
-      : {}),
+    ...(entryTarget !== null ? { templateTableSlugs: entryTarget.tableSlugs } : {}),
     seo: readSeoCell(row.cells) ?? null,
     status: row.status,
     updatedAt: row.updatedAt,
@@ -137,7 +145,10 @@ async function handleGetTargets(req: Request, db: DbClient): Promise<Response> {
     publicOrigin: canonicalPublicOrigin(),
     faviconUrl: site?.settings.faviconUrl ?? null,
     siteSeo: site?.settings.seo ?? null,
-    targets: [...pageRows.map(pageRowToTarget), ...postTargets],
+    targets: [
+      ...pageRows.map(pageRowToTarget).filter((target) => target !== null),
+      ...postTargets,
+    ],
   })
 }
 

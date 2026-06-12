@@ -209,7 +209,10 @@ export function SeoPreviewEditor({ target, workspace, canManage, bridge }: SeoPr
           <div className={styles.headerText}>
             <h2 className={styles.headerTitle}>{target.title}</h2>
             <span className={styles.headerRoute}>
-              {target.route ?? (target.kind === 'template' ? `Entry template${target.tableSlug ? ` · ${target.tableSlug}` : ''}` : '')}
+              {target.route ??
+                (target.kind === 'template'
+                  ? `Entry template · ${(target.templateTableSlugs ?? []).join(', ')}`
+                  : '')}
             </span>
           </div>
           <SeoScoreChip score={report.score} />

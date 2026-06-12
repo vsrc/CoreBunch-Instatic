@@ -22,6 +22,7 @@ interface SeoTarget {
   title: string
   route: string | null
   tableSlug?: string
+  templateTableSlugs?: string[]
   seo: SeoMetadata | null
   status: string
 }
@@ -71,6 +72,23 @@ describe('GET /admin/api/cms/seo/targets', () => {
     })
     expect(createRes.status).toBe(201)
 
+    // An `everywhere` layout template must NOT appear in the index — it has
+    // no route or content of its own; the pages it wraps own the metadata.
+    const createLayoutRes = await h.cms('/admin/api/cms/data/tables/pages/rows', {
+      method: 'POST',
+      cookie: owner,
+      json: {
+        cells: {
+          title: 'Main layout',
+          slug: 'main-layout',
+          templateEnabled: true,
+          templateTarget: { kind: 'everywhere' },
+          templatePriority: 0,
+        },
+      },
+    })
+    expect(createLayoutRes.status).toBe(201)
+
     const body = await fetchTargets(owner)
     expect(body.siteName.length).toBeGreaterThan(0)
 
@@ -83,8 +101,14 @@ describe('GET /admin/api/cms/seo/targets', () => {
     expect(post).toBeDefined()
     expect(post!.route).toBe('/posts/hello-world')
 
-    const template = body.targets.find((t) => t.kind === 'template')
-    expect(template!.route).toBeNull()
+    // Every listed template is an entry template carrying its table slugs.
+    const templates = body.targets.filter((t) => t.kind === 'template')
+    expect(templates.length).toBeGreaterThan(0)
+    for (const template of templates) {
+      expect(template.route).toBeNull()
+      expect(template.templateTableSlugs!.length).toBeGreaterThan(0)
+    }
+    expect(body.targets.some((t) => t.title === 'Main layout')).toBe(false)
   })
 
   it('requires seo.read', async () => {
