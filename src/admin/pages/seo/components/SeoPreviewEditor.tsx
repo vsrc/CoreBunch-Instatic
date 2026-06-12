@@ -322,7 +322,7 @@ export function SeoPreviewEditor({ target, workspace, canManage, bridge }: SeoPr
         {field('ogDescription', 'OG description', { textarea: true, sparkle: true })}
         <SeoImageField
           label="OG image"
-          inputId={`${fieldIdBase}-ogImage`}
+          fieldId={`${fieldIdBase}-ogImage`}
           value={draft.draft.ogImage ?? ''}
           inheritedValue={resolved.ogImage ?? null}
           disabled={!canManage}

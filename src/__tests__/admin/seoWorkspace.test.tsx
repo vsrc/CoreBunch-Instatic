@@ -164,6 +164,10 @@ function mockSeoFetch(): FetchCall[] {
         },
       })
     }
+    if (url === '/admin/api/cms/media') {
+      // SeoImageField resolves picked-tile thumbnails from the asset list.
+      return json({ assets: [] })
+    }
     if (url === '/admin/api/cms/seo/site' && init?.method === 'PUT') {
       const body = JSON.parse(String(init.body)) as { seo: Record<string, unknown> }
       return json({ seo: body.seo })
@@ -327,9 +331,11 @@ describe('SEO Meta tab', () => {
     fireEvent.click(await screen.findByTestId('seo-target-page_about'))
     const editor = await screen.findByRole('region', { name: 'SEO for About' })
 
-    // "About Acme" has no social image — the improvement row points at it.
+    // "About Acme" has no social image — the improvement row points at the
+    // OG image field (a tabIndex=-1 container, since the Library mode has no
+    // single input to land on).
     fireEvent.click(within(editor).getByTestId('seo-improvement-socialImage'))
-    expect(document.activeElement).toBe(within(editor).getByLabelText('OG image URL'))
+    expect((document.activeElement as HTMLElement).id.endsWith('-ogImage')).toBe(true)
   })
 
   it('guards target switching while the editor is dirty', async () => {

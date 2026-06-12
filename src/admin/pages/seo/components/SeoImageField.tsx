@@ -1,16 +1,21 @@
 /**
- * SeoImageField — social-image picker for OG/X images.
+ * SeoImageField — social-image picker for OG/X images and site-default
+ * images.
  *
- * Primary affordance: the media library picker (same `MediaPickerModal` the
- * favicon picker uses). A URL input stays available as the secondary path
- * for externally-hosted images. Empty value falls back through the resolver
- * chain — the inherited value renders as a muted preview row.
+ * Same Library/URL pattern as the property panel's `MediaLibraryControl`:
+ * a segmented source toggle over the shared `MediaPickerField` tile
+ * (thumbnail + Change/Clear, fullscreen `MediaPickerModal`), or a plain URL
+ * input with inline preview for externally-hosted images. Empty value falls
+ * back through the resolver chain — the inherited image renders in the tile
+ * with an "Inherited" hint until overridden.
  */
-import { lazy, Suspense, useState } from 'react'
-import { Button } from '@ui/components/Button'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { Input } from '@ui/components/Input'
-import { ImagesSolidIcon } from 'pixel-art-icons/icons/images-solid'
-import type { CmsMediaAsset } from '@core/persistence'
+import { SegmentedControl } from '@ui/components/SegmentedControl'
+import { listCmsMediaAssets, type CmsMediaAsset } from '@core/persistence/cmsMedia'
+import { isValidImageUrl } from '@core/utils/urlValidation'
+import { getErrorMessage } from '@core/utils/errorMessage'
+import { MediaPickerField } from '@admin/pages/media/components/MediaPickerField'
 import styles from './SeoImageField.module.css'
 
 const MediaPickerModal = lazy(() =>
@@ -19,10 +24,17 @@ const MediaPickerModal = lazy(() =>
   ),
 )
 
+type Mode = 'library' | 'url'
+
+const SOURCE_OPTIONS = [
+  { value: 'library', label: 'Library', ariaLabel: 'Media library' },
+  { value: 'url', label: 'URL', ariaLabel: 'Custom URL' },
+] satisfies ReadonlyArray<{ value: Mode; label: string; ariaLabel: string }>
+
 interface SeoImageFieldProps {
   label: string
-  /** Id for the URL input — lets the improvements list focus this field. */
-  inputId?: string
+  /** Anchor id — the improvements list scrolls to / focuses this field. */
+  fieldId?: string
   /** Explicit value ('' when inheriting). */
   value: string
   /** Resolved fallback shown when no explicit value is set. */
@@ -31,41 +43,116 @@ interface SeoImageFieldProps {
   onChange: (next: string) => void
 }
 
-export function SeoImageField({ label, inputId, value, inheritedValue, disabled, onChange }: SeoImageFieldProps) {
-  const [pickerOpen, setPickerOpen] = useState(false)
+/** Local upload paths and absolute http(s)/data:image URLs are accepted. */
+function isValidSeoImageValue(value: string): boolean {
+  if (value === '') return true
+  if (value.startsWith('/') && !value.startsWith('//')) return true
+  return isValidImageUrl(value)
+}
 
-  function handlePick(asset: CmsMediaAsset): void {
-    onChange(asset.publicPath)
+export function SeoImageField({ label, fieldId, value, inheritedValue, disabled, onChange }: SeoImageFieldProps) {
+  const [mode, setMode] = useState<Mode>(() =>
+    value !== '' && !value.startsWith('/uploads/') ? 'url' : 'library',
+  )
+  const [pickerOpen, setPickerOpen] = useState(false)
+  // Fetched once so the picked tile can render the right thumbnail +
+  // metadata for a saved publicPath — same approach as MediaLibraryControl.
+  // The modal mounts its own workspace when opened.
+  const [assets, setAssets] = useState<CmsMediaAsset[]>([])
+  const [libraryError, setLibraryError] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    listCmsMediaAssets()
+      .then((next) => {
+        if (!cancelled) setAssets(next)
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setLibraryError(getErrorMessage(err, 'Unable to load media library'))
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // The tile resolves a thumbnail only for the EXPLICIT value; a purely
+  // inherited image renders through the fallback branch so the "Inherited"
+  // hint stays visible.
+  const asset = value !== '' ? assets.find((a) => a.publicPath === value) ?? null : null
+  const inheriting = value === '' && inheritedValue !== null
+  const urlInvalid = !isValidSeoImageValue(value)
+
+  function handlePick(picked: CmsMediaAsset): void {
+    setAssets((current) => (current.some((a) => a.id === picked.id) ? current : [picked, ...current]))
+    onChange(picked.publicPath)
     setPickerOpen(false)
   }
 
   return (
-    <div className={styles.field}>
+    /* tabIndex -1: programmatic focus target for the improvements list. */
+    <div id={fieldId} tabIndex={-1} className={styles.field}>
       <span className={styles.label}>{label}</span>
-      <div className={styles.controls}>
-        <Input
-          type="text"
-          id={inputId}
-          value={value}
-          placeholder={inheritedValue ?? 'No image — pick from the library'}
-          disabled={disabled}
-          aria-label={`${label} URL`}
-          onChange={(e) => onChange(e.target.value)}
-        />
-        <Button
-          variant="secondary"
+      <div className={styles.body}>
+        <SegmentedControl<Mode>
+          value={mode}
+          options={SOURCE_OPTIONS}
+          onChange={setMode}
           size="sm"
+          fullWidth
           disabled={disabled}
-          onClick={() => setPickerOpen(true)}
-          aria-label={`Browse media library for ${label}`}
-        >
-          <ImagesSolidIcon size={13} aria-hidden="true" />
-          <span>Browse</span>
-        </Button>
-        {value !== '' && (
-          <Button variant="ghost" size="sm" disabled={disabled} onClick={() => onChange('')} aria-label={`Clear ${label}`}>
-            Clear
-          </Button>
+          aria-label={`${label} source`}
+        />
+
+        {mode === 'library' ? (
+          <>
+            <MediaPickerField
+              asset={asset}
+              hasValue={value !== '' || inheriting}
+              fallbackLabel={
+                inheriting
+                  ? inheritedValue.split('/').pop() ?? inheritedValue
+                  : value.split('/').pop() ?? value
+              }
+              fallbackHint={inheriting ? 'Inherited — pick one to override' : 'Saved path'}
+              mediaKind="image"
+              subjectLabel={label}
+              disabled={disabled}
+              onBrowse={() => setPickerOpen(true)}
+              onClear={value !== '' ? () => onChange('') : undefined}
+            />
+            {libraryError && (
+              <p className={styles.status} role="alert">{libraryError}</p>
+            )}
+          </>
+        ) : (
+          <div className={styles.urlBody}>
+            {value !== '' && !urlInvalid && (
+              <span className={styles.urlPreview}>
+                <img
+                  src={value}
+                  alt=""
+                  loading="lazy"
+                  onError={(event) => {
+                    ;(event.target as HTMLImageElement).style.display = 'none'
+                  }}
+                />
+              </span>
+            )}
+            <Input
+              type="url"
+              value={value}
+              placeholder={inheritedValue ?? 'https://example.com/image.png'}
+              disabled={disabled}
+              invalid={urlInvalid}
+              aria-label={`${label} URL`}
+              onChange={(e) => onChange(e.target.value)}
+            />
+            {urlInvalid && (
+              <p className={styles.status} role="alert">
+                Must be an absolute http(s) URL or a local upload path.
+              </p>
+            )}
+          </div>
         )}
       </div>
       {pickerOpen && (
