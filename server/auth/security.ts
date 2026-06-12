@@ -94,6 +94,17 @@ export function expectedOrigin(req: Request): string {
   return `${proto}://${host}`
 }
 
+/**
+ * The canonical configured public origin (`publicOrigins[0]`), or null when
+ * none is configured. SEO consumers (canonical URLs, og:url, sitemap <loc>,
+ * JSON-LD) use this: published static HTML must NEVER bake a guessed host,
+ * so callers that bake artefacts omit absolute URLs when this is null, while
+ * the dynamic robots/sitemap endpoints fall back to the request origin.
+ */
+export function canonicalPublicOrigin(): string | null {
+  return publicOrigins[0] ?? null
+}
+
 /** True when the canonical configured public origin uses https. */
 export function publicOriginIsHttps(): boolean {
   const configured = publicOrigins[0]

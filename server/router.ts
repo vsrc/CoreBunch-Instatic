@@ -11,6 +11,7 @@ import { handleLoopRequest, isLoopRuntimeAssetPath, serveLoopRuntimeAsset } from
 import { handleHoleRequest, isHoleRuntimeAssetPath, serveHoleRuntimeAsset } from './handlers/cms/hole'
 import { handleModuleJsAssetRequest, isModuleJsAssetPath } from './handlers/cms/moduleJs'
 import { handlePublicFormRequest } from './forms/handler'
+import { serveRobotsTxt, serveSitemapXml } from './publish/seoEndpoints'
 import { isRuntimePackagePath, tryServeRuntimePackage } from './publish/runtime/packageServer'
 import { jsonResponse } from './http'
 import { binaryResponse, toArrayBuffer } from './binary'
@@ -76,6 +77,10 @@ const routes: readonly RouteHandler[] = [
   tryServeRuntimePackageNamespace,
   tryServeSiteCssNamespace,
   tryServeMediaRedirect,
+  // robots.txt + sitemap.xml are first-party generated files. They dispatch
+  // BEFORE static assets and public page rendering so neither path can be
+  // shadowed by an uploaded file or fall through to an HTML response.
+  tryServeSeoFiles,
   tryServeStaticAsset,
   tryServeUpload,
   tryServeAdminApp,
@@ -421,6 +426,22 @@ async function tryServeAdminApp(
  * fast-path (pre-rendered static artefacts via `readArtefact`), then
  * `resolvePublicRoute`, then the live renderer + `applyPublishedHtmlPipeline`.
  */
+/**
+ * First-party robots.txt / sitemap.xml — generated from the published
+ * snapshot with publishVersion-keyed caching (`server/publish/seoEndpoints.ts`).
+ */
+function tryServeSeoFiles(
+  req: Request,
+  runtime: ServerRuntime,
+  url: URL,
+  pathname: string,
+): Promise<Response> | null {
+  if (req.method !== 'GET' && req.method !== 'HEAD') return null
+  if (pathname === '/robots.txt') return serveRobotsTxt(runtime.db, url)
+  if (pathname === '/sitemap.xml') return serveSitemapXml(runtime.db, url)
+  return null
+}
+
 async function tryServePublicRoute(req: Request, runtime: ServerRuntime, url: URL, _pathname: string): Promise<Response | null> {
   if (req.method !== 'GET') return null
   return await renderPublicResolution(runtime.db, url, runtime.uploadsDir)

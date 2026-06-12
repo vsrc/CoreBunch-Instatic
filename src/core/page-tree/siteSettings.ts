@@ -35,8 +35,6 @@ import { SiteSeoSettingsSchema, parseSiteSeoSettings } from '@core/seo'
 // ---------------------------------------------------------------------------
 
 export const SiteSettingsSchema = Type.Object({
-  metaTitle: Type.Optional(Type.String()),
-  metaDescription: Type.Optional(Type.String()),
   faviconUrl: Type.Optional(Type.String()),
   language: Type.Optional(Type.String()),
   /** Structured framework token settings — absent means framework disabled. */
@@ -92,8 +90,6 @@ export function parseSiteSettings(raw: unknown): SiteSettings {
   const seo = parseSiteSeoSettings(r.seo)
 
   return {
-    ...(typeof r.metaTitle === 'string' ? { metaTitle: r.metaTitle } : {}),
-    ...(typeof r.metaDescription === 'string' ? { metaDescription: r.metaDescription } : {}),
     ...(typeof r.faviconUrl === 'string' ? { faviconUrl: r.faviconUrl } : {}),
     ...(typeof r.language === 'string' ? { language: r.language } : {}),
     framework,
