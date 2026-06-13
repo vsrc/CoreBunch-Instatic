@@ -125,27 +125,18 @@ describe('GET /robots.txt', () => {
     expect(body).not.toContain('<')
   })
 
-  it('emits AI-crawler blocks when groups are disabled', async () => {
-    const db = makeFakeDb(
-      { robots: { allowAiTrainingCrawlers: false, allowAiAnswerCrawlers: false } },
-      [],
-    )
+  it('serves the stored body verbatim and appends the sitemap', async () => {
+    const db = makeFakeDb({ robots: { content: 'User-agent: GPTBot\nDisallow: /' } }, [])
     const body = await (await serveRobotsTxt(db, URL_NO_ORIGIN, REQ)).text()
     expect(body).toContain('User-agent: GPTBot\nDisallow: /')
-    expect(body).toContain('User-agent: PerplexityBot\nDisallow: /')
-  })
-
-  it('disables indexing wholesale when indexingEnabled is false', async () => {
-    const db = makeFakeDb({ robots: { indexingEnabled: false } }, [])
-    const body = await (await serveRobotsTxt(db, URL_NO_ORIGIN, REQ)).text()
-    expect(body).toContain('User-agent: *\nDisallow: /')
+    expect(body).toContain('Sitemap: http://localhost:3001/sitemap.xml')
   })
 
   it('caches per publish version', async () => {
     const db = makeFakeDb(undefined, [])
     const first = await (await serveRobotsTxt(db, URL_NO_ORIGIN, REQ)).text()
     // Same version: served from cache even if settings change underneath.
-    const dbChanged = makeFakeDb({ robots: { indexingEnabled: false } }, [])
+    const dbChanged = makeFakeDb({ robots: { content: 'User-agent: *\nDisallow: /' } }, [])
     const second = await (await serveRobotsTxt(dbChanged, URL_NO_ORIGIN, REQ)).text()
     expect(second).toBe(first)
     // New publish version: regenerated.

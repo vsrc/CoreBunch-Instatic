@@ -32,13 +32,19 @@ describe('lintRobotsTxt', () => {
 })
 
 describe('matchRobots', () => {
-  const robots = generateRobotsTxt({
-    robots: {
-      rules: [{ userAgent: 'Googlebot', allow: ['/admin/public'], disallow: ['/private'] }],
-    },
-    sitemapEnabled: true,
-    origin: 'https://acme.com',
-  })
+  // The * group blocks /admin; Googlebot has its own group that allows
+  // /admin/public and disallows /private.
+  const robots = [
+    'User-agent: *',
+    'Allow: /',
+    'Disallow: /admin',
+    '',
+    'User-agent: Googlebot',
+    'Allow: /admin/public',
+    'Disallow: /private',
+    '',
+    'Sitemap: https://acme.com/sitemap.xml',
+  ].join('\n')
 
   test('default content path is allowed for everyone', () => {
     expect(matchRobots(robots, 'SomeBot', '/about').allowed).toBe(true)

@@ -356,51 +356,46 @@ describe('SEO Meta tab', () => {
 })
 
 describe('SEO Robots tab', () => {
-  it('updates the generated preview as AI-crawler toggles flip', async () => {
+  it('renders the editable robots.txt seeded with the default template', async () => {
     mockSeoFetch()
     renderWithSession(<RobotsHarness />)
 
-    // Assert on the viewer's data-code mirror, not rendered text: the lazy
-    // CM6 viewer paints only measured-visible lines (none in a test DOM),
-    // so textContent depends on whether the chunk resolved yet.
-    const preview = await screen.findByTestId('seo-robots-preview')
-    expect(preview.getAttribute('data-code')).toContain('User-agent: *')
-    expect(preview.getAttribute('data-code')).toContain('Allow: /')
-    expect(preview.getAttribute('data-code')).not.toContain('GPTBot')
-
-    fireEvent.click(screen.getByTestId('seo-robots-ai-training'))
-    expect(screen.getByTestId('seo-robots-preview').getAttribute('data-code')).toContain('User-agent: GPTBot')
+    // The container mirrors the live content in data-content (the lazy CM6
+    // editor paints only measured-visible lines in a test DOM).
+    const editor = await screen.findByTestId('seo-robots-editor')
+    expect(editor.getAttribute('data-content')).toContain('User-agent: *')
+    expect(editor.getAttribute('data-content')).toContain('Disallow: /admin')
   })
 
-  it('disallows system paths by default and lets you opt out', async () => {
+  it('a quick-insert shortcut edits the document', async () => {
     mockSeoFetch()
     renderWithSession(<RobotsHarness />)
+    await screen.findByTestId('seo-robots-editor')
 
-    const preview = await screen.findByTestId('seo-robots-preview')
-    expect(preview.getAttribute('data-code')).toContain('Disallow: /admin')
-
-    fireEvent.click(screen.getByTestId('seo-robots-system-paths'))
-    expect(screen.getByTestId('seo-robots-preview').getAttribute('data-code')).not.toContain('Disallow: /admin')
+    fireEvent.click(screen.getByTestId('seo-robots-block-ai'))
+    const content = screen.getByTestId('seo-robots-editor').getAttribute('data-content') ?? ''
+    expect(content).toContain('User-agent: GPTBot')
+    expect(content).toContain('User-agent: PerplexityBot')
   })
 
-  it('adds a custom rule and reflects it in the preview', async () => {
+  it('surfaces an AI-crawler recommendation and applies it on click', async () => {
     mockSeoFetch()
     renderWithSession(<RobotsHarness />)
-    await screen.findByTestId('seo-robots-preview')
+    await screen.findByTestId('seo-robots-editor')
 
-    fireEvent.click(screen.getByTestId('seo-robots-add-rule'))
-    fireEvent.change(screen.getByTestId('seo-robots-rule-ua-0'), { target: { value: 'Bingbot' } })
-    fireEvent.change(screen.getByLabelText('Rule 1 disallow paths'), { target: { value: '/no-bing' } })
+    // Default template leaves AI crawlers allowed → the recommendation shows.
+    const rec = await screen.findByTestId('seo-robots-rec-ai-training')
+    fireEvent.click(rec)
 
-    const code = screen.getByTestId('seo-robots-preview').getAttribute('data-code') ?? ''
-    expect(code).toContain('User-agent: Bingbot')
-    expect(code).toContain('Disallow: /no-bing')
+    expect(screen.getByTestId('seo-robots-editor').getAttribute('data-content')).toContain('User-agent: GPTBot')
+    // Applied → recommendation gone.
+    expect(screen.queryByTestId('seo-robots-rec-ai-training')).toBeNull()
   })
 
   it('URL tester reports a blocked system path and an allowed content path', async () => {
     mockSeoFetch()
     renderWithSession(<RobotsHarness />)
-    await screen.findByTestId('seo-robots-preview')
+    await screen.findByTestId('seo-robots-editor')
 
     fireEvent.change(screen.getByTestId('seo-robots-test-ua'), { target: { value: 'Googlebot' } })
     fireEvent.change(screen.getByTestId('seo-robots-test-path'), { target: { value: '/admin/users' } })

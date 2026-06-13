@@ -1,0 +1,33 @@
+/* Editable card surface, matching SeoCodeViewer. CM6's own editor/gutter
+ * backgrounds are flattened to the card so it reads as one quiet surface. */
+.editor {
+    border-radius: 16px;
+    background: var(--editor-surface-2);
+    padding: 8px 4px;
+    min-height: 360px;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+.editor :global(.cm-editor) {
+    background: transparent;
+}
+
+.editor :global(.cm-gutters) {
+    background: transparent;
+    border-right: 1px solid var(--panel-border);
+}
+
+.editor :global(.cm-activeLineGutter) {
+    background: transparent;
+}
+
+/* Pre-CM fallback: a monospace textarea so the surface is usable immediately. */
+.fallback {
+    width: 100%;
+    min-height: 340px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.6;
+    resize: vertical;
+}

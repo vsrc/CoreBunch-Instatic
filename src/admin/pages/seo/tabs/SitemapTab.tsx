@@ -114,12 +114,6 @@ export function SitemapTab({ workspace, canManage, bridge }: SitemapTabProps) {
       <div className={styles.workbench}>
         <div className={styles.settingsColumn}>
           {saveError && <p className={styles.error} role="alert">{saveError}</p>}
-          {!workspace.publicOrigin && (
-            <p className={styles.notice} role="status">
-              No public origin configured — set the <code>PUBLIC_ORIGINS</code> environment
-              variable so sitemap URLs use your real domain.
-            </p>
-          )}
 
           <div className={styles.card}>
             <header className={styles.cardHeader}>

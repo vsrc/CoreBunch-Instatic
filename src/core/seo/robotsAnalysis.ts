@@ -2,7 +2,7 @@
  * robots.txt analysis — pure helpers the admin Robots.txt tab uses to lint
  * the generated file and test a URL against it. Both operate on the SAME
  * text the endpoint serves (via `generateRobotsTxt`), so the tab's feedback
- * always reflects reality, including raw `extraDirectives`.
+ * always reflects exactly what crawlers receive.
  *
  *   - `lintRobotsTxt` flags syntax problems crawlers would ignore silently
  *     (unknown directives, rules before any `User-agent`, malformed values).

@@ -1,18 +1,17 @@
 /**
- * RobotsTab — generated robots.txt controls + live preview.
+ * RobotsTab — robots.txt as a directly-edited document.
  *
- * Two-column workbench. Left settings column:
- *   - Crawling card: indexing + AI-crawler toggles + a system-paths default.
- *   - Custom rules card: per-user-agent Allow/Disallow groups.
- *   - Advanced card: raw `extraDirectives` appended verbatim (escape hatch).
- * Right column: the byte-identical CodeMirror preview (same `generateRobotsTxt`
- * the endpoint serves), a lint panel, and a "test a URL" checker.
- *
- * Saving writes `site.settings.seo.robots`; output goes live on publish.
+ * The body IS the artifact: it lives in an editable CodeMirror surface (the
+ * main column) and saves to `site.settings.seo.robots.content`. The left
+ * rail is an assistant, not a parallel form — it explains the file, surfaces
+ * contextual recommendations + lint, and offers one-click inserts that edit
+ * the document (block AI crawlers, block system paths, reset, …). The server
+ * appends the `Sitemap:` line and enforces preview-host protection; the
+ * author never hand-manages the production origin.
  */
 import { useState } from 'react'
-import { Input, Textarea } from '@ui/components/Input'
 import { Button } from '@ui/components/Button'
+import { Input } from '@ui/components/Input'
 import { cn } from '@ui/cn'
 import { getErrorMessage } from '@core/utils/errorMessage'
 import { publishCmsDraft } from '@core/persistence'
@@ -20,16 +19,16 @@ import { hasCapability } from '@admin/access'
 import { useCurrentAdminUser } from '@admin/sessionContext'
 import { StepUpCancelledMessage, useStepUp } from '@admin/shared/StepUp'
 import {
-  generateRobotsTxt,
   lintRobotsTxt,
   matchRobots,
+  generateRobotsTxt,
   AI_TRAINING_CRAWLERS,
   AI_ANSWER_CRAWLERS,
+  SYSTEM_DISALLOW_PATHS,
+  DEFAULT_ROBOTS_TEMPLATE,
   type SeoRobotsSettings,
-  type SeoRobotsRule,
 } from '@core/seo'
-import { SeoCodeViewer } from '../components/SeoCodeViewer'
-import { SeoSwitchRow } from '../components/SeoFormRow'
+import { SeoCodeEditor } from '../components/SeoCodeEditor'
 import type { SeoWorkspace } from '../hooks/useSeoWorkspace'
 import type { SeoSaveBridge } from '../hooks/useSeoSaveBridge'
 import { useSeoSaveSurface } from '../hooks/useSeoSaveBridge'
@@ -41,112 +40,76 @@ interface RobotsTabProps {
   bridge: SeoSaveBridge
 }
 
-/**
- * Rules are edited as raw multi-line text (one path per line) so typing a
- * newline never gets stripped mid-edit; they compile to `string[]` only when
- * building the settings object.
- */
-interface RuleDraft {
-  userAgent: string
-  allowText: string
-  disallowText: string
-}
-
 type SaveState = 'idle' | 'saving' | 'saved' | 'publishing' | 'published' | 'error'
 
-function parseLines(text: string): string[] {
-  return text.split('\n').map((line) => line.trim()).filter((line) => line !== '')
+function escapeRegExp(value: string): string {
+  return value.replace(/[.+?^${}()|[\]\\*]/g, '\\$&')
 }
 
-function rulesToDrafts(rules: SeoRobotsRule[] | undefined): RuleDraft[] {
-  return (rules ?? []).map((rule) => ({
-    userAgent: rule.userAgent,
-    allowText: (rule.allow ?? []).join('\n'),
-    disallowText: (rule.disallow ?? []).join('\n'),
-  }))
+/** Append `User-agent: <bot>\nDisallow: /` blocks for bots not already present. */
+function appendBotBlocks(text: string, bots: readonly string[]): string {
+  const missing = bots.filter(
+    (bot) => !new RegExp(`^user-agent:\\s*${escapeRegExp(bot)}\\s*$`, 'im').test(text),
+  )
+  if (missing.length === 0) return text
+  const block = missing.map((bot) => `User-agent: ${bot}\nDisallow: /`).join('\n\n')
+  return text.trim() === '' ? block : `${text.trimEnd()}\n\n${block}`
 }
 
-/** Toggles draft + rule drafts → the persisted/previewed settings object. */
-function compileRobots(toggles: SeoRobotsSettings, rules: RuleDraft[]): SeoRobotsSettings {
-  const compiled: SeoRobotsRule[] = rules
-    .map((rule) => {
-      const out: SeoRobotsRule = { userAgent: rule.userAgent.trim() }
-      const allow = parseLines(rule.allowText)
-      const disallow = parseLines(rule.disallowText)
-      if (allow.length > 0) out.allow = allow
-      if (disallow.length > 0) out.disallow = disallow
-      return out
-    })
-    .filter((rule) => rule.userAgent !== '')
-
-  const next: SeoRobotsSettings = { ...toggles }
-  const extra = (toggles.extraDirectives ?? '').trim()
-  if (extra === '') delete next.extraDirectives
-  else next.extraDirectives = extra
-  if (compiled.length > 0) next.rules = compiled
-  else delete next.rules
-  return next
-}
-
-/** Canonical signature for dirty comparison — fills defaults, fixes key order. */
-function robotsSignature(settings: SeoRobotsSettings): string {
-  return JSON.stringify({
-    indexingEnabled: settings.indexingEnabled ?? true,
-    allowAiTrainingCrawlers: settings.allowAiTrainingCrawlers ?? true,
-    allowAiAnswerCrawlers: settings.allowAiAnswerCrawlers ?? true,
-    disallowSystemPaths: settings.disallowSystemPaths ?? true,
-    extraDirectives: (settings.extraDirectives ?? '').trim(),
-    rules: (settings.rules ?? []).map((rule) => ({
-      userAgent: rule.userAgent,
-      allow: rule.allow ?? [],
-      disallow: rule.disallow ?? [],
-    })),
-  })
+/** Add `Disallow:` lines into the `User-agent: *` group (creating it if absent). */
+function addStarDisallows(text: string, paths: readonly string[]): string {
+  const additions = paths.map((path) => `Disallow: ${path}`)
+  const lines = text.split('\n')
+  const missing = additions.filter(
+    (line) => !lines.some((existing) => existing.trim().toLowerCase() === line.toLowerCase()),
+  )
+  if (missing.length === 0) return text
+  const starIndex = lines.findIndex((line) => /^user-agent:\s*\*\s*$/i.test(line.trim()))
+  if (starIndex === -1) {
+    const block = ['User-agent: *', ...missing].join('\n')
+    return text.trim() === '' ? block : `${text.trimEnd()}\n\n${block}`
+  }
+  lines.splice(starIndex + 1, 0, ...missing)
+  return lines.join('\n')
 }
 
 export function RobotsTab({ workspace, canManage, bridge }: RobotsTabProps) {
   const stored = workspace.siteSeo?.robots ?? {}
-  // Toggles + extra directives live in `draft`; rule path-lists live in
-  // `rules` as raw text (see RuleDraft).
-  const [draft, setDraft] = useState<SeoRobotsSettings>(() => {
-    const { rules: _rules, ...rest } = stored
-    return rest
-  })
-  const [rules, setRules] = useState<RuleDraft[]>(() => rulesToDrafts(stored.rules))
+  const baseline = stored.content ?? DEFAULT_ROBOTS_TEMPLATE
+
+  const [content, setContent] = useState<string>(baseline)
+  // Bumped only on programmatic edits (shortcuts) to remount CM6 with the new
+  // text; plain typing flows through onChange without a remount.
+  const [editorRev, setEditorRev] = useState(0)
   const [saveState, setSaveState] = useState<SaveState>('idle')
   const [saveError, setSaveError] = useState<string | null>(null)
   const currentUser = useCurrentAdminUser()
   const { runStepUp } = useStepUp()
   const canPublish = !currentUser || hasCapability(currentUser, 'pages.publish')
 
-  const effective = compileRobots(draft, rules)
-  const indexingOff = draft.indexingEnabled === false
-  const isDirty = robotsSignature(effective) !== robotsSignature(stored)
+  const isDirty = content !== baseline
+  const lint = lintRobotsTxt(content)
 
-  const preview = generateRobotsTxt({
-    robots: effective,
-    sitemapEnabled: workspace.siteSeo?.sitemap?.enabled !== false,
-    origin: workspace.publicOrigin ?? undefined,
-  })
-  const lint = lintRobotsTxt(preview)
+  // Contextual recommendations — each is also the shortcut that resolves it.
+  const allBlocked = !matchRobots(content, 'Googlebot', '/').allowed
+  const adminExposed = matchRobots(content, 'Googlebot', '/admin').allowed
+  const trainingOpen = AI_TRAINING_CRAWLERS.some((bot) => matchRobots(content, bot, '/').allowed)
+  const answerOpen = AI_ANSWER_CRAWLERS.some((bot) => matchRobots(content, bot, '/').allowed)
 
   function touch(): void {
     if (saveState !== 'idle') setSaveState('idle')
   }
-  function setFlag(flag: keyof SeoRobotsSettings, value: boolean): void {
-    setDraft((current) => ({ ...current, [flag]: value }))
+
+  /** Plain typing from the editor — no remount. */
+  function handleEdit(next: string): void {
+    setContent(next)
     touch()
   }
-  function addRule(): void {
-    setRules((current) => [...current, { userAgent: '', allowText: '', disallowText: '' }])
-    touch()
-  }
-  function updateRule(index: number, patch: Partial<RuleDraft>): void {
-    setRules((current) => current.map((rule, i) => (i === index ? { ...rule, ...patch } : rule)))
-    touch()
-  }
-  function removeRule(index: number): void {
-    setRules((current) => current.filter((_, i) => i !== index))
+
+  /** Programmatic edit from a shortcut — remount CM6 to show the new text. */
+  function applyEdit(transform: (prev: string) => string): void {
+    setContent((prev) => transform(prev))
+    setEditorRev((rev) => rev + 1)
     touch()
   }
 
@@ -154,7 +117,8 @@ export function RobotsTab({ workspace, canManage, bridge }: RobotsTabProps) {
     setSaveState('saving')
     setSaveError(null)
     try {
-      await workspace.saveSite({ ...(workspace.siteSeo ?? {}), robots: effective })
+      const robots: SeoRobotsSettings = content.trim() === '' ? {} : { content }
+      await workspace.saveSite({ ...(workspace.siteSeo ?? {}), robots })
       setSaveState('saved')
       return true
     } catch (err) {
@@ -196,180 +160,149 @@ export function RobotsTab({ workspace, canManage, bridge }: RobotsTabProps) {
     { save: () => void handleSave(), publish: () => void handlePublish() },
   )
 
+  const recommendations: { id: string; tone: 'warning' | 'info'; text: string; action: string; onApply: () => void }[] = []
+  if (allBlocked) {
+    recommendations.push({
+      id: 'all-blocked',
+      tone: 'warning',
+      text: 'Every crawler is blocked — your site will not appear in search results.',
+      action: 'Allow crawlers',
+      onApply: () => applyEdit(() => 'User-agent: *\nAllow: /'),
+    })
+  } else {
+    if (adminExposed) {
+      recommendations.push({
+        id: 'admin',
+        tone: 'info',
+        text: 'Admin and internal routes are crawlable. Block them so they stay out of search.',
+        action: 'Block system paths',
+        onApply: () => applyEdit((prev) => addStarDisallows(prev, SYSTEM_DISALLOW_PATHS)),
+      })
+    }
+    if (trainingOpen) {
+      recommendations.push({
+        id: 'ai-training',
+        tone: 'info',
+        text: 'AI training crawlers can ingest your content for model training.',
+        action: 'Block AI training crawlers',
+        onApply: () => applyEdit((prev) => appendBotBlocks(prev, AI_TRAINING_CRAWLERS)),
+      })
+    }
+    if (answerOpen) {
+      recommendations.push({
+        id: 'ai-answer',
+        tone: 'info',
+        text: 'AI answer engines fetch your pages to ground live answers.',
+        action: 'Block AI answer crawlers',
+        onApply: () => applyEdit((prev) => appendBotBlocks(prev, AI_ANSWER_CRAWLERS)),
+      })
+    }
+  }
+
   return (
     <section className={styles.tab} aria-label="Robots.txt settings">
-      <div className={styles.workbench}>
-        <div className={styles.settingsColumn}>
-          {saveError && <p className={styles.error} role="alert">{saveError}</p>}
-          {!workspace.publicOrigin && (
-            <p className={styles.notice} role="status">
-              No public origin configured — set the <code>PUBLIC_ORIGINS</code> environment
-              variable so the sitemap link (and canonical URLs) use your real domain.
-            </p>
-          )}
-
+      <div className={styles.editorWorkbench}>
+        <aside className={styles.assistColumn} aria-label="robots.txt help">
           <div className={styles.card}>
             <header className={styles.cardHeader}>
               <h2 className={styles.heading}>Robots.txt</h2>
               <p className={styles.subheading}>
-                Generated automatically and served at <code>/robots.txt</code>. Changes go live on the next publish.
+                Edit the file directly — it is served at <code>/robots.txt</code> and goes live on
+                publish. The <code>Sitemap:</code> line is added automatically.
               </p>
             </header>
 
-            <SeoSwitchRow
-              id="seo-robots-indexing-switch"
-              label="Search indexing"
-              hint="Turning this off serves a global Disallow — the whole site disappears from search."
-              checked={!indexingOff}
-              disabled={!canManage}
-              onCheckedChange={(value) => setFlag('indexingEnabled', value)}
-              data-testid="seo-robots-indexing"
-            />
-            <SeoSwitchRow
-              id="seo-robots-system-paths-switch"
-              label="Block system paths"
-              hint="Adds default Disallow rules for /admin and internal /_instatic/ routes."
-              checked={draft.disallowSystemPaths !== false}
-              disabled={!canManage || indexingOff}
-              onCheckedChange={(value) => setFlag('disallowSystemPaths', value)}
-              data-testid="seo-robots-system-paths"
-            />
-            <SeoSwitchRow
-              id="seo-robots-ai-training-switch"
-              label="AI training crawlers"
-              hint={`Bots that ingest content for model training: ${AI_TRAINING_CRAWLERS.join(', ')}.`}
-              checked={draft.allowAiTrainingCrawlers !== false}
-              disabled={!canManage || indexingOff}
-              onCheckedChange={(value) => setFlag('allowAiTrainingCrawlers', value)}
-              data-testid="seo-robots-ai-training"
-            />
-            <SeoSwitchRow
-              id="seo-robots-ai-answer-switch"
-              label="AI answer crawlers"
-              hint={`Bots that fetch content to ground live AI answers: ${AI_ANSWER_CRAWLERS.join(', ')}. Blocking these removes the site from AI search results.`}
-              checked={draft.allowAiAnswerCrawlers !== false}
-              disabled={!canManage || indexingOff}
-              onCheckedChange={(value) => setFlag('allowAiAnswerCrawlers', value)}
-              data-testid="seo-robots-ai-answer"
-            />
-          </div>
-
-          <div className={styles.card}>
-            <header className={styles.cardHeader}>
-              <h2 className={styles.heading}>Custom rules</h2>
-              <p className={styles.subheading}>
-                Per-crawler Allow / Disallow paths — one path per line. Groups for the same
-                user-agent merge with the built-in ones above.
-              </p>
-            </header>
-
-            {rules.map((rule, index) => (
-              <div key={index} className={styles.ruleCard}>
-                <div className={styles.ruleHead}>
-                  <Input
-                    type="text"
-                    value={rule.userAgent}
-                    placeholder="User-agent — e.g. Googlebot or *"
-                    disabled={!canManage}
-                    aria-label={`Rule ${index + 1} user-agent`}
-                    onChange={(e) => updateRule(index, { userAgent: e.target.value })}
-                    data-testid={`seo-robots-rule-ua-${index}`}
-                  />
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={!canManage}
-                    onClick={() => removeRule(index)}
-                    aria-label={`Remove rule ${index + 1}`}
-                    data-testid={`seo-robots-rule-remove-${index}`}
-                  >
-                    Remove
-                  </Button>
-                </div>
-                <div className={styles.ruleGrid}>
-                  <label className={styles.ruleField}>
-                    <span className={styles.ruleLabel}>Disallow</span>
-                    <Textarea
-                      rows={2}
-                      value={rule.disallowText}
-                      placeholder={'/private\n/search'}
+            <div className={styles.assistGroup}>
+              <h3 className={styles.assistLabel}>Recommendations</h3>
+              {recommendations.length === 0 ? (
+                <p className={styles.assistOk} role="status">No recommendations — this looks healthy.</p>
+              ) : (
+                recommendations.map((rec) => (
+                  <div key={rec.id} className={cn(styles.recCard, styles[`rec_${rec.tone}`])}>
+                    <p className={styles.recText}>{rec.text}</p>
+                    <Button
+                      variant="secondary"
+                      size="xs"
                       disabled={!canManage}
-                      aria-label={`Rule ${index + 1} disallow paths`}
-                      onChange={(e) => updateRule(index, { disallowText: e.target.value })}
-                    />
-                  </label>
-                  <label className={styles.ruleField}>
-                    <span className={styles.ruleLabel}>Allow</span>
-                    <Textarea
-                      rows={2}
-                      value={rule.allowText}
-                      placeholder={'/public'}
-                      disabled={!canManage}
-                      aria-label={`Rule ${index + 1} allow paths`}
-                      onChange={(e) => updateRule(index, { allowText: e.target.value })}
-                    />
-                  </label>
-                </div>
+                      onClick={rec.onApply}
+                      data-testid={`seo-robots-rec-${rec.id}`}
+                    >
+                      {rec.action}
+                    </Button>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className={styles.assistGroup}>
+              <h3 className={styles.assistLabel}>Quick inserts</h3>
+              <div className={styles.shortcutRow}>
+                <Button variant="ghost" size="xs" disabled={!canManage}
+                  onClick={() => applyEdit(() => DEFAULT_ROBOTS_TEMPLATE)} data-testid="seo-robots-reset">
+                  Recommended defaults
+                </Button>
+                <Button variant="ghost" size="xs" disabled={!canManage}
+                  onClick={() => applyEdit((prev) => appendBotBlocks(prev, [...AI_TRAINING_CRAWLERS, ...AI_ANSWER_CRAWLERS]))}
+                  data-testid="seo-robots-block-ai">
+                  Block all AI crawlers
+                </Button>
+                <Button variant="ghost" size="xs" disabled={!canManage}
+                  onClick={() => applyEdit(() => 'User-agent: *\nDisallow: /')} data-testid="seo-robots-block-all">
+                  Block everything
+                </Button>
               </div>
-            ))}
+            </div>
 
-            <Button
-              variant="secondary"
-              size="sm"
-              disabled={!canManage}
-              onClick={addRule}
-              data-testid="seo-robots-add-rule"
-            >
-              Add rule
-            </Button>
+            {lint.length > 0 && (
+              <div className={styles.assistGroup}>
+                <h3 className={styles.assistLabel}>Issues</h3>
+                <ul className={styles.lintList} aria-label="robots.txt warnings">
+                  {lint.map((finding, i) => (
+                    <li key={i} className={cn(styles.lintItem, styles[`lint_${finding.level}`])}>
+                      <span className={styles.lintLine}>Line {finding.line}</span>
+                      {finding.message}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div className={styles.assistGroup}>
+              <h3 className={styles.assistLabel}>Test a URL</h3>
+              <RobotsUrlTester
+                robotsText={generateRobotsTxt({
+                  robots: { content },
+                  sitemapEnabled: workspace.siteSeo?.sitemap?.enabled !== false,
+                  origin: workspace.publicOrigin ?? undefined,
+                })}
+              />
+            </div>
           </div>
-
-          <div className={styles.card}>
-            <header className={styles.cardHeader}>
-              <h2 className={styles.heading}>Advanced</h2>
-              <p className={styles.subheading}>
-                Extra directives appended verbatim — for one-offs like <code>Clean-param</code> or
-                <code> Host</code>. Linted, never dropped.
-              </p>
-            </header>
-            <Textarea
-              rows={4}
-              value={draft.extraDirectives ?? ''}
-              placeholder={'Clean-param: ref /\nHost: example.com'}
-              disabled={!canManage}
-              aria-label="Extra robots.txt directives"
-              onChange={(e) => {
-                setDraft((current) => ({ ...current, extraDirectives: e.target.value }))
-                touch()
-              }}
-              data-testid="seo-robots-extra"
-            />
-          </div>
-        </div>
-
-        <aside className={styles.previewColumn} aria-label="robots.txt preview">
-          <h3 className={styles.previewHeading}>Preview</h3>
-          <SeoCodeViewer docKey="robots-preview" value={preview} language="text" data-testid="seo-robots-preview" />
-
-          {lint.length > 0 && (
-            <ul className={styles.lintList} aria-label="robots.txt warnings">
-              {lint.map((finding, i) => (
-                <li key={i} className={cn(styles.lintItem, styles[`lint_${finding.level}`])}>
-                  <span className={styles.lintLine}>Line {finding.line}</span>
-                  {finding.message}
-                </li>
-              ))}
-            </ul>
-          )}
-
-          <RobotsUrlTester robotsText={preview} />
         </aside>
+
+        <div className={styles.editorMain}>
+          {saveError && <p className={styles.error} role="alert">{saveError}</p>}
+          <SeoCodeEditor
+            docKey={`robots:${editorRev}`}
+            value={content}
+            language="text"
+            disabled={!canManage}
+            ariaLabel="robots.txt content"
+            onChange={handleEdit}
+            data-testid="seo-robots-editor"
+          />
+          {workspace.publicOrigin && (
+            <p className={styles.servedNote} role="status">
+              Served at <code>{workspace.publicOrigin}/robots.txt</code> · sitemap linked automatically.
+            </p>
+          )}
+        </div>
       </div>
     </section>
   )
 }
 
-/** Live "is this URL crawlable?" checker against the previewed file. */
+/** Live "is this URL crawlable?" checker against the served file. */
 function RobotsUrlTester({ robotsText }: { robotsText: string }) {
   const [userAgent, setUserAgent] = useState('Googlebot')
   const [path, setPath] = useState('/')
@@ -377,7 +310,6 @@ function RobotsUrlTester({ robotsText }: { robotsText: string }) {
 
   return (
     <div className={styles.tester}>
-      <h3 className={styles.previewHeading}>Test a URL</h3>
       <div className={styles.testerRow}>
         <Input
           type="text"
