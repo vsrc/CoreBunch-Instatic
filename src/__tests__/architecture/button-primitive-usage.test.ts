@@ -108,12 +108,14 @@ const ALLOWLIST = new Set([
   // §8.1 nav rows and §8.7 listbox options.
   'admin/pages/seo/components/SeoTargetIndex.tsx',
 
-  // ── §8.11 SEO improvements advice rows ──────────────────────────────────
-  // The Meta editor's improvements list renders full-width rows (status dot
-  // + wrapping two-line advice text) that focus the field they describe.
-  // Button's fixed heights and white-space: nowrap cannot host wrapping
-  // multi-line row content — same pattern class as the §8.8 index rows.
+  // ── §8.11 SEO advice rows (recommendations + improvements) ──────────────
+  // The Meta editor's improvements list and the Robots tab's recommendation
+  // list render full-width rows (status dot + wrapping two-line advice text)
+  // that apply a fix / focus a field on click. Button's fixed heights and
+  // white-space: nowrap cannot host wrapping multi-line row content — same
+  // pattern class as the §8.8 index rows.
   'admin/pages/seo/components/SeoPreviewEditor.tsx',
+  'admin/pages/seo/tabs/RobotsTab.tsx',
 
   // ── §8.7 Full-width row disclosure / listbox option custom layouts ──────
   // ColorTokenCard row toggle is a full-width structured row (title + meta,

@@ -167,37 +167,6 @@
     color: var(--editor-text-secondary);
 }
 
-.assistOk {
-    margin: 0;
-    font-size: 12px;
-    color: var(--editor-text-muted);
-}
-
-.recCard {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-    padding: 12px;
-    border-radius: var(--panel-radius);
-    background: var(--editor-surface-3);
-}
-
-.recText {
-    margin: 0;
-    font-size: 12px;
-    line-height: 1.45;
-    color: var(--editor-text);
-}
-
-.rec_warning {
-    box-shadow: inset 2px 0 0 var(--editor-warning);
-}
-
-.rec_info {
-    box-shadow: inset 2px 0 0 var(--editor-info-text);
-}
-
 .shortcutRow {
     display: flex;
     flex-wrap: wrap;
@@ -210,40 +179,76 @@
     color: var(--editor-text-muted);
 }
 
-/* ── Lint panel ──────────────────────────────────────────────────────────── */
-.lintList {
+/* ── Advice rows (recommendations + lint) — the app's grouped-row pattern:
+ *    quiet surface-3 rows divided by a 1px gap on the surface parent; the
+ *    only color is the leading state dot. ──────────────────────────────── */
+.adviceList {
     display: flex;
     flex-direction: column;
     gap: 1px;
-    margin: 0;
-    padding: 0;
-    list-style: none;
-    border-radius: var(--editor-radius);
+    border-radius: var(--panel-radius);
     overflow: hidden;
 }
 
-.lintItem {
+.adviceRow {
+    appearance: none;
+    border: 0;
+    margin: 0;
+    font: inherit;
+    width: 100%;
+    text-align: left;
     display: flex;
     align-items: baseline;
     gap: 8px;
-    padding: 8px 12px;
-    font-size: 12px;
+    padding: 9px 12px;
     background: var(--editor-surface-3);
+    color: var(--editor-text);
 }
 
-.lintLine {
+button.adviceRow {
+    cursor: pointer;
+    transition: background 120ms ease;
+}
+
+button.adviceRow:hover:not(:disabled) {
+    background: var(--editor-surface-4);
+}
+
+button.adviceRow:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+}
+
+.adviceDot {
     flex-shrink: 0;
-    font-family: var(--font-mono);
-    font-size: 10.5px;
+    width: 6px;
+    height: 6px;
+    margin-top: 5px;
+    border-radius: 50%;
+    background: var(--editor-text-muted);
+}
+
+.adviceDotOk {
+    background: var(--editor-success-green);
+}
+
+.adviceDotWarn {
+    background: var(--editor-warning);
+}
+
+.adviceDotDanger {
+    background: var(--editor-danger);
+}
+
+.adviceText {
+    font-size: 12px;
+    line-height: 1.45;
     color: var(--editor-text-muted);
 }
 
-.lint_warning {
-    color: var(--editor-warning-text);
-}
-
-.lint_error {
-    color: var(--editor-danger-text);
+.adviceText strong {
+    font-weight: 600;
+    color: var(--editor-text);
 }
 
 /* ── URL tester ──────────────────────────────────────────────────────────── */
@@ -261,16 +266,10 @@
 
 .testerResult {
     margin: 0;
-    padding: 8px 12px;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 9px 12px;
     border-radius: var(--editor-radius);
-    font-size: 12px;
     background: var(--editor-surface-3);
-}
-
-.testerAllowed {
-    color: var(--editor-success-text-soft);
-}
-
-.testerBlocked {
-    color: var(--editor-danger-text);
 }

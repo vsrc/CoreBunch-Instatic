@@ -160,40 +160,37 @@ export function RobotsTab({ workspace, canManage, bridge }: RobotsTabProps) {
     { save: () => void handleSave(), publish: () => void handlePublish() },
   )
 
-  const recommendations: { id: string; tone: 'warning' | 'info'; text: string; action: string; onApply: () => void }[] = []
+  const recommendations: { id: string; warn?: boolean; label: string; text: string; onApply: () => void }[] = []
   if (allBlocked) {
     recommendations.push({
       id: 'all-blocked',
-      tone: 'warning',
-      text: 'Every crawler is blocked — your site will not appear in search results.',
-      action: 'Allow crawlers',
+      warn: true,
+      label: 'Allow crawlers',
+      text: 'every crawler is blocked, so the site won’t appear in search.',
       onApply: () => applyEdit(() => 'User-agent: *\nAllow: /'),
     })
   } else {
     if (adminExposed) {
       recommendations.push({
         id: 'admin',
-        tone: 'info',
-        text: 'Admin and internal routes are crawlable. Block them so they stay out of search.',
-        action: 'Block system paths',
+        label: 'Block system paths',
+        text: 'admin and internal routes are crawlable.',
         onApply: () => applyEdit((prev) => addStarDisallows(prev, SYSTEM_DISALLOW_PATHS)),
       })
     }
     if (trainingOpen) {
       recommendations.push({
         id: 'ai-training',
-        tone: 'info',
-        text: 'AI training crawlers can ingest your content for model training.',
-        action: 'Block AI training crawlers',
+        label: 'Block AI training crawlers',
+        text: 'they can ingest your content for model training.',
         onApply: () => applyEdit((prev) => appendBotBlocks(prev, AI_TRAINING_CRAWLERS)),
       })
     }
     if (answerOpen) {
       recommendations.push({
         id: 'ai-answer',
-        tone: 'info',
-        text: 'AI answer engines fetch your pages to ground live answers.',
-        action: 'Block AI answer crawlers',
+        label: 'Block AI answer crawlers',
+        text: 'they fetch your pages to ground live AI answers.',
         onApply: () => applyEdit((prev) => appendBotBlocks(prev, AI_ANSWER_CRAWLERS)),
       })
     }
@@ -207,46 +204,45 @@ export function RobotsTab({ workspace, canManage, bridge }: RobotsTabProps) {
             <header className={styles.cardHeader}>
               <h2 className={styles.heading}>Robots.txt</h2>
               <p className={styles.subheading}>
-                Edit the file directly — it is served at <code>/robots.txt</code> and goes live on
-                publish. The <code>Sitemap:</code> line is added automatically.
+                Served at <code>/robots.txt</code>, live on publish. The <code>Sitemap:</code> line
+                is added automatically.
               </p>
             </header>
 
-            <div className={styles.assistGroup}>
-              <h3 className={styles.assistLabel}>Recommendations</h3>
-              {recommendations.length === 0 ? (
-                <p className={styles.assistOk} role="status">No recommendations — this looks healthy.</p>
-              ) : (
-                recommendations.map((rec) => (
-                  <div key={rec.id} className={cn(styles.recCard, styles[`rec_${rec.tone}`])}>
-                    <p className={styles.recText}>{rec.text}</p>
-                    <Button
-                      variant="secondary"
-                      size="xs"
+            {recommendations.length > 0 && (
+              <div className={styles.assistGroup}>
+                <h3 className={styles.assistLabel}>Recommendations</h3>
+                <div className={styles.adviceList}>
+                  {recommendations.map((rec) => (
+                    <button
+                      key={rec.id}
+                      type="button"
+                      className={styles.adviceRow}
                       disabled={!canManage}
                       onClick={rec.onApply}
                       data-testid={`seo-robots-rec-${rec.id}`}
                     >
-                      {rec.action}
-                    </Button>
-                  </div>
-                ))
-              )}
-            </div>
+                      <span className={cn(styles.adviceDot, rec.warn && styles.adviceDotWarn)} aria-hidden="true" />
+                      <span className={styles.adviceText}><strong>{rec.label}</strong> — {rec.text}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className={styles.assistGroup}>
-              <h3 className={styles.assistLabel}>Quick inserts</h3>
+              <h3 className={styles.assistLabel}>Insert</h3>
               <div className={styles.shortcutRow}>
-                <Button variant="ghost" size="xs" disabled={!canManage}
+                <Button variant="secondary" size="xs" disabled={!canManage}
                   onClick={() => applyEdit(() => DEFAULT_ROBOTS_TEMPLATE)} data-testid="seo-robots-reset">
-                  Recommended defaults
+                  Defaults
                 </Button>
-                <Button variant="ghost" size="xs" disabled={!canManage}
+                <Button variant="secondary" size="xs" disabled={!canManage}
                   onClick={() => applyEdit((prev) => appendBotBlocks(prev, [...AI_TRAINING_CRAWLERS, ...AI_ANSWER_CRAWLERS]))}
                   data-testid="seo-robots-block-ai">
-                  Block all AI crawlers
+                  Block AI crawlers
                 </Button>
-                <Button variant="ghost" size="xs" disabled={!canManage}
+                <Button variant="secondary" size="xs" disabled={!canManage}
                   onClick={() => applyEdit(() => 'User-agent: *\nDisallow: /')} data-testid="seo-robots-block-all">
                   Block everything
                 </Button>
@@ -256,14 +252,17 @@ export function RobotsTab({ workspace, canManage, bridge }: RobotsTabProps) {
             {lint.length > 0 && (
               <div className={styles.assistGroup}>
                 <h3 className={styles.assistLabel}>Issues</h3>
-                <ul className={styles.lintList} aria-label="robots.txt warnings">
+                <div className={styles.adviceList} aria-label="robots.txt issues">
                   {lint.map((finding, i) => (
-                    <li key={i} className={cn(styles.lintItem, styles[`lint_${finding.level}`])}>
-                      <span className={styles.lintLine}>Line {finding.line}</span>
-                      {finding.message}
-                    </li>
+                    <div key={i} className={styles.adviceRow}>
+                      <span
+                        className={cn(styles.adviceDot, finding.level === 'error' ? styles.adviceDotDanger : styles.adviceDotWarn)}
+                        aria-hidden="true"
+                      />
+                      <span className={styles.adviceText}><strong>Line {finding.line}</strong> — {finding.message}</span>
+                    </div>
                   ))}
-                </ul>
+                </div>
               </div>
             )}
 
@@ -293,7 +292,7 @@ export function RobotsTab({ workspace, canManage, bridge }: RobotsTabProps) {
           />
           {workspace.publicOrigin && (
             <p className={styles.servedNote} role="status">
-              Served at <code>{workspace.publicOrigin}/robots.txt</code> · sitemap linked automatically.
+              Served at <code>{workspace.publicOrigin}/robots.txt</code>
             </p>
           )}
         </div>
@@ -328,13 +327,15 @@ function RobotsUrlTester({ robotsText }: { robotsText: string }) {
           data-testid="seo-robots-test-path"
         />
       </div>
-      <p
-        className={cn(styles.testerResult, result.allowed ? styles.testerAllowed : styles.testerBlocked)}
-        role="status"
-        data-testid="seo-robots-test-result"
-      >
-        <strong>{result.allowed ? 'Allowed' : 'Blocked'}</strong>
-        {result.rule ? ` · matched ${result.rule}` : ' · no matching rule'}
+      <p className={styles.testerResult} role="status" data-testid="seo-robots-test-result">
+        <span
+          className={cn(styles.adviceDot, result.allowed ? styles.adviceDotOk : styles.adviceDotDanger)}
+          aria-hidden="true"
+        />
+        <span className={styles.adviceText}>
+          <strong>{result.allowed ? 'Allowed' : 'Blocked'}</strong>
+          {result.rule ? ` · matched ${result.rule}` : ' · no matching rule'}
+        </span>
       </p>
     </div>
   )
