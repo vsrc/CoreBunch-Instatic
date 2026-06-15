@@ -27,7 +27,7 @@ export interface Location {
   search: string
 }
 
-export interface NavigateOptions {
+interface NavigateOptions {
   replace?: boolean
 }
 
@@ -80,6 +80,12 @@ function compilePattern(pattern: string): CompiledPattern {
       if (segment.startsWith(':')) {
         paramNames.push(segment.slice(1))
         return '([^/]+)'
+      }
+      // `*` segment — wildcard matching anything (including further slashes).
+      // Used for catch-all routes (`path="*"`, `path="/admin/*"`) so unknown
+      // URLs can redirect instead of <Routes> rendering an empty tree.
+      if (segment === '*') {
+        return '.*'
       }
       return segment.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')
     })

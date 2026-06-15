@@ -9,7 +9,7 @@ The frontend is a single React 19 + Vite SPA mounted at `/admin`. Inside it, two
 ## TL;DR
 
 - **Entry:** `src/admin/main.tsx` mounts `<Router><AdminRoutes /></Router><AdminContextMenuGuard />` with React 19 root-level error callbacks. `flushSync` forces the initial render synchronous to cut LCP.
-- **Router:** `src/admin/lib/routing/` — in-house router replacing `react-router-dom`. 10 routes, all wrapped in a per-route `<ErrorBoundary>` and `<Suspense>`.
+- **Router:** `src/admin/lib/routing/` — in-house router replacing `react-router-dom`. 10 routes, all wrapped in a per-route `<ErrorBoundary>` and `<Suspense>`, plus a final `path="/admin/*"` catch-all redirecting unknown admin URLs to `/admin/dashboard` (login form when unauthenticated) instead of rendering an empty tree. Public-site 404s are NOT claimed — the publish pipeline's NotFound handling owns those.
 - **Cold path:** entry chunk is tiny. `AuthenticatedAdmin` is `React.lazy` and only loads post-login. Each workspace page is wrapped in `prewarmedLazy(...)`: the active page fires its import at module evaluation; the remaining pages pre-warm via `requestIdleCallback` after first paint so subsequent nav is synchronous (no Suspense flicker).
 - **Workspaces:** `dashboard`, `site` (the editor), `content`, `data`, `media`, `plugins`, `users`, `ai`, `account`, `pluginPage`. Capability-gated by `canAccessWorkspace`.
 - **Editor store** lives at `src/admin/pages/site/store/`. Zustand + Mutative (`zustand-mutative`) + `subscribeWithSelector`. 12 slices, one source of truth for the page tree. Undo/redo uses patch-based history (O(change) per step, not O(site)).
@@ -172,7 +172,7 @@ Sensitive actions (delete user, revoke another device, sign out all devices) req
 
 ### The three layouts
 
-Every admin page picks one of three root layouts from `src/admin/layouts/`. Import directly from the per-layout path (not the barrel `src/admin/layouts/index.ts`) so rolldown can split them into separate chunks.
+Every admin page picks one of three root layouts from `src/admin/layouts/`. Import directly from the per-layout path so rolldown can split them into separate chunks (there is deliberately no barrel).
 
 | Layout | Used by | Bundle contract |
 |---|---|---|
@@ -180,7 +180,7 @@ Every admin page picks one of three root layouts from `src/admin/layouts/`. Impo
 | `AdminWorkspaceCanvasLayout` | Content, Data, Media | Canvas chrome (toolbar, sidebar, full-height canvas) WITHOUT site-only modules (no PropertiesPanel, no DnD, no CodeMirror). |
 | `AdminPageLayout` | Plugins, Users, Account, plugin admin pages | Lightweight — toolbar + centered scrollable page body. **Must not import the editor store.** Site name and favicon come from `useSiteSummary` + the `adminUi` Zustand store. |
 
-`AdminCanvasLayout` keeps the real editor shell mounted while `usePersistence()` loads the draft site document. In production it renders the toolbar/chrome first and lazy-loads `AdminCanvasEditorBody` after paint. The body owns the permanent rail, sidebars, canvas, DnD context, `ConfirmDeleteProvider`, `CodeEditorPanel`, first-party module registration, and loop-source registration. Rare modal surfaces such as `ImportHtmlModal` stay behind their own open-state lazy boundary inside the body. Loading states use the same local skeleton vocabulary: the editor-body lazy fallback and the canvas no-site fallback both render `CanvasFrameSkeletonFrame`, sidebars use compact skeleton rows or blocks, and loaded breakpoint frames keep `CanvasFrameSkeleton` visible while their iframe trees progressively mount.
+`AdminCanvasLayout` keeps the real editor shell mounted while `usePersistence()` loads the draft site document. In production it renders the toolbar/chrome first and lazy-loads `AdminCanvasEditorBody` after paint. The body owns the permanent rail, sidebars, canvas, DnD context, `ConfirmDeleteProvider`, `CodeEditorPanel`, first-party module registration, and loop-source registration. Rare modal surfaces such as `ImportHtmlModal` stay behind their own open-state lazy boundary inside the body. Loading states use the same local skeleton vocabulary: the editor-body lazy fallback and the canvas no-site fallback both render `CanvasFrameSkeletonFrame`, and sidebars use compact skeleton rows or blocks. Once the document is in the store, every breakpoint frame mounts immediately — the tree is already in memory, so there is nothing to stagger.
 
 The `adminUi` store (`src/admin/state/adminUi.ts`) is the small cross-shell state store: settings-modal open flag, site-import modal open flag, site name/favicon for the toolbar brand position, and `activeLivePath` — the public path the "Open live page" toolbar button opens. The toolbar renders a compact skeleton while the site identity is loading, then renders the configured site favicon when present; otherwise it shows the site name with the same compact bold typography as the admin navigation. The site name is exposed through the shared tooltip after identity loads. It lives outside `@site/` so `AdminPageLayout` can subscribe without pulling in the 165 KB editor graph. The editor's `settingsSlice` mirrors its state into `adminUi` via a registered bridge so both are always in sync.
 
@@ -393,7 +393,7 @@ Selectors are pure reads. Mutations go through actions (`useEditorStore.getState
 
 Both modes use the same `IframeFrameSurface` and the same `NodeRenderer` — they are fully editable (click-to-select, properties panel, structural edits all work). The only difference is the layout wrapper. They also share the loading treatment: while the page is hydrating, design mode renders a `CanvasFrameSkeletonFrame` per breakpoint and live mode renders the same `CanvasFrameSkeleton` inside its single frame's width model.
 
-Design mode uses `useProgressiveCanvasFrameLoading` so large pages do not mount every breakpoint copy of the node tree in the same commit. `BreakpointFrame` always mounts the lightweight iframe shell and shared `CanvasFrameSkeleton`; the active breakpoint's `NodeRenderer` tree is revealed first, and inactive breakpoint trees are revealed one at a time after idle pauses. Direct `BreakpointFrame` usage still renders immediately unless its `renderTree` prop is explicitly disabled.
+Design mode mounts every breakpoint frame as soon as the page document is in the store. The node tree lives in memory, so there is no async load to stage and no per-frame stagger — each `BreakpointFrame` mounts its iframe shell and `NodeRenderer` tree directly. Skeleton frames (`CanvasFrameSkeletonFrame`) cover the only genuine wait: the document not being loaded yet (`page === null`).
 
 Each `IframeFrameSurface` boots with an empty `srcDoc` skeleton and portals the React node tree into the iframe's `<body>` via `createPortal`. Why iframes:
 

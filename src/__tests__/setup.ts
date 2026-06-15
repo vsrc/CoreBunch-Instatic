@@ -116,6 +116,48 @@ for (const key of GLOBALS_TO_COPY) {
 }
 
 // ---------------------------------------------------------------------------
+// Default user-preference fetches to the "never set" envelope.
+//
+// Admin surfaces load user preferences on mount (e.g. the module-inserter
+// favourites via `useModuleInserterPreference` → `getUserPreference`), which
+// fires a real `fetch` to `/admin/api/cms/me/preferences/<key>`. In tests that
+// hits `http://localhost` and rejects with ECONNREFUSED. Because the
+// preference store is a module-level singleton whose load promise can outlive
+// the component that triggered it, that rejection surfaces during a LATER
+// test's `cleanup()` as an `AggregateError` — a cross-test flake that depends
+// on render timing (it was masked while canvas frames mounted slowly, and
+// reappeared once they mount synchronously).
+//
+// Returning the server's "never set" signal (`{ value: null }`) makes every
+// such load resolve cleanly to the caller's own default, with no network call.
+// Tests that need specific preference data still override `globalThis.fetch`
+// in their own setup; `getUserPreference` callers that inject a `fetchImpl`
+// bypass this entirely.
+{
+  const realFetch = globalThis.fetch
+  const PREFERENCES_PATH = '/admin/api/cms/me/preferences/'
+  ;(globalThis as Record<string, unknown>).fetch = (async (
+    input: RequestInfo | URL,
+    init?: RequestInit,
+  ): Promise<Response> => {
+    const url =
+      typeof input === 'string'
+        ? input
+        : input instanceof URL
+          ? input.href
+          : (input as Request).url
+    const method = (init?.method ?? (input as Request).method ?? 'GET').toUpperCase()
+    if (method === 'GET' && url.includes(PREFERENCES_PATH)) {
+      return new Response(JSON.stringify({ value: null }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+    return realFetch(input, init)
+  }) as typeof globalThis.fetch
+}
+
+// ---------------------------------------------------------------------------
 // Tame DOM serialization in failure output.
 //
 // A happy-dom node is deeply circular (`ownerDocument` → every element →
@@ -237,4 +279,30 @@ if (typeof (globalThis as { EventSource?: unknown }).EventSource === 'undefined'
     close(): void {}
   }
   ;(globalThis as { EventSource?: unknown }).EventSource = StubEventSource as unknown
+}
+
+// ---------------------------------------------------------------------------
+// Global React Testing Library cleanup after every test.
+//
+// @testing-library/react auto-registers an `afterEach(cleanup)` ONLY when
+// `afterEach` is a global (the Jest/Vitest convention). Under `bun test`
+// `afterEach` is import-only, so auto-cleanup never installs: any test that
+// renders a component and doesn't manually `cleanup()` leaves it mounted, and
+// it lingers into the NEXT test file. When a later file's own `cleanup()`
+// finally unmounts that stale tree, an effect or in-flight request that
+// resolved after the originating test surfaces inside that unrelated test's
+// `act()` as an `AggregateError` — a cross-file flake whose victim depends on
+// file ordering. Registering cleanup here (from the preload, so it applies to
+// every file) restores the intended per-test isolation. `cleanup()` is a no-op
+// when nothing is mounted, so non-React tests are unaffected.
+//
+// Imported dynamically so it runs AFTER the happy-dom globals above are
+// installed — a static top-level import would be hoisted and pull in React
+// before `document` exists.
+{
+  const { afterEach } = await import('bun:test')
+  const { cleanup } = await import('@testing-library/react')
+  afterEach(() => {
+    cleanup()
+  })
 }

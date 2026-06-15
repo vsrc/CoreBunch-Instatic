@@ -6,7 +6,8 @@
 // relative paths and never through this barrel.
 
 export { publishPage } from './render'
-export type { PublishedRuntimePackageImportmap, PublishedSeo } from './render'
+export type { PublishedRuntimePackageImportmap } from './render'
+export type { PublishedSeo } from './seoHead'
 
 export { renderNode, resolveSpecialRenderer, getSpecialRendererModuleIds } from './renderNode'
 
@@ -25,18 +26,18 @@ export {
   addCspSources,
   createBaseCspPlan,
   cspMetaTag,
-  emptyCspPlan,
   parseCspContent,
   rewriteCspMeta,
   serializeCsp,
   setCspDirective,
 } from './cspPlan'
-export type { CspPlan } from './cspPlan'
+
 
 export { escapeHtml, isSafeUrl, safeUrl, sanitiseCssValue } from './utils'
 
 export {
   bagToCSS,
+  bagToReactStyle,
   createStyleRuleCssEmitter,
   generateClassCSS,
   isEmittableProperty,

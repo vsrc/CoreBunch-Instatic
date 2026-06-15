@@ -2,14 +2,21 @@ import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import React from 'react'
 import { act, cleanup, render, screen } from '@testing-library/react'
 import { CanvasRoot } from '@site/canvas/CanvasRoot'
+import { CanvasTransformLayer } from '@site/canvas/CanvasTransformLayer'
 import { CANVAS_VIEWPORT_HEIGHT } from '@site/canvas/resolveViewportUnits'
+import { DEFAULT_BREAKPOINTS } from '@core/page-tree'
 import { useEditorStore } from '@site/store/store'
 import {
   DEFAULT_MODULE_INSERTER_PREFERENCE,
 } from '@core/persistence/userPreferences'
 import { __resetModuleInserterPreferenceForTests } from '@site/module-picker/useModuleInserterPreference'
 import { makeNode, makePage, makeSite } from '../fixtures'
-import { getCanvasFrameDocument, queryCanvasNodeInFrame } from './iframeCanvasQuery'
+import {
+  getCanvasFrameDocument,
+  queryCanvasNodeInFrame,
+  waitForCanvasFrameDocument,
+  waitForCanvasNodeInFrame,
+} from './iframeCanvasQuery'
 import '@modules/base'
 
 const originalFetch = globalThis.fetch
@@ -46,7 +53,7 @@ beforeEach(() => {
       [textId]: makeNode({
         id: textId,
         moduleId: 'base.text',
-        props: { text: 'Progressive headline', tag: 'h1' },
+        props: { text: 'Frame headline', tag: 'h1' },
       }),
     },
   })
@@ -79,51 +86,64 @@ async function flushAnimationFrame() {
   })
 }
 
-async function flushIdleFallback() {
-  await act(async () => {
-    await new Promise<void>((resolve) => setTimeout(resolve, 90))
-  })
-}
+describe('canvas frame mounting', () => {
+  it('mounts every breakpoint frame once the page document is in the store — no staggering', async () => {
+    // Render the transform layer directly (this is where the staggering lived)
+    // with the page already present. The page tree is in memory, so there is no
+    // per-frame stagger: the active frame and every inactive frame mount
+    // together. (The previous progressive loader deliberately delayed inactive
+    // frames behind a requestAnimationFrame → setTimeout → requestIdleCallback
+    // chain, which could strand frames as skeletons if rAF was suspended — a
+    // background tab, or a headless CI runner.)
+    const page = useEditorStore.getState().site!.pages[0]
+    render(
+      <CanvasTransformLayer
+        page={page}
+        breakpoints={DEFAULT_BREAKPOINTS}
+        activeBreakpointId="desktop"
+        onBreakpointActivate={() => {}}
+      />,
+    )
 
-describe('progressive canvas loading', () => {
-  it('paints frame skeletons before mounting node trees, then loads the active frame first', async () => {
+    await waitForCanvasNodeInFrame('desktop', 'headline')
+    await waitForCanvasNodeInFrame('mobile', 'headline')
+    await waitForCanvasNodeInFrame('tablet', 'headline')
+
+    // No skeletons once frames are mounted (the skeleton only renders while
+    // `page === null`, exercised by the next test).
+    expect(screen.queryByTestId('canvas-frame-skeleton-mobile')).toBeNull()
+    expect(screen.queryByTestId('canvas-frame-skeleton-desktop')).toBeNull()
+  })
+
+  it('shows skeleton frames while no page document is loaded yet', () => {
+    // No active page (the document hasn't loaded) — the canvas renders skeleton
+    // frames as the genuine "still loading" affordance, with no node trees.
+    useEditorStore.setState({
+      site: null,
+      activePageId: null,
+    } as Parameters<typeof useEditorStore.setState>[0])
+
     render(<CanvasRoot />)
 
     expect(screen.getByTestId('canvas-frame-skeleton-mobile')).toBeDefined()
     expect(queryCanvasNodeInFrame('mobile', 'headline')).toBeNull()
-
-    await flushAnimationFrame()
-
-    expect(queryCanvasNodeInFrame('desktop', 'headline')).toBeTruthy()
-    expect(queryCanvasNodeInFrame('mobile', 'headline')).toBeNull()
-    expect(screen.queryByTestId('canvas-frame-skeleton-desktop')).toBeNull()
-    expect(screen.getByTestId('canvas-frame-skeleton-mobile')).toBeDefined()
-
-    await flushIdleFallback()
-
-    expect(queryCanvasNodeInFrame('mobile', 'headline')).toBeTruthy()
-    expect(screen.queryByTestId('canvas-frame-skeleton-mobile')).toBeNull()
   })
 
   it('hides root iframe overflow in design mode but leaves live mode scrollable', async () => {
     render(<CanvasRoot />)
 
-    await flushAnimationFrame()
-
-    const designDoc = getCanvasFrameDocument('desktop')
-    expect(designDoc).toBeTruthy()
-    expect(designDoc!.documentElement.style.height).toBe('auto')
-    expect(designDoc!.body.style.height).toBe('auto')
-    expect(designDoc!.body.style.minHeight).toBe(`${CANVAS_VIEWPORT_HEIGHT}px`)
-    expect(designDoc!.documentElement.style.overflow).toBe('hidden')
-    expect(designDoc!.body.style.overflow).toBe('hidden')
+    const designDoc = await waitForCanvasFrameDocument('desktop')
+    expect(designDoc.documentElement.style.height).toBe('auto')
+    expect(designDoc.body.style.height).toBe('auto')
+    expect(designDoc.body.style.minHeight).toBe(`${CANVAS_VIEWPORT_HEIGHT}px`)
+    expect(designDoc.documentElement.style.overflow).toBe('hidden')
+    expect(designDoc.body.style.overflow).toBe('hidden')
 
     cleanup()
     useEditorStore.setState({ canvasView: 'live' } as Parameters<typeof useEditorStore.setState>[0])
     render(<CanvasRoot />)
 
     await flushAnimationFrame()
-
     const liveDoc = getCanvasFrameDocument('desktop')
     expect(liveDoc).toBeTruthy()
     expect(liveDoc!.body.style.minHeight).toBe('')

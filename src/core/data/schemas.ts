@@ -334,7 +334,7 @@ export type DataTableListItem = Static<typeof DataTableListItemSchema>
 // DataRowCells
 // ---------------------------------------------------------------------------
 
-export const DataRowCellsSchema = Type.Record(Type.String(), Type.Unknown())
+const DataRowCellsSchema = Type.Record(Type.String(), Type.Unknown())
 
 export type DataRowCells = Static<typeof DataRowCellsSchema>
 
@@ -415,7 +415,7 @@ export type DeletedRowSummary = Static<typeof DeletedRowSummarySchema>
 // DataRowVersion — one row in data_row_versions.
 // ---------------------------------------------------------------------------
 
-export const DataRowVersionSchema = Type.Object({
+const DataRowVersionSchema = Type.Object({
   id: Type.String(),
   rowId: Type.String(),
   versionNumber: Type.Number(),
@@ -437,7 +437,7 @@ export type DataRowVersion = Static<typeof DataRowVersionSchema>
 // a media cell value (see `resolvePublishedRowMediaPath`).
 // ---------------------------------------------------------------------------
 
-export const PublishedDataRowSchema = Type.Object({
+const PublishedDataRowSchema = Type.Object({
   id: Type.String(),
   rowId: Type.String(),
   tableId: Type.String(),
@@ -469,7 +469,7 @@ export type PublishedDataRow = Static<typeof PublishedDataRowSchema>
 // DataRowRedirect — resolved redirect from an old public path.
 // ---------------------------------------------------------------------------
 
-export const DataRowRedirectSchema = Type.Object({
+const DataRowRedirectSchema = Type.Object({
   id: Type.String(),
   fromPath: Type.String(),
   targetPath: Type.String(),
