@@ -84,6 +84,7 @@ import { CANVAS_VIEWPORT_HEIGHT, type CanvasViewport } from './resolveViewportUn
 import { useIframeFrameAutoHeight } from './useIframeFrameAutoHeight'
 import { applyIframeBodyReset, type IframeInteraction } from './iframeBodyReset'
 import { useEditorStore } from '@site/store/store'
+import { installAdminZoomGuard } from '@admin/shared/AdminZoomGuard'
 import { closestReadonlyRegion, isElementLike } from './readonlyRegion'
 import styles from './IframeFrameSurface.module.css'
 
@@ -317,6 +318,21 @@ export const IframeFrameSurface = forwardRef<IframeFrameSurfaceHandle, IframeFra
         iframeDoc.removeEventListener('dblclick', handleDblClick, true)
       }
     }, [iframeDoc, onReadonlyOpen])
+
+    // ── Block native browser zoom inside the frame ──────────────────────
+    // `AdminZoomGuard` (mounted once in `main.tsx`) prevents pinch / ctrl-wheel
+    // browser zoom — but only on the PARENT admin document. Wheel and Safari
+    // `gesture*` events fire in the iframe's OWN document and never cross the
+    // boundary to the parent, so without an in-frame guard a pinch anywhere
+    // over a breakpoint frame (e.g. while hovering its toolbar buttons) zooms
+    // the entire admin page. Install the same guard inside every frame
+    // document. This covers design AND live frames; the wheel forwarder below
+    // (design only) still routes pan/zoom to the canvas — the guard only
+    // cancels the browser's native zoom default.
+    useEffect(() => {
+      if (!iframeDoc) return
+      return installAdminZoomGuard(iframeDoc)
+    }, [iframeDoc])
 
     // ── Forward wheel events to the canvas gesture layer ─────────────────
     // Without this, scrolling the wheel while the cursor is over an iframe
