@@ -204,14 +204,6 @@ export function TableSettings({
 
   return (
     <>
-      {isSystem && (
-        <div className={styles.statusBanner}>
-          <p className={styles.savingText}>
-            System table — built-in fields and identity are locked. You can add custom fields and set the primary field.
-          </p>
-        </div>
-      )}
-
       {/* ── Save status banner (above all sections) ── */}
       {saveError && (
         <div className={styles.statusBanner}>

@@ -105,6 +105,41 @@ export function DataSidebar({
     setContextMenu({ x, y, tableId: table.id })
   }
 
+  // Built-in system tables (posts/pages/components/layouts) are grouped apart
+  // from user-created custom tables. `listDataTablesWithCounts` already sorts
+  // system tables first, so partitioning preserves order within each group.
+  const systemTables = tables.filter((table) => table.system)
+  const customTables = tables.filter((table) => !table.system)
+
+  function renderTableButton(table: DataTableListItem) {
+    const selected = table.id === selectedTableId
+    return (
+      <Button
+        key={table.id}
+        variant="ghost"
+        size="sm"
+        fullWidth
+        align="start"
+        pressed={selected}
+        role="option"
+        aria-selected={selected}
+        data-data-table-id={table.id}
+        onClick={() => onSelectTable(table.id)}
+        onContextMenuCapture={(event) => openTableContextMenu(table, event)}
+        className={styles.tableButton}
+      >
+        <DatabaseSolidIcon size={13} aria-hidden="true" />
+        <span className={styles.tableLabel}>{table.pluralLabel}</span>
+        <span className={styles.kindBadge}>
+          {table.kind === 'postType' ? 'post-type'
+            : table.kind === 'page' ? 'page'
+            : table.kind === 'component' ? 'component'
+            : 'data'}
+        </span>
+      </Button>
+    )
+  }
+
   function openTableContextMenu(table: DataTableListItem, event: MouseEvent<HTMLButtonElement>): void {
     event.preventDefault()
     event.stopPropagation()
@@ -226,34 +261,18 @@ export function DataSidebar({
                 <p className={styles.emptyText}>No tables yet.</p>
               )}
 
-              {tables.map((table) => {
-                const selected = table.id === selectedTableId
-                return (
-                  <Button
-                    key={table.id}
-                    variant="ghost"
-                    size="sm"
-                    fullWidth
-                    align="start"
-                    pressed={selected}
-                    role="option"
-                    aria-selected={selected}
-                    data-data-table-id={table.id}
-                    onClick={() => onSelectTable(table.id)}
-                    onContextMenuCapture={(event) => openTableContextMenu(table, event)}
-                    className={styles.tableButton}
-                  >
-                    <DatabaseSolidIcon size={13} aria-hidden="true" />
-                    <span className={styles.tableLabel}>{table.pluralLabel}</span>
-                    <span className={styles.kindBadge}>
-                      {table.kind === 'postType' ? 'post-type'
-                        : table.kind === 'page' ? 'page'
-                        : table.kind === 'component' ? 'component'
-                        : 'data'}
-                    </span>
-                  </Button>
-                )
-              })}
+              {/* System tables first (built-in), then the user's custom tables.
+                  Group labels render only when both groups are present, so a
+                  custom-only persona (no system read) sees a plain list. */}
+              {!loading && !error && systemTables.length > 0 && customTables.length > 0 && (
+                <p className={styles.groupLabel} aria-hidden="true">System</p>
+              )}
+              {systemTables.map(renderTableButton)}
+
+              {!loading && !error && customTables.length > 0 && systemTables.length > 0 && (
+                <p className={styles.groupLabel} aria-hidden="true">Your tables</p>
+              )}
+              {customTables.map(renderTableButton)}
             </div>
 
             {/* Action footer — create table + export/import */}

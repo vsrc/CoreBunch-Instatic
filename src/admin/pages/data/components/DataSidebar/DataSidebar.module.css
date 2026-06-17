@@ -86,6 +86,20 @@
     color: var(--editor-text-muted);
 }
 
+.groupLabel {
+    margin: 0;
+    padding: 8px 6px 4px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--editor-text-muted);
+}
+
+.groupLabel:not(:first-child) {
+    margin-top: 6px;
+}
+
 .footer {
     padding: 6px 8px 8px;
     flex-shrink: 0;
