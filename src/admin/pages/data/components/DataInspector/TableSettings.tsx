@@ -196,8 +196,22 @@ export function TableSettings({
     label: f.label,
   }))
 
+  // System tables (posts/pages/components/layouts) have a frozen identity and
+  // built-in fields. The General / Routing / Kind / Danger sections are hidden
+  // — only Display (primary field) and Fields (where custom fields can be
+  // added) remain. The server enforces the same frozen-vs-mutable split.
+  const isSystem = table.system
+
   return (
     <>
+      {isSystem && (
+        <div className={styles.statusBanner}>
+          <p className={styles.savingText}>
+            System table — built-in fields and identity are locked. You can add custom fields and set the primary field.
+          </p>
+        </div>
+      )}
+
       {/* ── Save status banner (above all sections) ── */}
       {saveError && (
         <div className={styles.statusBanner}>
@@ -210,7 +224,8 @@ export function TableSettings({
         </div>
       )}
 
-      {/* ── General ── */}
+      {/* ── General (hidden for system tables — identity is frozen) ── */}
+      {!isSystem && (
       <Section title="General" icon={Settings2SolidIcon} defaultOpen>
         <div className={sectionStyles.sectionBody}>
           <ControlRow propKey="name" label="Name">
@@ -267,13 +282,16 @@ export function TableSettings({
           </ControlRow>
         </div>
       </Section>
+      )}
 
       {/* ── Routing ──
         Available for both `postType` and `data` kinds. Tables with a
         non-empty `routeBase` serve each published row at
         `/<routeBase>/<slug>` (rendered via the template system, or via the
         fallback data-row document when no template is configured). `data`
-        kinds default to an empty `routeBase` (not routable). */}
+        kinds default to an empty `routeBase` (not routable).
+        Hidden for system tables — their route base is fixed. */}
+      {!isSystem && (
       <Section title="Routing" icon={LinkIcon}>
         <div className={sectionStyles.sectionBody}>
           <ControlRow
@@ -295,6 +313,7 @@ export function TableSettings({
           </ControlRow>
         </div>
       </Section>
+      )}
 
       {/* ── Display ── */}
       <Section title="Display" icon={EyeSolidIcon} defaultOpen>
@@ -327,13 +346,15 @@ export function TableSettings({
         />
       </Section>
 
-      {/* ── Kind (read-only) ── */}
+      {/* ── Kind (read-only; hidden for system tables) ── */}
+      {!isSystem && (
       <Section title="Kind" icon={BoxSolidIcon}>
         <div className={styles.kindRow}>
           <span className={styles.kindBadge}>{KIND_LABELS[table.kind]}</span>
           <span className={styles.kindCaption}>Table kind cannot be changed after creation.</span>
         </div>
       </Section>
+      )}
 
       {/* ── Danger zone ── */}
       {canDelete && (
