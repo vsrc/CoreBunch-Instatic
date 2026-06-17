@@ -6,6 +6,27 @@ This project is pre-1.0. Breaking changes may appear in minor or patch releases 
 
 ## Unreleased
 
+## 0.0.5 - 2026-06-17
+
+### AI & agent tooling
+
+- Added document-targeted site agent tools for pages, templates, and Visual Components: `list_documents`, `read_document`, and `open_document` replace the page-only read surface.
+- Loop authoring now routes through the HTML import path and gives agents valid loop-source field tokens before they bind dynamic content.
+
+### Content, data, and export
+
+- Split system-table and custom-table capabilities, and locked system table identity while still allowing safe custom field edits.
+- Routed collection create, update, and delete through step-up authentication.
+- Added a granular full-site export dialog with Cmd+K access and server-accurate export size estimates, including media.
+- Fixed Content Outlet rendering so current-entry bodies render in any content outlet.
+
+### Editor and canvas
+
+- Made the Settings modal and toolbar trailer global instead of editor-panel scoped.
+- Made saved layouts the single source of truth.
+- Rendered `base.text` with `tag: none` as bare text on canvas to match the published DOM.
+- Rewrote the GitHub README with deeper product and self-hosting detail.
+
 ## 0.0.4 - 2026-06-13
 
 ### Editor & canvas
