@@ -105,6 +105,18 @@ function makePostRequest(path: string, cookie: string, body: unknown): Request {
   return req
 }
 
+function makeFormPostRequest(path: string, cookie: string, body: unknown): Request {
+  const form = new URLSearchParams()
+  form.set('exportRequest', JSON.stringify(body))
+  const req = new Request(`http://localhost${path}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: form,
+  })
+  req.headers.set('cookie', cookie)
+  return req
+}
+
 // ---------------------------------------------------------------------------
 // Shared state set up in beforeAll
 // ---------------------------------------------------------------------------
@@ -282,6 +294,28 @@ describe('handleExportRoute — POST { tables: [{ tableId: "posts", rowIds: [id1
     expect(tableIds).toContain('posts')
     expect(tableIds).not.toContain('pages')
     expect(tableIds).not.toContain(CUSTOM_TABLE_ID)
+  })
+
+  test('accepts form-encoded exportRequest for browser-native downloads', async () => {
+    const req = makeFormPostRequest('/admin/api/cms/export', cookie, {
+      tables: [{ tableId: 'posts', rowIds: [post1Id] }],
+      includeMedia: true,
+      includeSite: false,
+      includeMediaFolders: false,
+      includeRedirects: false,
+    })
+    const res = await handleExportRoute(req, db, { uploadsDir: '/tmp/test-uploads-export' })
+    expect(res!.status).toBe(200)
+    expect(res!.headers.get('content-disposition')).toContain('attachment')
+
+    const body = JSON.parse(await res!.text())
+    const bundle = parseValue(SiteBundleSchema, body)
+
+    expect(bundle.site).toBeUndefined()
+    expect(bundle.rows.map((r) => r.id)).toEqual([post1Id])
+    expect(bundle.media).toEqual([])
+    expect(bundle.mediaFolders).toBeUndefined()
+    expect(bundle.redirects).toBeUndefined()
   })
 })
 

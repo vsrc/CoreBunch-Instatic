@@ -17,7 +17,7 @@
  * real selection and adds each asset's Base64 length analytically), so the
  * "Estimated size" line in the dialog can never drift from the real download.
  *
- * Filter options (GET → query string, POST → JSON body via ExportRequestSchema):
+ * Filter options (GET → query string, POST → JSON body or form field via ExportRequestSchema):
  *   tables       — comma-separated table ids (GET) or string[] (POST); default all
  *   rowIds       — comma-separated row ids (GET) or string[] (POST); default all
  *   includeMedia — `1`/`0` (GET) or boolean (POST); default false
@@ -138,7 +138,9 @@ export async function handleExportRoute(
   let includeRedirects: boolean
 
   if (req.method === 'POST') {
-    const exportReq = await readValidatedBody(req, ExportRequestSchema)
+    const exportReq = await readValidatedBody(req, ExportRequestSchema, {
+      formJsonField: 'exportRequest',
+    })
     if (!exportReq) {
       return jsonResponse({ error: 'Invalid export request body' }, { status: 400 })
     }

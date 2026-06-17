@@ -7,8 +7,8 @@
  *   2.  Toggling the active category's switch flips its aria-checked
  *   3.  Selecting the Media category shows its switch (on by default = full export)
  *   4.  "Select none" disables Download and updates the footer summary
- *   5.  Download success — fetch body carries every include* flag (full export)
- *   6.  Download error — inline alert shown, error toast pushed, onClose NOT called
+ *   5.  Download starts — form body carries every include* flag (full export)
+ *   6.  Download start error — inline alert shown, error toast pushed, onClose NOT called
  *   7.  Cancel calls onClose
  *   8.  Estimate is fetched and shrinks when media is toggled OFF
  *   9.  Row scope — initialScope='selected' shows the Selected segment, pressed
@@ -90,14 +90,17 @@ const originalFetch = globalThis.fetch
 let savedCreateObjectURL: typeof URL.createObjectURL
 let savedRevokeObjectURL: typeof URL.revokeObjectURL
 let savedAnchorClick: typeof HTMLAnchorElement.prototype.click
+let savedFormSubmit: typeof HTMLFormElement.prototype.submit
 
 beforeEach(() => {
   savedCreateObjectURL = URL.createObjectURL
   savedRevokeObjectURL = URL.revokeObjectURL
   savedAnchorClick = HTMLAnchorElement.prototype.click
+  savedFormSubmit = HTMLFormElement.prototype.submit
   URL.createObjectURL = (_obj: Blob | MediaSource) => 'blob:mock-url'
   URL.revokeObjectURL = (_url: string) => {}
   HTMLAnchorElement.prototype.click = function (this: HTMLAnchorElement) {}
+  HTMLFormElement.prototype.submit = function (this: HTMLFormElement) {}
   globalThis.fetch = defaultFetch()
 })
 
@@ -106,6 +109,7 @@ afterEach(() => {
   URL.createObjectURL = savedCreateObjectURL
   URL.revokeObjectURL = savedRevokeObjectURL
   HTMLAnchorElement.prototype.click = savedAnchorClick
+  HTMLFormElement.prototype.submit = savedFormSubmit
   cleanup()
 })
 
@@ -156,19 +160,23 @@ describe('ExportDialog', () => {
     expect(screen.getByText(/0 of \d+ categories selected/i)).toBeTruthy()
   })
 
-  it('download success — fetch body carries every include flag (full export)', async () => {
+  it('download starts — form body carries every include flag (full export)', async () => {
     let onCloseCalled = false
-    let fetchBodyStr: string | null = null
+    let submittedForm: HTMLFormElement | null = null
+    let exportFetchCalled = false
 
-    globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    globalThis.fetch = async (input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : input.toString()
       if (url.startsWith('/admin/api/cms/export/summary')) return jsonResponse({ media: 2, mediaFolders: 1, redirects: 1 })
       if (url === '/admin/api/cms/export/estimate') return jsonResponse({ bytes: 1000 })
       if (url === '/admin/api/cms/export') {
-        fetchBodyStr = (init?.body as string) ?? null
-        return jsonResponse('{}')
+        exportFetchCalled = true
+        return jsonResponse({ error: 'Export downloads must not go through fetch' }, 500)
       }
       return jsonResponse({ error: `Unexpected request: ${url}` }, 500)
+    }
+    HTMLFormElement.prototype.submit = function (this: HTMLFormElement) {
+      submittedForm = Array.from(document.forms).find((form) => form.target === this.target) ?? null
     }
 
     let capturedToasts: Toast[] = []
@@ -187,8 +195,16 @@ describe('ExportDialog', () => {
 
       await waitFor(() => { expect(onCloseCalled).toBe(true) })
 
-      expect(fetchBodyStr).not.toBeNull()
-      const body = JSON.parse(fetchBodyStr!) as {
+      expect(exportFetchCalled).toBe(false)
+      expect(submittedForm).not.toBeNull()
+      expect(submittedForm!.method.toLowerCase()).toBe('post')
+      expect(submittedForm!.action.endsWith('/admin/api/cms/export')).toBe(true)
+      expect(submittedForm!.target).toBeTruthy()
+      expect(document.querySelector(`iframe[name="${submittedForm!.target}"]`)).toBeTruthy()
+
+      const input = submittedForm!.querySelector('input[name="exportRequest"]') as HTMLInputElement | null
+      expect(input).not.toBeNull()
+      const body = JSON.parse(input!.value) as {
         tables: { tableId: string; rowIds?: string[] }[]
         includeMedia: boolean
         includeSite: boolean
@@ -205,21 +221,23 @@ describe('ExportDialog', () => {
       expect(body.includeMediaFolders).toBe(true)
       expect(body.includeRedirects).toBe(true)
 
-      expect(capturedToasts.some((t) => t.kind === 'success' && t.title === 'Export complete')).toBe(true)
+      expect(capturedToasts.some((t) => t.kind === 'success' && t.title === 'Export started')).toBe(true)
     } finally {
       unsub()
     }
   })
 
-  it('download error — inline alert shown, error toast pushed, onClose NOT called', async () => {
+  it('download start error — inline alert shown, error toast pushed, onClose NOT called', async () => {
     let onCloseCalled = false
 
     globalThis.fetch = async (input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : input.toString()
       if (url.startsWith('/admin/api/cms/export/summary')) return jsonResponse({ media: 0, mediaFolders: 0, redirects: 0 })
       if (url === '/admin/api/cms/export/estimate') return jsonResponse({ bytes: 1000 })
-      if (url === '/admin/api/cms/export') return jsonResponse({ error: 'boom' }, 500)
       return jsonResponse({ error: `Unexpected: ${url}` }, 500)
+    }
+    HTMLFormElement.prototype.submit = function () {
+      throw new Error('Browser refused to start the download')
     }
 
     let capturedToasts: Toast[] = []
@@ -285,7 +303,7 @@ describe('ExportDialog', () => {
   })
 
   it('content table detail lists rows as a checklist; toggling updates the count + request', async () => {
-    let lastExportBody: string | null = null
+    let submittedForm: HTMLFormElement | null = null
     globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input.toString()
       if (url.startsWith('/admin/api/cms/export/summary')) return jsonResponse({ media: 0, mediaFolders: 0, redirects: 0 })
@@ -298,8 +316,11 @@ describe('ExportDialog', () => {
           ],
         })
       }
-      if (url === '/admin/api/cms/export') { lastExportBody = (init?.body as string) ?? null; return jsonResponse('{}') }
+      if (url === '/admin/api/cms/export') return jsonResponse({ error: 'Export downloads must not go through fetch' }, 500)
       return jsonResponse({ error: `Unexpected request: ${url}` }, 500)
+    }
+    HTMLFormElement.prototype.submit = function (this: HTMLFormElement) {
+      submittedForm = Array.from(document.forms).find((form) => form.target === this.target) ?? null
     }
 
     render(<ExportDialog open={true} onClose={() => {}} tables={[POSTS_TABLE]} />)
@@ -315,8 +336,10 @@ describe('ExportDialog', () => {
     await waitFor(() => { expect(screen.getByText(/1 of 2 entries selected/i)).toBeTruthy() })
 
     fireEvent.click(screen.getByRole('button', { name: /download bundle/i }))
-    await waitFor(() => { expect(lastExportBody).not.toBeNull() })
-    const body = JSON.parse(lastExportBody!) as { tables: { tableId: string; rowIds?: string[] }[] }
+    await waitFor(() => { expect(submittedForm).not.toBeNull() })
+    const input = submittedForm!.querySelector('input[name="exportRequest"]') as HTMLInputElement | null
+    expect(input).not.toBeNull()
+    const body = JSON.parse(input!.value) as { tables: { tableId: string; rowIds?: string[] }[] }
     const posts = body.tables.find((t) => t.tableId === 'posts')
     expect(posts?.rowIds).toEqual(['p2'])
   })
