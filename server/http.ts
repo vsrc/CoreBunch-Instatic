@@ -3,6 +3,12 @@ import { safeParseValue } from '@core/utils/typeboxHelpers'
 
 interface ReadValidatedBodyOptions {
   maxBytes?: number
+  /**
+   * Allows a standard browser form POST to carry a JSON payload in one field.
+   * Used for native attachment downloads where `fetch().blob()` would force the
+   * browser to materialize the whole response in JS memory/blob storage.
+   */
+  formJsonField?: string
 }
 
 export class RequestBodyTooLargeError extends Error {
@@ -45,15 +51,36 @@ export async function readValidatedBody<T extends TSchema>(
 ): Promise<Static<T> | null> {
   let raw: unknown
   try {
-    raw = options.maxBytes === undefined
-      ? await req.json()
-      : await readJsonWithLimit(req, options.maxBytes)
+    const formJsonField = options.formJsonField
+    if (shouldReadFormJsonField(req, formJsonField) && formJsonField) {
+      raw = await readFormJsonField(req, formJsonField)
+    } else if (options.maxBytes === undefined) {
+      raw = await req.json()
+    } else {
+      raw = await readJsonWithLimit(req, options.maxBytes)
+    }
   } catch (err) {
     if (err instanceof RequestBodyTooLargeError) throw err
     return null
   }
   const parsed = safeParseValue(schema, raw)
   return parsed.ok ? (parsed.value as Static<T>) : null
+}
+
+function shouldReadFormJsonField(req: Request, fieldName: string | undefined): boolean {
+  if (!fieldName) return false
+  const contentType = req.headers.get('content-type')?.toLowerCase() ?? ''
+  return (
+    contentType.startsWith('application/x-www-form-urlencoded') ||
+    contentType.startsWith('multipart/form-data')
+  )
+}
+
+async function readFormJsonField(req: Request, fieldName: string): Promise<unknown> {
+  const form = await req.formData()
+  const value = form.get(fieldName)
+  if (typeof value !== 'string') return null
+  return JSON.parse(value)
 }
 
 async function readJsonWithLimit(req: Request, maxBytes: number): Promise<unknown> {

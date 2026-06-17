@@ -25,7 +25,7 @@ import { Dialog } from '@ui/components/Dialog'
 import { Switch } from '@ui/components/Switch'
 import { pushToast } from '@ui/components/Toast'
 import { assignRailAccents, railTintVar } from '@ui/railAccent'
-import { exportSiteBundle, getExportSummary } from '@core/persistence/cmsTransfer'
+import { getExportSummary, submitSiteBundleExport } from '@core/persistence/cmsTransfer'
 import { listCmsDataRows } from '@core/persistence/cmsData'
 import { isAbortError } from '@core/http'
 import { getErrorMessage } from '@core/utils/errorMessage'
@@ -101,22 +101,6 @@ function rowTitle(row: DataRow, table: DataTableListItem): string {
   return row.slug || '(untitled)'
 }
 
-function makeTimestampedFilename(): string {
-  const ts = new Date().toISOString().slice(0, 19).replace(/[:.]/g, '-')
-  return `site-bundle-${ts}.json`
-}
-
-function triggerDownload(blob: Blob, filename: string): void {
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  URL.revokeObjectURL(url)
-}
-
 /** Build the initial per-table pick map. */
 function initialPicks(
   tables: DataTableListItem[],
@@ -150,11 +134,14 @@ async function runExport(
 ): Promise<void> {
   setExporting(true)
   setError(null)
-  const filename = makeTimestampedFilename()
   try {
-    const blob = await exportSiteBundle(request)
-    triggerDownload(blob, filename)
-    pushToast({ kind: 'success', title: 'Export complete', body: filename, location: 'data-workspace' })
+    submitSiteBundleExport(request)
+    pushToast({
+      kind: 'success',
+      title: 'Export started',
+      body: 'Your browser will save the bundle when it is ready.',
+      location: 'data-workspace',
+    })
     onClose()
   } catch (err) {
     console.error('[ExportDialog] Export failed:', err)

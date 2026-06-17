@@ -18,6 +18,7 @@ The **Export site** dialog (`src/admin/pages/data/components/ExportDialog`) is a
   - `POST /admin/api/cms/import/preview` — analyze a bundle without applying (diff summary)
   - `POST /admin/api/cms/import[?strategy=...]` — apply the bundle
 - Export categories: **theme & settings** (the shell), each **content table**, the **media library**, **media folders**, and **redirects** — all on by default.
+- The admin dialog starts downloads with a same-origin form POST, not `fetch().blob()`, so large media-heavy bundles are streamed by the browser's download stack instead of being materialized in JavaScript blob storage.
 - UI entry (export): **Export site** in the Data workspace opens `src/admin/pages/data/components/ExportDialog`.
 - UI entry (import): drop the exported `.json` into the canonical Site Import modal (`src/admin/modals/SiteImport`). Spotlight and workspace **Import site** actions open this same global shell modal.
 - Three import strategies: `replace` (destructive — the full-restore path), `merge-add` (insert if new), `merge-overwrite` (upsert).
@@ -109,7 +110,7 @@ Folder and row authorship (`created_by_user_id`) is **reset to null** on import 
 
 `GET /admin/api/cms/export` or `POST /admin/api/cms/export`
 
-GET accepts filter options as query-string params. POST accepts a JSON body matching `ExportRequestSchema`:
+GET accepts filter options as query-string params. POST accepts either a JSON body matching `ExportRequestSchema` or an HTML form field named `exportRequest` containing that same JSON shape:
 
 ```ts
 {
@@ -126,6 +127,8 @@ GET accepts filter options as query-string params. POST accepts a JSON body matc
 ```
 
 The redesigned **Export site** dialog defaults every category on and content tables to all rows, so its one-click action is a complete full-site export. Opening a content table reveals a **per-row checklist** (pages, posts, components, …) with per-table All / None, so an operator can include or exclude individual entries; the dialog then sends that table with an explicit `rowIds` subset. A table left untouched is sent with no `rowIds` (the whole table) and never needs its rows fetched. `GET` supports whole-table selection only (`?tables=posts,pages`); row-level subsets are POST-only.
+
+The form field exists for the admin dialog's native attachment download path. It preserves row-level POST selection without forcing the returned bundle through a JS `Blob`.
 
 The handler:
 
@@ -329,7 +332,7 @@ A nightly cron can hit `/admin/api/cms/export` with an admin session cookie and 
   - `server/handlers/cms/export.ts` — `GET+POST /export`
   - `server/handlers/cms/import.ts` — `POST /import`
   - `server/handlers/cms/importPreview.ts` — `POST /import/preview`
-  - `src/core/persistence/cmsTransfer.ts` — client-side fetch helpers
+  - `src/core/persistence/cmsTransfer.ts` — client-side transfer helpers, including native export form submission
   - `server/util/pathWithin.ts` — `assertPathWithin` containment helper (media write sink)
 - Gate tests:
   - `src/__tests__/architecture/cmsTransferExport.test.ts`

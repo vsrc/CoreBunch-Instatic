@@ -4,15 +4,15 @@
  *   POST /admin/api/cms/import/preview
  *   POST /admin/api/cms/import?strategy=<strategy>
  *
- * All HTTP calls use `credentials: 'include'`. Export returns a raw Blob
- * (the endpoint streams an attachment, not an envelope). Preview and import
- * return standard JSON envelopes validated with TypeBox via `readEnvelope`.
+ * Export uses a same-origin browser form POST so the browser owns the attachment
+ * download stream. Preview and import return standard JSON envelopes validated
+ * with TypeBox via `readEnvelope`.
  */
 
 import type { SiteBundle, BundlePreview, ImportResult, ImportStrategy, ExportRequest, ExportEstimate, ExportSummary } from '@core/data/bundleSchema'
 import { SiteBundleSchema, BundlePreviewSchema, ImportResultSchema, ExportEstimateSchema, ExportSummarySchema } from '@core/data/bundleSchema'
 import { parseValue, formatValueErrors, compiled } from '@core/utils/typeboxHelpers'
-import { apiRequest, readEnvelope, assertOk } from '@core/http'
+import { apiRequest, readEnvelope } from '@core/http'
 
 // ---------------------------------------------------------------------------
 // SiteBundleParseError
@@ -37,28 +37,58 @@ export class SiteBundleParseError extends Error {
 }
 
 // ---------------------------------------------------------------------------
-// exportSiteBundle
+// submitSiteBundleExport
 // ---------------------------------------------------------------------------
 
 /**
  * POST /admin/api/cms/export
  *
- * Returns the raw Blob of the JSON bundle so callers can trigger a browser
- * download or read the bytes themselves. Uses POST so arbitrary-length
- * `rowIds` arrays don't hit URL length limits.
+ * Starts a native browser attachment download through a hidden form POST. This
+ * keeps arbitrary-length `rowIds` arrays out of the URL while avoiding
+ * `fetch().blob()`, which forces large full-site bundles into JS blob storage
+ * before the browser can save them.
  *
  * The export endpoint returns raw JSON with `content-disposition: attachment`,
- * NOT the standard `{ data, error }` envelope — so we do NOT use `readEnvelope`.
+ * NOT the standard `{ data, error }` envelope — so this helper intentionally
+ * does not use `apiRequest` / `readEnvelope`.
  */
-export async function exportSiteBundle(opts: ExportRequest): Promise<Blob> {
-  const res = await fetch('/admin/api/cms/export', {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(opts),
-  })
-  await assertOk(res, 'Failed to export site')
-  return res.blob()
+export function submitSiteBundleExport(opts: ExportRequest): void {
+  if (typeof document === 'undefined' || !document.body) {
+    throw new Error('Export download requires a browser document')
+  }
+
+  const targetName = `instatic-export-${Date.now()}-${Math.random().toString(36).slice(2)}`
+
+  const iframe = document.createElement('iframe')
+  iframe.name = targetName
+  iframe.hidden = true
+  iframe.setAttribute('aria-hidden', 'true')
+
+  const form = document.createElement('form')
+  form.method = 'POST'
+  form.action = '/admin/api/cms/export'
+  form.target = targetName
+  form.enctype = 'application/x-www-form-urlencoded'
+  form.hidden = true
+  form.setAttribute('aria-hidden', 'true')
+
+  const input = document.createElement('input')
+  input.type = 'hidden'
+  input.name = 'exportRequest'
+  input.value = JSON.stringify(opts)
+  form.appendChild(input)
+
+  document.body.append(iframe, form)
+  try {
+    form.submit()
+  } catch (err) {
+    form.remove()
+    iframe.remove()
+    throw err
+  }
+
+  // Keep the iframe mounted; removing the target can cancel slow attachment streams.
+  form.remove()
 }
 
 // ---------------------------------------------------------------------------
