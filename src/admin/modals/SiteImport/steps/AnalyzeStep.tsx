@@ -49,7 +49,6 @@ import styles from './AnalyzeStep.module.css'
 // ---------------------------------------------------------------------------
 
 type Category = 'pages' | 'styles' | 'media' | 'colors' | 'fonts' | 'scripts' | 'skipped'
-
 interface CategoryDef {
   id: Exclude<Category, 'skipped'>
   label: string

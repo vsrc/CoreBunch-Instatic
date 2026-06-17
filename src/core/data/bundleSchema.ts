@@ -202,6 +202,27 @@ export const ExportRequestSchema = Type.Object({
 export type ExportRequest = Static<typeof ExportRequestSchema>
 
 // ---------------------------------------------------------------------------
+// BundleImportSelection
+// ---------------------------------------------------------------------------
+
+/**
+ * Request-side filter for applying an already-exported bundle. The shape
+ * mirrors export selection so the Site Import review navigator can apply the
+ * exact categories and rows the operator left enabled.
+ */
+export const BundleImportSelectionSchema = Type.Object({
+  includeSite: Type.Boolean(),
+  tables: Type.Array(TableSelectionSchema),
+  includeMedia: Type.Boolean(),
+  /** Restrict imported media assets by id. Omit when `includeMedia` means all media. */
+  mediaIds: Type.Optional(Type.Array(Type.String())),
+  includeMediaFolders: Type.Boolean(),
+  includeRedirects: Type.Boolean(),
+})
+
+export type BundleImportSelection = Static<typeof BundleImportSelectionSchema>
+
+// ---------------------------------------------------------------------------
 // ExportEstimate
 // ---------------------------------------------------------------------------
 

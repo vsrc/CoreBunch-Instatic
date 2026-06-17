@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { pushToast } from '@ui/components/Toast'
+import { StepUpCancelledMessage, useStepUp } from '@admin/shared/StepUp'
 import {
   importSiteBundle,
   importSiteBundleArchive,
@@ -11,17 +12,23 @@ import {
 } from '@core/persistence/cmsTransfer'
 import { getErrorMessage } from '@core/utils/errorMessage'
 import {
+  filterSiteBundleForImportSelection,
+  isFullBundleImportSelection,
+  makeFullBundleImportSelection,
+} from '@core/data/bundleSelection'
+import {
   CMS_SITE_BUNDLE_IMPORTED_EVENT,
   requestCmsSiteReload,
 } from '@admin/state/adminEvents'
 import type {
+  BundleImportSelection,
   BundlePreview,
   ImportResult as CmsImportResult,
   ImportStrategy,
   SiteBundle,
 } from '@core/data/bundleSchema'
 
-interface CmsBundleState {
+export interface CmsBundleState {
   filename: string
   bundle: SiteBundle
   archiveFile: File | null
@@ -29,6 +36,7 @@ interface CmsBundleState {
   previewLoading: boolean
   previewError: string | null
   strategy: ImportStrategy
+  selection: BundleImportSelection
   importing: boolean
 }
 
@@ -75,13 +83,31 @@ function buildCmsImportToastBody(result: CmsImportResult): string {
   return parts.join(' · ')
 }
 
-function previewHasContent(preview: BundlePreview | null): boolean {
-  if (!preview) return false
+function selectionHasContent(bundle: SiteBundle, selection: BundleImportSelection): boolean {
+  if (selection.includeSite && bundle.site) return true
+
+  const tableSelections = new Map(selection.tables.map((table) => [table.tableId, table.rowIds]))
+  if (bundle.rows.some((row) => {
+    const rowIds = tableSelections.get(row.tableId)
+    return rowIds === undefined
+      ? tableSelections.has(row.tableId)
+      : rowIds.includes(row.id)
+  })) {
+    return true
+  }
+
+  if (selection.includeMedia) {
+    if (selection.mediaIds === undefined) {
+      if ((bundle.media?.length ?? 0) > 0) return true
+    } else if (selection.mediaIds.length > 0) {
+      return true
+    }
+  }
+
   return (
-    preview.tables.some((table) => table.inBundle > 0) ||
-    preview.totals.mediaFiles > 0 ||
-    preview.totals.mediaFolders > 0 ||
-    preview.totals.redirects > 0
+    selection.includeMediaFolders && (bundle.mediaFolders?.length ?? 0) > 0
+  ) || (
+    selection.includeRedirects && (bundle.redirects?.length ?? 0) > 0
   )
 }
 
@@ -95,6 +121,7 @@ export function useCmsBundleImport({
   closeModal,
   onImportComplete,
 }: UseCmsBundleImportInput) {
+  const { runStepUp } = useStepUp()
   const [cmsBundleState, setCmsBundleState] = useState<CmsBundleState | null>(null)
 
   async function beginCmsBundlePreview(
@@ -110,6 +137,7 @@ export function useCmsBundleImport({
       previewLoading: true,
       previewError: null,
       strategy: 'merge-add',
+      selection: makeFullBundleImportSelection(bundle),
       importing: false,
     })
 
@@ -157,11 +185,15 @@ export function useCmsBundleImport({
     setCmsBundleState((prev) => prev ? { ...prev, strategy } : prev)
   }
 
+  function setCmsSelection(selection: BundleImportSelection) {
+    setCmsBundleState((prev) => prev ? { ...prev, selection } : prev)
+  }
+
   async function importCmsBundle() {
     if (
       !cmsBundleState ||
       !cmsBundleState.preview ||
-      !previewHasContent(cmsBundleState.preview) ||
+      !selectionHasContent(cmsBundleState.bundle, cmsBundleState.selection) ||
       cmsBundleState.importing
     ) {
       return
@@ -169,9 +201,13 @@ export function useCmsBundleImport({
 
     setCmsBundleState({ ...cmsBundleState, importing: true })
     try {
-      const importResult = cmsBundleState.archiveFile
-        ? await importSiteBundleArchive(cmsBundleState.archiveFile, cmsBundleState.strategy)
-        : await importSiteBundle(cmsBundleState.bundle, cmsBundleState.strategy)
+      const selectedBundle = filterSiteBundleForImportSelection(cmsBundleState.bundle, cmsBundleState.selection)
+      const archiveSelection = isFullBundleImportSelection(cmsBundleState.bundle, cmsBundleState.selection)
+        ? undefined
+        : cmsBundleState.selection
+      const importResult = await runStepUp(() => cmsBundleState.archiveFile
+        ? importSiteBundleArchive(cmsBundleState.archiveFile, cmsBundleState.strategy, archiveSelection)
+        : importSiteBundle(selectedBundle, cmsBundleState.strategy))
       pushToast({
         kind: 'success',
         title: 'Import complete',
@@ -185,6 +221,10 @@ export function useCmsBundleImport({
       onImportComplete?.()
       closeModal()
     } catch (err) {
+      if (err instanceof Error && err.message === StepUpCancelledMessage) {
+        setCmsBundleState((prev) => prev ? { ...prev, importing: false } : prev)
+        return
+      }
       console.error('[SiteImportModal] bundle import failed:', err)
       pushToast({
         kind: 'error',
@@ -199,7 +239,7 @@ export function useCmsBundleImport({
   const cmsCanImport =
     cmsBundleState !== null &&
     cmsBundleState.preview !== null &&
-    previewHasContent(cmsBundleState.preview) &&
+    selectionHasContent(cmsBundleState.bundle, cmsBundleState.selection) &&
     !cmsBundleState.previewLoading &&
     !cmsBundleState.importing
   const cmsImportButtonLabel = cmsBundleState?.importing
@@ -218,6 +258,7 @@ export function useCmsBundleImport({
     importCmsBundle,
     loadCmsBundleArchiveFile,
     loadCmsBundleFile,
+    setCmsSelection,
     setCmsStrategy,
   }
 }

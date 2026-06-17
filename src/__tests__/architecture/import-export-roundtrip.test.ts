@@ -51,7 +51,7 @@ import { handleExportRoute } from '../../../server/handlers/cms/export'
 import { handleImportRoute } from '../../../server/handlers/cms/import'
 import { handleImportArchiveRoute } from '../../../server/handlers/cms/importArchive'
 import { parseValue } from '@core/utils/typeboxHelpers'
-import { ImportResultSchema, type SiteBundle } from '@core/data/bundleSchema'
+import { ImportResultSchema, type BundleImportSelection, type SiteBundle } from '@core/data/bundleSchema'
 import { BUNDLE_ARCHIVE_MANIFEST_PATH } from '@core/data/bundleArchive'
 import { parseSiteBundleArchive } from '@core/persistence/cmsTransfer'
 import type { DataRow, DataTable } from '@core/data/schemas'
@@ -789,6 +789,91 @@ describe('archive import validation', () => {
       expect(res!.status).toBe(400)
       const body = JSON.parse(await res!.text())
       expect(body.error).toBe('Archive is missing media file "media/missing.png"')
+    } finally {
+      await rm(uploadsDir, { recursive: true, force: true })
+    }
+  })
+
+  test('skips unselected media entries while streaming a selected archive import', async () => {
+    const uploadsDir = await mkdtemp(join(tmpdir(), 'instatic-import-skip-media-'))
+    try {
+      const db = createSqliteClient(':memory:')
+      await runMigrations(db, sqliteMigrations)
+      const cookie = await seedRoundtripAuth(db, 'skip-media@roundtrip.test')
+      const manifest = {
+        schemaVersion: 1,
+        exportedAt: new Date().toISOString(),
+        tables: [],
+        rows: [],
+        media: [
+          {
+            id: 'asset-skipped',
+            filename: 'skipped.png',
+            mimeType: 'image/png',
+            sizeBytes: 4,
+            altText: '',
+            caption: '',
+            title: '',
+            tags: [],
+            width: null,
+            height: null,
+            durationMs: null,
+            dominantColor: null,
+            blurHash: null,
+            storagePath: 'skipped.png',
+            posterPath: null,
+            folderIds: [],
+          },
+          {
+            id: 'asset-imported',
+            filename: 'imported.png',
+            mimeType: 'image/png',
+            sizeBytes: 4,
+            altText: '',
+            caption: '',
+            title: '',
+            tags: [],
+            width: null,
+            height: null,
+            durationMs: null,
+            dominantColor: null,
+            blurHash: null,
+            storagePath: 'imported.png',
+            posterPath: null,
+            folderIds: [],
+          },
+        ],
+      }
+      const archiveBytes = zipSync({
+        [BUNDLE_ARCHIVE_MANIFEST_PATH]: strToU8(JSON.stringify(manifest)),
+        'media/skipped.png': strToU8('skip'),
+        'media/imported.png': strToU8('keep'),
+      }, { level: 0 })
+      const selection: BundleImportSelection = {
+        includeSite: false,
+        tables: [],
+        includeMedia: true,
+        mediaIds: ['asset-imported'],
+        includeMediaFolders: false,
+        includeRedirects: false,
+      }
+      const params = new URLSearchParams({
+        strategy: 'merge-add',
+        selection: JSON.stringify(selection),
+      })
+
+      const req = new Request(`http://localhost/admin/api/cms/import/archive?${params.toString()}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/zip' },
+        body: archiveBytes,
+      })
+      req.headers.set('cookie', cookie)
+      const res = await handleImportArchiveRoute(req, db, { uploadsDir })
+      expect(res!.status).toBe(200)
+      const body = parseValue(ImportResultSchema, JSON.parse(await res!.text()))
+      expect(body.mediaImported).toBe(1)
+      expect(await getMediaAsset(db, 'asset-skipped')).toBeNull()
+      expect(await getMediaAsset(db, 'asset-imported')).not.toBeNull()
     } finally {
       await rm(uploadsDir, { recursive: true, force: true })
     }

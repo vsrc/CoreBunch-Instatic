@@ -2,20 +2,20 @@
 
 `src/admin/modals/SiteImport` is the canonical import surface. It routes static-site bundles (HTML pages, CSS files, images, fonts, JS) through `src/core/siteImport`, and routes CMS-exported site-transfer ZIP bundles through the CMS transfer endpoints for full import/export parity.
 
-The static-site pipeline has two parts: a pure analysis function (`buildImportPlan`) that produces an `ImportPlan` preview, and an async commit function (`commitImportPlan`) that uploads assets and writes to the store. CMS bundle imports keep their native semantics: validate the `SiteBundle`, preview against `/admin/api/cms/import/preview`, then apply through `/admin/api/cms/import`.
+The static-site pipeline has two parts: a pure analysis function (`buildImportPlan`) that produces an `ImportPlan` preview, and an async commit function (`commitImportPlan`) that uploads assets and writes to the store. CMS bundle imports keep their native semantics: validate the `SiteBundle`, preview against `/admin/api/cms/import/preview`, then apply through `/admin/api/cms/import` or `/admin/api/cms/import/archive`. The modal still uses the same Review category navigator for CMS bundles, so tables, media, folders, redirects, and import mode live in the same picker pattern as HTML/CSS/media imports.
 
 ---
 
 ## TL;DR
 
-- Entry: global admin-shell modal, opened from Spotlight or workspace actions. Drop files, a folder, a static `.zip`, or a CMS-exported `.zip` bundle. Static files use the four-stage modal (Drop → Review → Conflicts → Import, with completion shown inside the Import stage). CMS bundles use Drop → Review bundle → Import.
+- Entry: global admin-shell modal, opened from Spotlight or workspace actions. Drop files, a folder, a static `.zip`, or a CMS-exported `.zip` bundle. Static files use the four-stage modal (Drop → Review → Conflicts → Import, with completion shown inside the Import stage). CMS bundles use the same Drop → Review route and import directly from Review after category selection.
 - `buildImportPlan({ fileMap, currentSite, options })` — pure, synchronous — produces an `ImportPlan` with pages, style rules, kept stylesheet files, media, color tokens, custom fonts, Google font install requests, font tokens, and scripts.
 - **Per-stylesheet import modes:** each top-level linked stylesheet either converts to editable style rules (default) or imports verbatim as a page-scoped `SiteFile` stylesheet (`options.stylesheetModes`, picked in the Review step). There are no generated scope classes — page isolation comes from the kept file's runtime scope.
 - `commitImportPlan(plan, adapter)` — uploads assets, then wraps all store writes in a single `adapter.commit` call → one Cmd+Z reverts the whole import.
 - Static imports load the current CMS draft into the editor store on demand when launched outside `/admin/site`; if no draft exists, the modal creates an empty site before analysis.
 - Conflict resolution: rename with a numeric suffix (default), overwrite, skip, or custom-rename — per page slug, per class name, per design token (colour / font CSS variable), and per divergent cross-stylesheet class definition, with category-level bulk actions. Token renames rewrite `var(--x)` references so imports stay faithful.
 - What imports: pages, linked CSS plus unconditional local CSS `@import` graphs, `kind:'class'` and `kind:'ambient'` style rules, stylesheets kept as page-scoped files, `@keyframes`, uploadable media/font files, root CSS color tokens, root CSS font tokens, `@font-face` families, known external font stylesheet imports, safe extra HTML attributes on base modules, body-level classes/attributes/style metadata, bare DOM text nodes in mixed content, and executable HTML scripts as page-scoped runtime scripts.
-- CMS bundle import preserves exported tables, rows, optional site shell, and embedded media using the same merge strategies as site transfer (`replace`, `merge-add`, `merge-overwrite`).
+- CMS bundle import preserves selected exported tables, rows, optional site shell, media, folders, and redirects using the same merge strategies as site transfer (`replace`, `merge-add`, `merge-overwrite`).
 - HTML forms import through the shared HTML importer as first-class form primitives (`base.form`, controls, labels, submit buttons), not as custom containers.
 - What cannot be modeled: `@layer`, conditional local CSS `@import`, and arbitrary external `@import` — surfaced as warnings when the CSS engine exposes them, never silently dropped.
 - Headless: `src/core/siteImport/` carries no admin, React, or server imports (gated by `siteImport-headless.test.ts`).
@@ -54,8 +54,7 @@ src/admin/modals/SiteImport/
 ├── SiteImportModal.module.css
 ├── steps/
 │   ├── DropStep.tsx             — full-modal drop zone (files, folder, .zip)
-│   ├── AnalyzeStep.tsx          — category navigator (left) + detail pane (right)
-│   ├── CmsBundleReviewStep.tsx  — CMS bundle diff + merge strategy review
+│   ├── AnalyzeStep.tsx          — category navigator (left) + detail pane (right) for static imports and CMS bundles
 │   ├── ConflictsStep.tsx        — page-slug + class-name + design-token conflict resolution rows
 │   └── ImportStep.tsx           — determinate progress surface + complete/failed states
 └── shared/
@@ -73,9 +72,9 @@ src/admin/modals/SiteImport/
 ```text
 User drops files / folder / static .zip / CMS bundle .zip
             │
-            ├─ valid CMS bundle → previewSiteBundle → CmsBundleReviewStep
+            ├─ valid CMS bundle → previewSiteBundle → Review navigator
             │                                      │
-            │                                      └─ importSiteBundle(strategy)
+            │                                      └─ importSiteBundle/importSiteBundleArchive(strategy, selection)
             │
             ▼
     ingestInput(input)

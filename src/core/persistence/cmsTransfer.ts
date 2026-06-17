@@ -12,7 +12,7 @@
  */
 
 import { strFromU8, unzipSync } from 'fflate'
-import type { SiteBundle, BundlePreview, ImportResult, ImportStrategy, ExportRequest, ExportEstimate, ExportSummary } from '@core/data/bundleSchema'
+import type { SiteBundle, BundlePreview, ImportResult, ImportStrategy, ExportRequest, ExportEstimate, ExportSummary, BundleImportSelection } from '@core/data/bundleSchema'
 import { SiteBundleSchema, BundlePreviewSchema, ImportResultSchema, ExportEstimateSchema, ExportSummarySchema } from '@core/data/bundleSchema'
 import {
   BUNDLE_ARCHIVE_MANIFEST_PATH,
@@ -204,8 +204,12 @@ export async function importSiteBundle(
 export async function importSiteBundleArchive(
   archiveFile: Blob,
   strategy: ImportStrategy,
+  selection?: BundleImportSelection,
 ): Promise<ImportResult> {
-  const res = await fetch(`/admin/api/cms/import/archive?strategy=${encodeURIComponent(strategy)}`, {
+  const params = new URLSearchParams({ strategy })
+  if (selection) params.set('selection', JSON.stringify(selection))
+
+  const res = await fetch(`/admin/api/cms/import/archive?${params.toString()}`, {
     method: 'POST',
     credentials: 'include',
     headers: { 'content-type': 'application/zip' },

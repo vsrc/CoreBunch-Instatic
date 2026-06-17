@@ -8,8 +8,7 @@
  *
  * Steps:
  *   drop      → user drops/picks files
- *   analyze    → review static plan: pages, style rules, media, skipped items
- *   cms-review → review CMS bundle diff + merge strategy
+ *   analyze    → review static plan or CMS bundle categories
  *   conflicts  → resolve slug / class-name conflicts (skipped if none)
  *   run        → upload assets + commit static plan to store
  *
@@ -46,9 +45,9 @@ import { useAdminUi } from '@admin/state/adminUi'
 import { useEditorStore } from '@site/store/store'
 import { DropStep } from './steps/DropStep'
 import { AnalyzeStep } from './steps/AnalyzeStep'
+import { CmsBundleAnalyzeStep } from './steps/CmsBundleAnalyzeStep'
 import { ConflictsStep } from './steps/ConflictsStep'
 import { ImportStep } from './steps/ImportStep'
-import { CmsBundleReviewStep } from './steps/CmsBundleReviewStep'
 import { makeInitialRunProgress, type RunProgress } from './shared/importProgress'
 import { createSiteImportAdapter } from './shared/createSiteImportAdapter'
 import { describeCmsBundleLoadError, useCmsBundleImport } from './shared/useCmsBundleImport'
@@ -65,17 +64,33 @@ import {
 } from './shared/importPlanning'
 import styles from './SiteImportModal.module.css'
 import { getErrorMessage } from '@core/utils/errorMessage'
+import type { BundleImportSelection, SiteBundle } from '@core/data/bundleSchema'
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-export type Step = 'drop' | 'analyze' | 'conflicts' | 'run' | 'cms-review'
+export type Step = 'drop' | 'analyze' | 'conflicts' | 'run'
 
 export type { ImportSelection }
 
 interface SiteImportModalProps {
   onCmsBundleImportComplete?: () => void
+}
+
+function selectedCmsRowCount(selection: BundleImportSelection, bundle: SiteBundle): number {
+  const rowsByTable = new Map<string, number>()
+  for (const row of bundle.rows) {
+    rowsByTable.set(row.tableId, (rowsByTable.get(row.tableId) ?? 0) + 1)
+  }
+  return selection.tables.reduce((sum, table) => (
+    sum + (table.rowIds?.length ?? rowsByTable.get(table.tableId) ?? 0)
+  ), 0)
+}
+
+function selectedCmsMediaCount(selection: BundleImportSelection, mediaTotal: number): number {
+  if (!selection.includeMedia) return 0
+  return selection.mediaIds?.length ?? mediaTotal
 }
 
 // ---------------------------------------------------------------------------
@@ -96,6 +111,7 @@ export function SiteImportModal({ onCmsBundleImportComplete }: SiteImportModalPr
     importCmsBundle,
     loadCmsBundleArchiveFile,
     loadCmsBundleFile,
+    setCmsSelection,
     setCmsStrategy,
   } = useCmsBundleImport({
     closeModal,
@@ -133,7 +149,7 @@ export function SiteImportModal({ onCmsBundleImportComplete }: SiteImportModalPr
         setPlan(null)
         setSelection(null)
         setBusy(false)
-        setStep('cms-review')
+        setStep('analyze')
         return
       }
 
@@ -156,7 +172,7 @@ export function SiteImportModal({ onCmsBundleImportComplete }: SiteImportModalPr
         setPlan(null)
         setSelection(null)
         setBusy(false)
-        setStep('cms-review')
+        setStep('analyze')
         return
       }
 
@@ -277,8 +293,8 @@ export function SiteImportModal({ onCmsBundleImportComplete }: SiteImportModalPr
 
   function handleBack() {
     if (step === 'conflicts') setStep('analyze')
+    else if (step === 'analyze' && cmsBundleState) handleCmsChooseDifferentFile()
     else if (step === 'analyze') setStep('drop')
-    else if (step === 'cms-review') handleCmsChooseDifferentFile()
   }
 
   // ── Run ───────────────────────────────────────────────────────────────────
@@ -412,6 +428,34 @@ export function SiteImportModal({ onCmsBundleImportComplete }: SiteImportModalPr
     if (step === 'drop') return null
 
     if (step === 'analyze') {
+      if (cmsBundleState) {
+        const rowCount = selectedCmsRowCount(cmsBundleState.selection, cmsBundleState.bundle)
+        const mediaCount = selectedCmsMediaCount(cmsBundleState.selection, cmsBundleState.bundle.media?.length ?? 0)
+        return (
+          <>
+            <span className={styles.footNote}>
+              {rowCount} {rowCount === 1 ? 'row' : 'rows'} · {mediaCount} media selected
+            </span>
+            <Button
+              variant="secondary"
+              type="button"
+              disabled={cmsBundleState.importing}
+              onClick={handleBack}
+            >
+              Back
+            </Button>
+            <Button
+              variant={cmsBundleState.strategy === 'replace' ? 'destructive' : 'primary'}
+              type="button"
+              disabled={!cmsCanImport}
+              onClick={() => { void importCmsBundle() }}
+            >
+              {cmsImportButtonLabel}
+            </Button>
+          </>
+        )
+      }
+
       const pageCount = selection ? selection.pagesIncluded.size : 0
       const ruleCount = selection ? selection.styleRulesIncluded.size : 0
       const mediaCount = selection ? selection.assetsIncluded.size : 0
@@ -443,32 +487,6 @@ export function SiteImportModal({ onCmsBundleImportComplete }: SiteImportModalPr
           </Button>
           <Button variant="primary" type="button" onClick={handleConflictsImport}>
             Import
-          </Button>
-        </>
-      )
-    }
-
-    if (step === 'cms-review') {
-      return (
-        <>
-          <span className={styles.footNote}>
-            CMS bundle import preserves exported tables, rows, site shell, and media.
-          </span>
-          <Button
-            variant="secondary"
-            type="button"
-            disabled={cmsBundleState?.importing}
-            onClick={handleBack}
-          >
-            Back
-          </Button>
-          <Button
-            variant={cmsBundleState?.strategy === 'replace' ? 'destructive' : 'primary'}
-            type="button"
-            disabled={!cmsCanImport}
-            onClick={() => { void importCmsBundle() }}
-          >
-            {cmsImportButtonLabel}
           </Button>
         </>
       )
@@ -529,14 +547,13 @@ export function SiteImportModal({ onCmsBundleImportComplete }: SiteImportModalPr
   const titleByStep: Record<Step, string> = {
     drop: 'Import site',
     analyze: 'Review import',
-    'cms-review': 'Review bundle',
     conflicts: 'Resolve conflicts',
     // The Import step title tracks its phase: "Importing" while running,
     // "Import complete" once committed.
     run: runProgress.phase === 'done' ? 'Import complete' : 'Importing',
   }
-  const isCmsReplace = step === 'cms-review' && cmsBundleState?.strategy === 'replace'
-  const isCmsImporting = step === 'cms-review' && cmsBundleState?.importing === true
+  const isCmsReplace = step === 'analyze' && cmsBundleState?.strategy === 'replace'
+  const isCmsImporting = step === 'analyze' && cmsBundleState?.importing === true
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -549,13 +566,7 @@ export function SiteImportModal({ onCmsBundleImportComplete }: SiteImportModalPr
       size={step === 'analyze' ? '2xl' : 'xl'}
       tone={isCmsReplace ? 'danger' : 'neutral'}
       footer={renderFooter() ?? undefined}
-      bodyClassName={
-        step === 'analyze' || step === 'cms-review'
-          ? styles.analyzeBody
-          : step === 'run'
-            ? styles.importBody
-            : undefined
-      }
+      bodyClassName={step === 'analyze' ? styles.analyzeBody : step === 'run' ? styles.importBody : undefined}
       closeOnEscape={runProgress.phase !== 'applying' && !isCmsImporting}
       closeOnBackdrop={runProgress.phase !== 'applying' && !isCmsImporting}
     >
@@ -569,7 +580,17 @@ export function SiteImportModal({ onCmsBundleImportComplete }: SiteImportModalPr
           />
         )}
 
-        {step === 'analyze' && plan && fileMap && selection && (
+        {step === 'analyze' && cmsBundleState && (
+          <CmsBundleAnalyzeStep
+            state={cmsBundleState}
+            siteName={siteName}
+            onSelectionChange={setCmsSelection}
+            onStrategyChange={setCmsStrategy}
+            onChooseDifferentFile={handleCmsChooseDifferentFile}
+          />
+        )}
+
+        {step === 'analyze' && !cmsBundleState && plan && fileMap && selection && (
           <AnalyzeStep
             plan={plan}
             siteName={siteName}
@@ -624,18 +645,6 @@ export function SiteImportModal({ onCmsBundleImportComplete }: SiteImportModalPr
                 return next
               })
             }}
-          />
-        )}
-
-        {step === 'cms-review' && cmsBundleState && (
-          <CmsBundleReviewStep
-            filename={cmsBundleState.filename}
-            preview={cmsBundleState.preview}
-            previewLoading={cmsBundleState.previewLoading}
-            previewError={cmsBundleState.previewError}
-            strategy={cmsBundleState.strategy}
-            onStrategyChange={setCmsStrategy}
-            onChooseDifferentFile={handleCmsChooseDifferentFile}
           />
         )}
 

@@ -182,6 +182,11 @@ const ALLOWLIST = new Set([
   // • the "All" / "None" bulk text links — 11.5px inline text actions, not
   //   the token-driven Button sizes.
   'admin/modals/SiteImport/steps/AnalyzeStep.tsx',
+  // CMS transfer bundles reuse the same Super Import review navigator geometry
+  // as AnalyzeStep: full-width category rows, dashed choose-file affordance,
+  // and inline All / None text actions. Button's inline-flex size tokens
+  // cannot represent those structured row surfaces.
+  'admin/modals/SiteImport/steps/CmsBundleAnalyzeStep.tsx',
 
   // ── §8.13 Export site dialog category navigator ─────────────────────────
   // ExportDialog is the sibling of §8.12 — the same category-navigator

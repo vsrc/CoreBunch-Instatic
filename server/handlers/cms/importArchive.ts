@@ -21,7 +21,9 @@ import { parseValue, formatValueErrors, compiled } from '@core/utils/typeboxHelp
 import {
   ImportResultSchema,
   ImportStrategySchema,
+  BundleImportSelectionSchema,
   SiteBundleSchema,
+  type BundleImportSelection,
   type ImportResult,
   type ImportStrategy,
   type SiteBundle,
@@ -82,8 +84,14 @@ export async function handleImportArchiveRoute(
 
   const strategy = parseImportStrategy(url)
   if (strategy instanceof Response) return strategy
+  const selection = parseImportSelection(url)
+  if (selection instanceof Response) return selection
 
-  const dataBundle = siteBundleWithoutMediaBytes(manifest)
+  const selectedManifest = selection
+    ? filterArchiveManifestForSelection(manifest, selection)
+    : manifest
+
+  const dataBundle = siteBundleWithoutMediaBytes(selectedManifest)
   const dataImportReq = makeInternalImportRequest(req, strategy, dataBundle)
   const dataImportRes = await handleImportRoute(dataImportReq, db, options)
   if (!dataImportRes || !dataImportRes.ok) {
@@ -93,18 +101,19 @@ export async function handleImportArchiveRoute(
   const baseResult = parseValue(ImportResultSchema, await dataImportRes.json())
   const importedFolderIds = new Set(
     strategy === 'replace'
-      ? manifest.mediaFolders?.map((folder) => folder.id) ?? []
+      ? selectedManifest.mediaFolders?.map((folder) => folder.id) ?? []
       : [],
   )
 
   let mediaImported = 0
-  if (manifest.media && manifest.media.length > 0 && options.uploadsDir) {
+  if (selectedManifest.media && selectedManifest.media.length > 0 && options.uploadsDir) {
     try {
       mediaImported = await importArchiveMediaEntries({
         reader,
         db,
         uploadsDir: options.uploadsDir,
-        manifest,
+        archiveManifest: manifest,
+        selectedManifest,
         importedFolderIds,
       })
     } catch (err) {
@@ -132,6 +141,27 @@ function parseImportStrategy(url: URL): ImportStrategy | Response {
   }
 }
 
+function parseImportSelection(url: URL): BundleImportSelection | null | Response {
+  const raw = url.searchParams.get('selection')
+  if (!raw) return null
+
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    return jsonResponse({ error: 'Invalid import selection JSON' }, { status: 400 })
+  }
+
+  try {
+    return parseValue(BundleImportSelectionSchema, parsed)
+  } catch {
+    return jsonResponse(
+      { error: `Invalid import selection: ${formatValueErrors(BundleImportSelectionSchema, parsed)}` },
+      { status: 400 },
+    )
+  }
+}
+
 function makeInternalImportRequest(req: Request, strategy: ImportStrategy, bundle: SiteBundle): Request {
   const url = new URL(`${CMS_API_PREFIX}/import`, req.url)
   url.searchParams.set('strategy', strategy)
@@ -152,6 +182,47 @@ function siteBundleWithoutMediaBytes(manifest: SiteBundleArchiveManifest): SiteB
   const bundle: Partial<SiteBundleArchiveManifest> = { ...manifest }
   delete bundle.media
   return parseValue(SiteBundleSchema, bundle)
+}
+
+function filterArchiveManifestForSelection(
+  manifest: SiteBundleArchiveManifest,
+  selection: BundleImportSelection,
+): SiteBundleArchiveManifest {
+  const tableSelections = new Map(selection.tables.map((entry) => [entry.tableId, entry]))
+  const tables = manifest.tables.filter((table) => tableSelections.has(table.id))
+  const rows = manifest.rows.filter((row) => {
+    const tableSelection = tableSelections.get(row.tableId)
+    if (!tableSelection) return false
+    if (tableSelection.rowIds === undefined) return true
+    return tableSelection.rowIds.includes(row.id)
+  })
+  const selectedRowIds = new Set(rows.map((row) => row.id))
+  const media = filterArchiveManifestMedia(manifest, selection)
+  const redirects = selection.includeRedirects && manifest.redirects
+    ? manifest.redirects.filter((redirect) => selectedRowIds.has(redirect.targetRowId))
+    : undefined
+
+  return parseValue(SiteBundleArchiveManifestSchema, {
+    schemaVersion: manifest.schemaVersion,
+    exportedAt: manifest.exportedAt,
+    ...(manifest.sourceSiteName !== undefined ? { sourceSiteName: manifest.sourceSiteName } : {}),
+    ...(selection.includeSite && manifest.site ? { site: manifest.site } : {}),
+    tables,
+    rows,
+    ...(media ? { media } : {}),
+    ...(selection.includeMediaFolders && manifest.mediaFolders ? { mediaFolders: manifest.mediaFolders } : {}),
+    ...(redirects ? { redirects } : {}),
+  })
+}
+
+function filterArchiveManifestMedia(
+  manifest: SiteBundleArchiveManifest,
+  selection: BundleImportSelection,
+): SiteBundleArchiveManifest['media'] | undefined {
+  if (!selection.includeMedia || !manifest.media) return undefined
+  if (selection.mediaIds === undefined) return manifest.media
+  const selectedIds = new Set(selection.mediaIds)
+  return manifest.media.filter((asset) => selectedIds.has(asset.id))
 }
 
 async function readArchiveManifest(reader: ZipBodyReader): Promise<SiteBundleArchiveManifest> {
@@ -197,18 +268,22 @@ async function importArchiveMediaEntries(input: {
   reader: ZipBodyReader
   db: DbClient
   uploadsDir: string
-  manifest: SiteBundleArchiveManifest
+  archiveManifest: SiteBundleArchiveManifest
+  selectedManifest: SiteBundleArchiveManifest
   importedFolderIds: Set<string>
 }): Promise<number> {
-  const mediaByArchivePath = new Map(
-    (input.manifest.media ?? []).map((asset) => [mediaArchivePath(asset.storagePath), asset]),
+  const allMediaByArchivePath = new Map(
+    (input.archiveManifest.media ?? []).map((asset) => [mediaArchivePath(asset.storagePath), asset]),
+  )
+  const selectedMediaByArchivePath = new Map(
+    (input.selectedManifest.media ?? []).map((asset) => [mediaArchivePath(asset.storagePath), asset]),
   )
   let imported = 0
 
   while (true) {
     const header = await input.reader.readLocalHeader()
     if (!header) {
-      const missingPath = mediaByArchivePath.keys().next().value
+      const missingPath = selectedMediaByArchivePath.keys().next().value
       if (typeof missingPath === 'string') {
         throw new Error(`Archive is missing media file "${missingPath}"`)
       }
@@ -218,14 +293,28 @@ async function importArchiveMediaEntries(input: {
       throw new Error(`Archive entry "${header.path}" is compressed; CMS bundle media must be stored`)
     }
 
-    const asset = mediaByArchivePath.get(header.path)
-    if (!asset) {
+    const archivedAsset = allMediaByArchivePath.get(header.path)
+    if (!archivedAsset) {
       throw new Error(`Unexpected entry in CMS bundle archive: ${header.path}`)
     }
     if ((header.flags & ZIP_DATA_DESCRIPTOR_FLAG) === 0) {
-      if (header.compressedSize !== asset.sizeBytes || header.uncompressedSize !== asset.sizeBytes) {
+      if (header.compressedSize !== archivedAsset.sizeBytes || header.uncompressedSize !== archivedAsset.sizeBytes) {
         throw new Error(`Archive entry "${header.path}" size does not match the manifest`)
       }
+    }
+
+    const asset = selectedMediaByArchivePath.get(header.path)
+    if (!asset) {
+      const crc = createCrc32()
+      await drainEntry(input.reader, archivedAsset.sizeBytes, crc)
+      if ((header.flags & ZIP_DATA_DESCRIPTOR_FLAG) !== 0) {
+        await input.reader.readAndValidateDataDescriptor({
+          crc32: crc.digest(),
+          sizeBytes: archivedAsset.sizeBytes,
+        })
+      }
+      allMediaByArchivePath.delete(header.path)
+      continue
     }
 
     const target = join(input.uploadsDir, asset.storagePath)
@@ -264,9 +353,20 @@ async function importArchiveMediaEntries(input: {
     if (targetFolders.length > 0) {
       await assignAssetToFolders(input.db, asset.id, { add: targetFolders })
     }
-    mediaByArchivePath.delete(header.path)
+    allMediaByArchivePath.delete(header.path)
+    selectedMediaByArchivePath.delete(header.path)
     imported++
   }
+}
+
+async function drainEntry(
+  reader: ZipBodyReader,
+  sizeBytes: number,
+  crc: ReturnType<typeof createCrc32>,
+): Promise<void> {
+  await reader.copyExact(sizeBytes, async (chunk) => {
+    crc.update(chunk)
+  })
 }
 
 async function writeEntryToFile(

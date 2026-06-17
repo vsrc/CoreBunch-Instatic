@@ -19,6 +19,7 @@ The **Export site** dialog (`src/admin/pages/data/components/ExportDialog`) is a
   - `POST /admin/api/cms/import[?strategy=...]` — apply the bundle
   - `POST /admin/api/cms/import/archive[?strategy=...]` — apply the user-facing ZIP archive, streaming media bytes to disk
 - Export categories: **theme & settings** (the shell), each **content table**, the **media library**, **media folders**, and **redirects** — all on by default.
+- Import categories use the same selection model: the Site Import Review step can include or exclude the shell, tables/rows, media files, folders, and redirects before applying a bundle.
 - The admin dialog starts downloads with a same-origin form POST, not `fetch().blob()`, so large media-heavy bundles are streamed by the browser's download stack instead of being materialized in JavaScript blob storage.
 - UI entry (export): **Export site** in the Data workspace opens `src/admin/pages/data/components/ExportDialog`.
 - UI entry (import): drop the exported `.zip` into the canonical Site Import modal (`src/admin/modals/SiteImport`). Spotlight and workspace **Import site** actions open this same global shell modal.
@@ -209,6 +210,8 @@ Body: an internal `SiteBundle` JSON (verbatim). Strategy is a query-string param
 `POST /admin/api/cms/import/archive[?strategy=replace|merge-add|merge-overwrite]`
 
 Body: the user-facing ZIP archive emitted by export. The manifest must be the first stored entry at `.instatic/site-bundle.json`; media entries must be stored under `media/<storagePath>`. This is the path used by Super Import when a dropped ZIP is an Instatic transfer archive.
+
+The archive endpoint also accepts a `selection` query parameter containing `BundleImportSelection` JSON. The browser still posts the original ZIP Blob; the server filters the manifest before delegating to the JSON import handler and streams only selected media entries to disk, draining unselected archive entries as needed.
 
 ```ts
 type ImportStrategy = 'replace' | 'merge-add' | 'merge-overwrite'
