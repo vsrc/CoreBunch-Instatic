@@ -32,6 +32,7 @@ import { sqliteMigrations } from '../../../server/db/migrations-sqlite'
 import { mkdtemp, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { strToU8, zipSync } from 'fflate'
 import { listDataTables } from '../../../server/repositories/data/tables'
 import { listDataRows, createDataRow, upsertDataRow, getDataRow } from '../../../server/repositories/data/rows'
 import { saveDraftSite, getDraftSite } from '../../../server/repositories/site'
@@ -48,8 +49,11 @@ import {
 } from '../../../server/auth/tokens'
 import { handleExportRoute } from '../../../server/handlers/cms/export'
 import { handleImportRoute } from '../../../server/handlers/cms/import'
+import { handleImportArchiveRoute } from '../../../server/handlers/cms/importArchive'
 import { parseValue } from '@core/utils/typeboxHelpers'
-import { SiteBundleSchema, ImportResultSchema } from '@core/data/bundleSchema'
+import { ImportResultSchema, type SiteBundle } from '@core/data/bundleSchema'
+import { BUNDLE_ARCHIVE_MANIFEST_PATH } from '@core/data/bundleArchive'
+import { parseSiteBundleArchive } from '@core/persistence/cmsTransfer'
 import type { DataRow, DataTable } from '@core/data/schemas'
 import type { DbClient } from '../../../server/db/client'
 import type { SiteShell } from '@core/page-tree'
@@ -312,14 +316,15 @@ async function seedRoundtripAuth(db: DbClient, email: string): Promise<string> {
 async function exportBundle(
   sourceDb: DbClient,
   sourceCookie: string,
-): Promise<ReturnType<typeof parseValue<typeof SiteBundleSchema>>> {
+): Promise<SiteBundle> {
   const req = new Request('http://localhost/admin/api/cms/export', { method: 'GET' })
   req.headers.set('cookie', sourceCookie)
   const res = await handleExportRoute(req, sourceDb)
   expect(res).not.toBeNull()
   expect(res!.status).toBe(200)
-  const body = JSON.parse(await res!.text())
-  return parseValue(SiteBundleSchema, body)
+  const bundle = parseSiteBundleArchive(new Uint8Array(await res!.arrayBuffer()))
+  expect(bundle).not.toBeNull()
+  return bundle!
 }
 
 describe('with strategies — handler-level roundtrip', () => {
@@ -327,7 +332,7 @@ describe('with strategies — handler-level roundtrip', () => {
    * Source DB: seeded once for all strategy sub-tests.
    * Contains 3 posts rows and 1 pages row.
    */
-  let sourceBundle: ReturnType<typeof parseValue<typeof SiteBundleSchema>>
+  let sourceBundle: SiteBundle
 
   beforeAll(async () => {
     const sourceDb = createSqliteClient(':memory:')
@@ -680,28 +685,31 @@ describe('full-site round-trip — folders, membership, redirects', () => {
     exportReq.headers.set('cookie', sourceCookie)
     const exportRes = await handleExportRoute(exportReq, sourceDb, { uploadsDir: sourceDir })
     expect(exportRes!.status).toBe(200)
-    const bundle = parseValue(SiteBundleSchema, JSON.parse(await exportRes!.text()))
+    const archiveBytes = new Uint8Array(await exportRes!.arrayBuffer())
+    const bundle = parseSiteBundleArchive(archiveBytes)
+    expect(bundle).not.toBeNull()
 
     // The bundle must actually carry the new categories.
-    expect(bundle.mediaFolders?.length).toBe(1)
-    expect(bundle.redirects?.length).toBe(1)
-    expect(bundle.media?.find((m) => m.id === 'asset-logo')?.folderIds).toEqual(['folder-logos'])
+    expect(bundle!.mediaFolders?.length).toBe(1)
+    expect(bundle!.redirects?.length).toBe(1)
+    expect(bundle!.media?.find((m) => m.id === 'asset-logo')?.folderIds).toEqual(['folder-logos'])
 
     // --- Import (replace) into a pristine instance ---
     targetDb = createSqliteClient(':memory:')
     await runMigrations(targetDb, sqliteMigrations)
     const targetCookie = await seedRoundtripAuth(targetDb, 'fullsite-target@roundtrip.test')
 
-    const importReq = new Request('http://localhost/admin/api/cms/import?strategy=replace', {
+    const importReq = new Request('http://localhost/admin/api/cms/import/archive?strategy=replace', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(bundle),
+      headers: { 'content-type': 'application/zip' },
+      body: archiveBytes,
     })
     importReq.headers.set('cookie', targetCookie)
-    const importRes = await handleImportRoute(importReq, targetDb, { uploadsDir: targetDir })
+    const importRes = await handleImportArchiveRoute(importReq, targetDb, { uploadsDir: targetDir })
     expect(importRes!.status).toBe(200)
     const result = parseValue(ImportResultSchema, JSON.parse(await importRes!.text()))
     expect(result.mediaFoldersImported).toBe(1)
+    expect(result.mediaImported).toBe(1)
     expect(result.redirectsImported).toBe(1)
   })
 
@@ -731,5 +739,58 @@ describe('full-site round-trip — folders, membership, redirects', () => {
     expect(redirects[0]?.targetRowId).toBe(redirectTargetRowId)
     // The target row really exists in the fresh instance.
     expect(await getDataRow(targetDb, redirectTargetRowId)).not.toBeNull()
+  })
+})
+
+describe('archive import validation', () => {
+  test('rejects an Instatic archive that omits manifest-declared media', async () => {
+    const uploadsDir = await mkdtemp(join(tmpdir(), 'instatic-import-missing-media-'))
+    try {
+      const db = createSqliteClient(':memory:')
+      await runMigrations(db, sqliteMigrations)
+      const cookie = await seedRoundtripAuth(db, 'missing-media@roundtrip.test')
+      const manifest = {
+        schemaVersion: 1,
+        exportedAt: new Date().toISOString(),
+        tables: [],
+        rows: [],
+        media: [
+          {
+            id: 'asset-missing',
+            filename: 'missing.png',
+            mimeType: 'image/png',
+            sizeBytes: 4,
+            altText: '',
+            caption: '',
+            title: '',
+            tags: [],
+            width: null,
+            height: null,
+            durationMs: null,
+            dominantColor: null,
+            blurHash: null,
+            storagePath: 'missing.png',
+            posterPath: null,
+            folderIds: [],
+          },
+        ],
+      }
+      const archiveBytes = zipSync({
+        [BUNDLE_ARCHIVE_MANIFEST_PATH]: strToU8(JSON.stringify(manifest)),
+      }, { level: 0 })
+
+      const req = new Request('http://localhost/admin/api/cms/import/archive?strategy=merge-add', {
+        method: 'POST',
+        headers: { 'content-type': 'application/zip' },
+        body: archiveBytes,
+      })
+      req.headers.set('cookie', cookie)
+      const res = await handleImportArchiveRoute(req, db, { uploadsDir })
+      expect(res!.status).toBe(400)
+      const body = JSON.parse(await res!.text())
+      expect(body.error).toBe('Archive is missing media file "media/missing.png"')
+    } finally {
+      await rm(uploadsDir, { recursive: true, force: true })
+    }
   })
 })

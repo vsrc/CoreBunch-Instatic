@@ -3,16 +3,33 @@
  *   POST /admin/api/cms/export
  *   POST /admin/api/cms/import/preview
  *   POST /admin/api/cms/import?strategy=<strategy>
+ *   POST /admin/api/cms/import/archive?strategy=<strategy>
  *
  * Export uses a same-origin browser form POST so the browser owns the attachment
- * download stream. Preview and import return standard JSON envelopes validated
- * with TypeBox via `readEnvelope`.
+ * download stream. Instatic archive import posts the original ZIP Blob to the
+ * server-side streaming importer. Preview and import return standard JSON
+ * envelopes validated with TypeBox via `readEnvelope`.
  */
 
+import { strFromU8, unzipSync } from 'fflate'
 import type { SiteBundle, BundlePreview, ImportResult, ImportStrategy, ExportRequest, ExportEstimate, ExportSummary } from '@core/data/bundleSchema'
 import { SiteBundleSchema, BundlePreviewSchema, ImportResultSchema, ExportEstimateSchema, ExportSummarySchema } from '@core/data/bundleSchema'
+import {
+  BUNDLE_ARCHIVE_MANIFEST_PATH,
+  mediaArchivePath,
+  SiteBundleArchiveManifestSchema,
+  type SiteBundleArchiveManifest,
+} from '@core/data/bundleArchive'
 import { parseValue, formatValueErrors, compiled } from '@core/utils/typeboxHelpers'
 import { apiRequest, readEnvelope } from '@core/http'
+
+const ZIP_LOCAL_FILE_HEADER = 0x04034b50
+const ZIP_STORED_METHOD = 0
+const ZIP_DATA_DESCRIPTOR_FLAG = 0x0008
+const ZIP64_EXTRA_FIELD_ID = 0x0001
+const UINT32_MAX = 0xffffffff
+const MAX_ARCHIVE_MANIFEST_BYTES = 256 * 1024 * 1024
+const textDecoder = new TextDecoder()
 
 // ---------------------------------------------------------------------------
 // SiteBundleParseError
@@ -48,9 +65,9 @@ export class SiteBundleParseError extends Error {
  * `fetch().blob()`, which forces large full-site bundles into JS blob storage
  * before the browser can save them.
  *
- * The export endpoint returns raw JSON with `content-disposition: attachment`,
- * NOT the standard `{ data, error }` envelope — so this helper intentionally
- * does not use `apiRequest` / `readEnvelope`.
+ * The export endpoint returns a zip attachment, not the standard `{ data,
+ * error }` envelope — so this helper intentionally does not use `apiRequest`
+ * / `readEnvelope`.
  */
 export function submitSiteBundleExport(opts: ExportRequest): void {
   if (typeof document === 'undefined' || !document.body) {
@@ -184,6 +201,19 @@ export async function importSiteBundle(
   return readEnvelope(res, ImportResultSchema, 'Failed to import bundle')
 }
 
+export async function importSiteBundleArchive(
+  archiveFile: Blob,
+  strategy: ImportStrategy,
+): Promise<ImportResult> {
+  const res = await fetch(`/admin/api/cms/import/archive?strategy=${encodeURIComponent(strategy)}`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'content-type': 'application/zip' },
+    body: archiveFile,
+  })
+  return readEnvelope(res, ImportResultSchema, 'Failed to import bundle')
+}
+
 // ---------------------------------------------------------------------------
 // parseSiteBundle
 // ---------------------------------------------------------------------------
@@ -227,4 +257,190 @@ export function parseSiteBundle(raw: string): SiteBundle {
     }
     throw new SiteBundleParseError(message, firstPath)
   }
+}
+
+// ---------------------------------------------------------------------------
+// parseSiteBundleArchive
+// ---------------------------------------------------------------------------
+
+/**
+ * Parse a CMS site-transfer ZIP archive. Returns `null` when the ZIP does not
+ * contain the CMS archive manifest, so callers can route the ZIP through the
+ * static-site importer. Throws `SiteBundleParseError` when a manifest is present
+ * but malformed or references missing media entries.
+ */
+export function parseSiteBundleArchive(bytes: Uint8Array): SiteBundle | null {
+  let entries: Record<string, Uint8Array>
+  try {
+    entries = unzipSync(bytes)
+  } catch {
+    return null
+  }
+
+  const manifestBytes = entries[BUNDLE_ARCHIVE_MANIFEST_PATH]
+  if (!manifestBytes) return null
+
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(strFromU8(manifestBytes))
+  } catch (err) {
+    throw new SiteBundleParseError(
+      `Invalid archive manifest JSON: ${err instanceof Error ? err.message : 'parse error'}`,
+      '',
+    )
+  }
+
+  const manifest = parseSiteBundleArchiveManifestValue(parsed)
+
+  const media = manifest.media?.map((asset, index) => {
+    const path = mediaArchivePath(asset.storagePath)
+    const mediaBytes = entries[path]
+    if (!mediaBytes) {
+      throw new SiteBundleParseError(`Archive is missing media file "${path}"`, `/media/${index}/storagePath`)
+    }
+    return {
+      ...asset,
+      bytesBase64: bytesToBase64(mediaBytes),
+    }
+  })
+
+  return parseValue(SiteBundleSchema, {
+    ...manifest,
+    ...(media ? { media } : {}),
+  })
+}
+
+export async function readSiteBundleArchiveManifestFile(
+  archiveFile: Blob,
+): Promise<SiteBundleArchiveManifest | null> {
+  const header = new Uint8Array(await archiveFile.slice(0, 30).arrayBuffer())
+  if (header.byteLength < 30) return null
+
+  const view = new DataView(header.buffer, header.byteOffset, header.byteLength)
+  if (readUint32(view, 0) !== ZIP_LOCAL_FILE_HEADER) return null
+
+  const flags = readUint16(view, 6)
+  const compression = readUint16(view, 8)
+  const compressedSize32 = readUint32(view, 18)
+  const fileNameLength = readUint16(view, 26)
+  const extraLength = readUint16(view, 28)
+
+  const metadataStart = 30
+  const metadataEnd = metadataStart + fileNameLength + extraLength
+  if (metadataEnd > archiveFile.size) return null
+
+  const metadata = new Uint8Array(await archiveFile.slice(metadataStart, metadataEnd).arrayBuffer())
+  const fileName = textDecoder.decode(metadata.subarray(0, fileNameLength))
+  if (fileName !== BUNDLE_ARCHIVE_MANIFEST_PATH) return null
+
+  if (compression !== ZIP_STORED_METHOD) {
+    throw new SiteBundleParseError('CMS archive manifest must be stored without compression', '')
+  }
+  if ((flags & ZIP_DATA_DESCRIPTOR_FLAG) !== 0) {
+    throw new SiteBundleParseError('CMS archive manifest must declare its size in the local header', '')
+  }
+
+  const extra = metadata.subarray(fileNameLength)
+  const compressedSize = compressedSize32 === UINT32_MAX
+    ? readZip64LocalSize(extra)
+    : compressedSize32
+  if (compressedSize === null) {
+    throw new SiteBundleParseError('CMS archive manifest is missing ZIP64 size metadata', '')
+  }
+  if (compressedSize > MAX_ARCHIVE_MANIFEST_BYTES) {
+    throw new SiteBundleParseError('CMS archive manifest is too large to preview safely', '')
+  }
+
+  const manifestStart = metadataEnd
+  const manifestEnd = manifestStart + compressedSize
+  if (manifestEnd > archiveFile.size) {
+    throw new SiteBundleParseError('CMS archive manifest is truncated', '')
+  }
+
+  const manifestBytes = new Uint8Array(await archiveFile.slice(manifestStart, manifestEnd).arrayBuffer())
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(textDecoder.decode(manifestBytes))
+  } catch (err) {
+    throw new SiteBundleParseError(
+      `Invalid archive manifest JSON: ${err instanceof Error ? err.message : 'parse error'}`,
+      '',
+    )
+  }
+  return parseSiteBundleArchiveManifestValue(parsed)
+}
+
+export function siteBundlePreviewFromArchiveManifest(manifest: SiteBundleArchiveManifest): SiteBundle {
+  return parseValue(SiteBundleSchema, {
+    ...manifest,
+    ...(manifest.media
+      ? {
+          media: manifest.media.map((asset) => ({
+            ...asset,
+            bytesBase64: '',
+          })),
+        }
+      : {}),
+  })
+}
+
+function parseSiteBundleArchiveManifestValue(value: unknown): SiteBundleArchiveManifest {
+  try {
+    return parseValue(SiteBundleArchiveManifestSchema, value)
+  } catch {
+    throw new SiteBundleParseError(
+      formatValueErrors(SiteBundleArchiveManifestSchema, value),
+      firstSchemaErrorPath(SiteBundleArchiveManifestSchema, value),
+    )
+  }
+}
+
+function firstSchemaErrorPath(
+  schema: Parameters<typeof formatValueErrors>[0],
+  value: unknown,
+): string {
+  try {
+    return compiled(schema).Errors(value).First()?.path ?? ''
+  } catch {
+    return ''
+  }
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = ''
+  const chunkSize = 0x8000
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    const chunk = bytes.subarray(offset, offset + chunkSize)
+    for (let i = 0; i < chunk.length; i++) {
+      binary += String.fromCharCode(chunk[i]!)
+    }
+  }
+  return btoa(binary)
+}
+
+function readZip64LocalSize(extra: Uint8Array): number | null {
+  let offset = 0
+  while (offset + 4 <= extra.byteLength) {
+    const view = new DataView(extra.buffer, extra.byteOffset + offset, extra.byteLength - offset)
+    const headerId = readUint16(view, 0)
+    const dataSize = readUint16(view, 2)
+    const dataStart = offset + 4
+    const dataEnd = dataStart + dataSize
+    if (dataEnd > extra.byteLength) return null
+    if (headerId === ZIP64_EXTRA_FIELD_ID) {
+      if (dataSize < 16) return null
+      const zip64View = new DataView(extra.buffer, extra.byteOffset + dataStart, dataSize)
+      return Number(zip64View.getBigUint64(8, true))
+    }
+    offset = dataEnd
+  }
+  return null
+}
+
+function readUint16(view: DataView, offset: number): number {
+  return view.getUint16(offset, true)
+}
+
+function readUint32(view: DataView, offset: number): number {
+  return view.getUint32(offset, true)
 }

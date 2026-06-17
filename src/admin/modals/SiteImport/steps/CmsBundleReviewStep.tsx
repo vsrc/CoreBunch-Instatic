@@ -1,7 +1,7 @@
 /**
  * CmsBundleReviewStep — review path for CMS-native site bundles.
  *
- * Static-site imports build an `ImportPlan`; CMS-exported JSON bundles already
+ * Static-site imports build an `ImportPlan`; CMS-exported bundles already
  * contain canonical tables, rows, optional site shell, and media bytes. This
  * step keeps those semantics intact by showing the server preview diff and
  * strategy selector before `POST /admin/api/cms/import` applies the bundle.

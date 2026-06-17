@@ -1,6 +1,6 @@
 # Site Import
 
-`src/admin/modals/SiteImport` is the canonical import surface. It routes static-site bundles (HTML pages, CSS files, images, fonts, JS) through `src/core/siteImport`, and routes CMS-exported `SiteBundle` JSON files through the CMS transfer endpoints for full import/export parity.
+`src/admin/modals/SiteImport` is the canonical import surface. It routes static-site bundles (HTML pages, CSS files, images, fonts, JS) through `src/core/siteImport`, and routes CMS-exported site-transfer ZIP bundles through the CMS transfer endpoints for full import/export parity.
 
 The static-site pipeline has two parts: a pure analysis function (`buildImportPlan`) that produces an `ImportPlan` preview, and an async commit function (`commitImportPlan`) that uploads assets and writes to the store. CMS bundle imports keep their native semantics: validate the `SiteBundle`, preview against `/admin/api/cms/import/preview`, then apply through `/admin/api/cms/import`.
 
@@ -8,7 +8,7 @@ The static-site pipeline has two parts: a pure analysis function (`buildImportPl
 
 ## TL;DR
 
-- Entry: global admin-shell modal, opened from Spotlight or workspace actions. Drop files, a folder, a `.zip`, or a CMS-exported `.json` bundle. Static files use the four-stage modal (Drop → Review → Conflicts → Import, with completion shown inside the Import stage). CMS bundles use Drop → Review bundle → Import.
+- Entry: global admin-shell modal, opened from Spotlight or workspace actions. Drop files, a folder, a static `.zip`, or a CMS-exported `.zip` bundle. Static files use the four-stage modal (Drop → Review → Conflicts → Import, with completion shown inside the Import stage). CMS bundles use Drop → Review bundle → Import.
 - `buildImportPlan({ fileMap, currentSite, options })` — pure, synchronous — produces an `ImportPlan` with pages, style rules, kept stylesheet files, media, color tokens, custom fonts, Google font install requests, font tokens, and scripts.
 - **Per-stylesheet import modes:** each top-level linked stylesheet either converts to editable style rules (default) or imports verbatim as a page-scoped `SiteFile` stylesheet (`options.stylesheetModes`, picked in the Review step). There are no generated scope classes — page isolation comes from the kept file's runtime scope.
 - `commitImportPlan(plan, adapter)` — uploads assets, then wraps all store writes in a single `adapter.commit` call → one Cmd+Z reverts the whole import.
@@ -71,9 +71,9 @@ src/admin/modals/SiteImport/
 ## Data flow
 
 ```text
-User drops files / folder / .zip / CMS bundle JSON
+User drops files / folder / static .zip / CMS bundle .zip
             │
-            ├─ valid SiteBundle JSON → previewSiteBundle → CmsBundleReviewStep
+            ├─ valid CMS bundle → previewSiteBundle → CmsBundleReviewStep
             │                                      │
             │                                      └─ importSiteBundle(strategy)
             │
@@ -281,9 +281,9 @@ The conflict wizard renders bulk controls in each of the three conflict categori
 
 The modal is mounted once at the authenticated admin shell (`AuthenticatedAdmin.tsx`) behind `useAdminUi().siteImportOpen`. It is not owned by the Site editor route. The Site editor, Data workspace, and Spotlight command all open the same shell-level modal state, so importing works from any admin workspace with the required capability.
 
-**Drop** — full-modal drop zone. Accepts loose files, a folder, a `.zip`, or a CMS-exported `.json` bundle. A single JSON file is first checked with `parseSiteBundle`; valid bundles route to the CMS bundle review path. Everything else goes through `ingestInput`, which normalizes static import input shapes to `FileMap`. Static import analysis needs a `currentSite`; when the modal opens outside the Site editor, it loads the CMS draft through `cmsAdapter.loadSite('default')` before calling `buildImportPlan`. Size guards: 1 GB aggregate, 10 k files, 5 GB uncompressed (zip-bomb guard).
+**Drop** — full-modal drop zone. Accepts loose files, a folder, a static `.zip`, or a CMS-exported `.zip` bundle. A single ZIP is classified before analysis: an Instatic transfer archive has `.instatic/site-bundle.json` as its first stored entry and routes to the CMS bundle review path; any other ZIP is treated as a static-site import and normalized through `ingestInput` to `FileMap`. JSON `SiteBundle` files are still accepted by the internal parser for tests and direct API work, but the exported user-facing artifact is ZIP. Static import analysis needs a `currentSite`; when the modal opens outside the Site editor, it loads the CMS draft through `cmsAdapter.loadSite('default')` before calling `buildImportPlan`. Size guards: 1 GB aggregate, 10 k files, 5 GB uncompressed (zip-bomb guard).
 
-**CMS bundle review** — shown when the dropped file validates as `SiteBundle`. The wizard calls `previewSiteBundle` to render a diff against the local site, then lets the user pick `replace`, `merge-add`, or `merge-overwrite`. Commit calls `importSiteBundle`; on success the modal closes and the caller can refresh workspace data.
+**CMS bundle review** — shown when the dropped archive validates as an Instatic transfer archive. The wizard reads only the manifest for preview, calls `previewSiteBundle` to render a diff against the local site, then lets the user pick `replace`, `merge-add`, or `merge-overwrite`. Commit calls `importSiteBundleArchive` with the original ZIP `File`, so media assets stream through `/admin/api/cms/import/archive` instead of expanding into browser memory. On success the modal closes and the caller can refresh workspace data.
 
 **Analyze (Review)** — category navigator. Left column: one nav entry per import category with its count and include-toggle, plus "Add more files" (files can be added at any point — re-ingests and rebuilds the plan) and a "Can't import" entry for skipped items. Right pane: detail view per category:
 - **Pages** — checkbox + inline slug editor per page.
@@ -332,7 +332,7 @@ On success the same step switches to its **complete** state — a success mark, 
 ## Related
 
 - [docs/features/html-import.md](html-import.md) — `@core/htmlImport` is used by `htmlPagePlan.ts` to parse each HTML file's body into a `PageNode` fragment
-- [docs/features/site-transfer.md](site-transfer.md) — CMS bundle export/import format and server endpoints used by the JSON branch of this modal
+- [docs/features/site-transfer.md](site-transfer.md) — CMS bundle export/import archive format and server endpoints used by the CMS branch of this modal
 - [docs/reference/page-tree.md](../reference/page-tree.md) — `NodeTree<PageNode>`, `ImportFragment` shape
 - [docs/reference/typebox-patterns.md](../reference/typebox-patterns.md) — boundary validation
 - Source-of-truth files:

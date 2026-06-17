@@ -17,6 +17,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
 import React from 'react'
 import { render, screen, cleanup, fireEvent, act, waitFor, within } from '@testing-library/react'
+import { strToU8, zipSync } from 'fflate'
 import { useEditorStore } from '@site/store/store'
 import { useAdminUi } from '@admin/state/adminUi'
 import { subscribeToasts, type Toast } from '@ui/components/Toast/toastBus'
@@ -32,6 +33,7 @@ import { SiteImportModal } from '@admin/modals/SiteImport'
 import type { ImportSelection } from '@admin/modals/SiteImport'
 import { commitImportPlan } from '@core/siteImport'
 import { pageToCells } from '@core/data/pageFromRow'
+import { BUNDLE_ARCHIVE_MANIFEST_PATH } from '@core/data/bundleArchive'
 // Static-site import maps HTML into base modules during plan analysis.
 import '@modules/base'
 import type {
@@ -167,6 +169,30 @@ const CMS_BUNDLE: SiteBundle = {
   rows: [CMS_BUNDLE_ROW],
 }
 
+const CMS_BUNDLE_ARCHIVE_MANIFEST = {
+  ...CMS_BUNDLE,
+  media: [
+    {
+      id: 'asset-logo',
+      filename: 'logo.png',
+      mimeType: 'image/png',
+      sizeBytes: 14,
+      altText: '',
+      caption: '',
+      title: '',
+      tags: [],
+      width: null,
+      height: null,
+      durationMs: null,
+      dominantColor: null,
+      blurHash: null,
+      storagePath: 'logo.png',
+      posterPath: null,
+      folderIds: [],
+    },
+  ],
+}
+
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -231,6 +257,27 @@ function dropCmsBundleFile(bundle: SiteBundle, name = 'site-bundle.json') {
   fireEvent.drop(screen.getByLabelText(/drop site files/i), {
     dataTransfer: { files: [bundleFile] },
   })
+}
+
+function makeCmsBundleZip(): Uint8Array {
+  return zipSync({
+    [BUNDLE_ARCHIVE_MANIFEST_PATH]: strToU8(JSON.stringify(CMS_BUNDLE_ARCHIVE_MANIFEST)),
+    'media/logo.png': strToU8('fake-png-bytes'),
+  }, { level: 0 })
+}
+
+function makeCmsBundleZipFile(name = 'site-bundle.zip'): File {
+  return new File([makeCmsBundleZip()], name, {
+    type: 'application/zip',
+  })
+}
+
+function dropCmsBundleZip(name = 'site-bundle.zip'): File {
+  const zipFile = makeCmsBundleZipFile(name)
+  fireEvent.drop(screen.getByLabelText(/drop site files/i), {
+    dataTransfer: { files: [zipFile] },
+  })
+  return zipFile
 }
 
 function SiteImportHarness({ onCmsBundleImportComplete }: { onCmsBundleImportComplete?: () => void }) {
@@ -319,6 +366,124 @@ describe('SiteImportModal — CMS bundle import', () => {
     expect(screen.getByText(/fixture cms site/i)).toBeDefined()
     expect(screen.getByText(/import strategy/i)).toBeDefined()
     expect((previewRequestBody as SiteBundle).schemaVersion).toBe(1)
+  })
+
+  it('routes a CMS-exported zip bundle into the bundle preview flow without base64-expanding media bytes', async () => {
+    let previewRequestBody: unknown = null
+    globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (url === '/admin/api/cms/import/preview') {
+        previewRequestBody = JSON.parse(String(init?.body ?? '{}'))
+        return jsonResponse({
+          meta: {
+            exportedAt: CMS_BUNDLE.exportedAt,
+            sourceSiteName: CMS_BUNDLE.sourceSiteName,
+            schemaVersion: 1,
+          },
+          tables: [
+            {
+              id: 'posts',
+              name: 'Posts',
+              kind: 'postType',
+              inBundle: 1,
+              willReplace: 0,
+              willAdd: 1,
+              currentLocal: 0,
+            },
+          ],
+          totals: {
+            rows: 1,
+            mediaFiles: 1,
+            mediaEmbedded: true,
+            mediaFolders: 0,
+            redirects: 0,
+          },
+        })
+      }
+      return jsonResponse({ error: `Unexpected request: ${url}` }, 500)
+    }
+
+    useEditorStore.setState({
+      site: makeSite(),
+    } as Parameters<typeof useEditorStore.setState>[0])
+
+    render(<SiteImportModal />)
+
+    dropCmsBundleZip()
+
+    expect(await screen.findByText(/diff against current site/i)).toBeDefined()
+    expect(screen.getByText(/fixture cms site/i)).toBeDefined()
+
+    const previewBundle = previewRequestBody as SiteBundle
+    expect(previewBundle.media?.[0]?.bytesBase64).toBe('')
+  })
+
+  it('imports a CMS-exported zip bundle through the archive endpoint', async () => {
+    let importUrl: string | null = null
+    let importBody: BodyInit | null | undefined = null
+    globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (url === '/admin/api/cms/import/preview') {
+        return jsonResponse({
+          meta: {
+            exportedAt: CMS_BUNDLE.exportedAt,
+            sourceSiteName: CMS_BUNDLE.sourceSiteName,
+            schemaVersion: 1,
+          },
+          tables: [
+            {
+              id: 'posts',
+              name: 'Posts',
+              kind: 'postType',
+              inBundle: 1,
+              willReplace: 0,
+              willAdd: 1,
+              currentLocal: 0,
+            },
+          ],
+          totals: {
+            rows: 1,
+            mediaFiles: 1,
+            mediaEmbedded: true,
+            mediaFolders: 0,
+            redirects: 0,
+          },
+        })
+      }
+      if (url.startsWith('/admin/api/cms/import/archive')) {
+        importUrl = url
+        importBody = init?.body
+        return jsonResponse({
+          ok: true,
+          strategy: 'merge-add',
+          tablesAffected: 1,
+          rowsInserted: 1,
+          rowsReplaced: 0,
+          rowsSkipped: 0,
+          mediaImported: 1,
+          mediaFoldersImported: 0,
+          redirectsImported: 0,
+        })
+      }
+      return jsonResponse({ error: `Unexpected request: ${url}` }, 500)
+    }
+
+    useEditorStore.setState({
+      site: makeSite(),
+    } as Parameters<typeof useEditorStore.setState>[0])
+
+    render(<SiteImportModal />)
+
+    const zipFile = dropCmsBundleZip()
+    expect(await screen.findByText(/diff against current site/i)).toBeDefined()
+
+    fireEvent.click(screen.getByRole('button', { name: /add rows/i }))
+
+    await waitFor(() => {
+      expect(importUrl).toContain('/admin/api/cms/import/archive')
+    })
+    expect(importUrl).toContain('strategy=merge-add')
+    expect(importBody).toBe(zipFile)
   })
 
   it('imports the CMS bundle with the selected strategy and closes through the store flag', async () => {

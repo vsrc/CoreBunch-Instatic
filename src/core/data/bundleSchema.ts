@@ -5,7 +5,7 @@
  *   - optionally: the site shell (breakpoints, settings, classes, files, runtime config)
  *   - all (or selected) data tables
  *   - all (or selected) data rows
- *   - optionally: non-deleted media assets with bytes embedded as base64
+ *   - optionally: non-deleted media assets
  *   - optionally: the media folder tree (assets carry their `folderIds` membership)
  *   - optionally: published-URL redirects (old route → row)
  *
@@ -15,10 +15,12 @@
  * credentials (user passwords, AI provider keys) are deliberately NOT carried —
  * a portable bundle is not a place for secrets.
  *
- * The bundle is intended for self-contained transfer between self-hosted instances.
- * Media bytes are embedded directly in the JSON (base64-encoded). For large sites
- * this produces a large JSON file; the caller should handle streaming or chunking
- * at the transport layer. v1 caveat: bundles are assembled in memory.
+ * This is the internal server import/preview payload. User-facing exports are
+ * ZIP archives whose manifest omits `bytesBase64` and stores raw media bytes
+ * under `media/<storagePath>`. The Site Import modal reads only the archive
+ * manifest for preview, then posts the original ZIP to the archive import
+ * endpoint so media bytes stream server-side instead of expanding in browser
+ * memory. Direct/internal JSON imports still use this embedded-byte shape.
  *
  * Import side supports three strategies:
  *   - replace         — wipe everything, reimport from bundle (destructive)
@@ -38,10 +40,10 @@ import { SiteShellSchema } from '@core/page-tree'
 // ---------------------------------------------------------------------------
 
 /**
- * A media asset record serialized for bundle transfer. `bytesBase64` holds the
- * raw file bytes encoded as Base64. `storagePath` is the relative path inside
- * the uploads directory so the import handler can write the file and reconstruct
- * `publicPath` as `/uploads/<storagePath>`.
+ * A media asset record serialized for the internal import payload.
+ * `bytesBase64` holds the raw file bytes encoded as Base64. `storagePath` is
+ * the relative path inside the uploads directory so the import handler can
+ * write the file and reconstruct `publicPath` as `/uploads/<storagePath>`.
  *
  * Variants, folder memberships, and deleted/replaced timestamps are intentionally
  * omitted — they either regenerate automatically or are not needed on a fresh import.
@@ -53,7 +55,7 @@ import { SiteShellSchema } from '@core/page-tree'
  */
 const SAFE_RELATIVE_PATH_PATTERN = '^(?!/)(?!.*(?:^|/)\\.\\.(?:$|/)).+$'
 
-export const MediaAssetExportSchema = Type.Object({
+export const MediaAssetMetadataSchema = Type.Object({
   id: Type.String(),
   filename: Type.String(),
   mimeType: Type.String(),
@@ -83,9 +85,19 @@ export const MediaAssetExportSchema = Type.Object({
    * assignments to folders that weren't exported are skipped.
    */
   folderIds: Type.Array(Type.String()),
-  /** Raw file bytes encoded as Base64. */
-  bytesBase64: Type.String(),
 })
+
+export type MediaAssetMetadata = Static<typeof MediaAssetMetadataSchema>
+
+export const MediaAssetExportSchema = Type.Intersect([
+  MediaAssetMetadataSchema,
+  Type.Object({
+    /** Raw file bytes encoded as Base64. */
+    bytesBase64: Type.String(),
+  }),
+])
+
+export type MediaAssetExport = Static<typeof MediaAssetExportSchema>
 
 // ---------------------------------------------------------------------------
 // BundleMediaFolder
@@ -195,10 +207,9 @@ export type ExportRequest = Static<typeof ExportRequestSchema>
 
 /**
  * Response of `POST /admin/api/cms/export/estimate`. Reports the byte size the
- * export bundle WOULD have for the given `ExportRequest`, computed from the
+ * export archive WOULD have for the given `ExportRequest`, computed from the
  * exact same selection logic the real export uses — without reading media
- * files off disk or base64-encoding them. `bytes` is the serialized bundle
- * length plus the Base64-encoded length of every included media asset.
+ * files off disk. `bytes` is the stored ZIP size.
  */
 export const ExportEstimateSchema = Type.Object({
   bytes: Type.Number(),

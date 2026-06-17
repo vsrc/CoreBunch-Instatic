@@ -1,6 +1,6 @@
 # Site Transfer
 
-Export and import — move a complete site between self-hosted instances. One JSON bundle carries the shell, all data tables, all data rows, the media library (assets + their bytes + the folder tree), and published-URL redirects. Everything that defines the *site* travels in one file, so re-importing into a fresh instance reproduces an **identical** site.
+Export and import — move a complete site between self-hosted instances. One ZIP bundle carries the shell, all data tables, all data rows, the media library (metadata + raw files + the folder tree), and published-URL redirects. Everything that defines the *site* travels in one archive, so re-importing into a fresh instance reproduces an **identical** site.
 
 The transfer format is **self-contained** — no external service, no signed URLs, no incremental sync. Use it for backup, environment promotion (staging → production), or migrating between hosts.
 
@@ -10,29 +10,35 @@ The **Export site** dialog (`src/admin/pages/data/components/ExportDialog`) is a
 
 ## TL;DR
 
-- Format: `SiteBundle` — TypeBox schema in `src/core/data/bundleSchema.ts`.
+- Format: `site-bundle-<timestamp>.zip` — `.instatic/site-bundle.json` plus `media/<storagePath>` entries. The archive manifest schema lives in `src/core/data/bundleArchive.ts`; the internal import payload schema lives in `src/core/data/bundleSchema.ts`.
 - Endpoints:
   - `GET /admin/api/cms/export` or `POST /admin/api/cms/export` — produce a bundle from the current site
   - `GET /admin/api/cms/export/estimate` (POST) — exact byte size for an `ExportRequest`, without reading media off disk
   - `GET /admin/api/cms/export/summary` — total counts of the non-table categories (media, folders, redirects) so the dialog can label/disable them
   - `POST /admin/api/cms/import/preview` — analyze a bundle without applying (diff summary)
   - `POST /admin/api/cms/import[?strategy=...]` — apply the bundle
+  - `POST /admin/api/cms/import/archive[?strategy=...]` — apply the user-facing ZIP archive, streaming media bytes to disk
 - Export categories: **theme & settings** (the shell), each **content table**, the **media library**, **media folders**, and **redirects** — all on by default.
 - The admin dialog starts downloads with a same-origin form POST, not `fetch().blob()`, so large media-heavy bundles are streamed by the browser's download stack instead of being materialized in JavaScript blob storage.
 - UI entry (export): **Export site** in the Data workspace opens `src/admin/pages/data/components/ExportDialog`.
-- UI entry (import): drop the exported `.json` into the canonical Site Import modal (`src/admin/modals/SiteImport`). Spotlight and workspace **Import site** actions open this same global shell modal.
+- UI entry (import): drop the exported `.zip` into the canonical Site Import modal (`src/admin/modals/SiteImport`). Spotlight and workspace **Import site** actions open this same global shell modal.
 - Three import strategies: `replace` (destructive — the full-restore path), `merge-add` (insert if new), `merge-overwrite` (upsert).
-- Media bytes are embedded as base64. Variants are **not** exported — they regenerate on first request after import.
+- Media bytes are stored as raw files under `media/`. Export and archive import stream media bytes; the browser and server do not assemble a media-heavy archive as a JSON/base64 payload.
 - Media folders + redirects are restored by the **`replace`** strategy (the full-restore path); merge strategies leave the local folder tree and redirects untouched.
-- v1 caveat: bundles are assembled in memory. Large sites with heavy media will be slow / memory-hungry — chunked streaming is a future improvement.
 
 ---
 
 ## Where the code lives
 
 ```text
+src/core/data/bundleArchive.ts
+├── SiteBundleArchiveManifestSchema — archive `.instatic/site-bundle.json` shape
+├── BUNDLE_ARCHIVE_MANIFEST_PATH    — `.instatic/site-bundle.json`
+└── mediaArchivePath()              — maps storagePath → `media/<storagePath>`
+
 src/core/data/bundleSchema.ts
-├── MediaAssetExportSchema       — one media asset with bytesBase64 + folderIds
+├── MediaAssetMetadataSchema     — one media asset without bytes
+├── MediaAssetExportSchema       — internal import payload asset with bytesBase64 + folderIds
 ├── BundleMediaFolderSchema      — one media-library folder (tree via parentId)
 ├── BundleRedirectSchema         — one published-URL redirect (raw row)
 ├── ImportStrategySchema         — 'replace' | 'merge-add' | 'merge-overwrite'
@@ -46,17 +52,28 @@ src/core/data/bundleSchema.ts
 server/handlers/cms/
 ├── export.ts                    — GET+POST /admin/api/cms/export
 ├── import.ts                    — POST /admin/api/cms/import
+├── importArchive.ts             — POST /admin/api/cms/import/archive
 └── importPreview.ts             — POST /admin/api/cms/import/preview
 
-src/core/persistence/cmsTransfer.ts   — client-side wrapper (typed fetch helpers)
+src/core/persistence/cmsTransfer.ts   — client-side wrapper (typed fetch + archive parse helpers)
 ```
 
 ---
 
-## The `SiteBundle` shape
+## Archive Shape
+
+```text
+site-bundle-2026-06-17T15-58-44.zip
+├── .instatic/
+│   └── site-bundle.json
+└── media/
+    └── <storagePath>
+```
+
+`.instatic/site-bundle.json` is the first stored ZIP entry and is a `SiteBundleArchiveManifest`:
 
 ```ts
-interface SiteBundle {
+interface SiteBundleArchiveManifest {
   schemaVersion:  1
   exportedAt:     string                    // ISO datetime
   sourceSiteName?: string                   // human-readable name of source site
@@ -70,8 +87,8 @@ interface SiteBundle {
   /** All (or selected) data rows — `data_rows` rows. Cells included verbatim. */
   rows:   DataRow[]
 
-  /** Optional: media assets with bytes embedded as base64. Each carries its `folderIds`. */
-  media?: MediaAssetExport[]
+  /** Optional: media asset metadata. Bytes live at media/<storagePath>. */
+  media?: MediaAssetMetadata[]
 
   /** Optional: the media-library folder tree (rebuilt from `parentId` links). */
   mediaFolders?: BundleMediaFolder[]
@@ -83,7 +100,7 @@ interface SiteBundle {
 
 `media[].folderIds` carries each asset's folder membership; on import it's restored only into folders that arrived in `mediaFolders`. The export keeps the bundle self-consistent: it only includes a redirect when both its table and its target row are part of the same bundle, so the import never hits a dangling foreign key.
 
-A bundle is a single JSON file. The whole thing parses through TypeBox at the import boundary; mismatched shape rejects the bundle with a clear path.
+The archive manifest parses through TypeBox before import. The admin import path reads only the first stored manifest entry for preview. Commit sends the original ZIP to `/admin/api/cms/import/archive`, which applies the validated manifest and streams each `media/<storagePath>` entry directly to `uploads/<storagePath>`.
 
 `MediaAssetExport.storagePath` (and `posterPath`) are constrained at the schema level: the TypeBox pattern forbids a leading `/` and any `..` segment. The import handler enforces a second containment check at the write sink — `assertPathWithin(uploadsDir, join(uploadsDir, storagePath))` in `server/handlers/cms/import.ts` — so a tampered bundle cannot write bytes outside the uploads root even if the schema check were bypassed.
 
@@ -119,7 +136,7 @@ GET accepts filter options as query-string params. POST accepts either a JSON bo
   // whole table, or list specific row ids for a subset. A table absent from
   // this array is not exported at all.
   tables?:              { tableId: string; rowIds?: string[] }[]
-  includeMedia?:        boolean     // embed media bytes; default: false (the dialog sends true)
+  includeMedia?:        boolean     // include media files; default: false (the dialog sends true)
   includeSite?:         boolean     // include site shell; default: true
   includeMediaFolders?: boolean     // include the folder tree + asset membership; default: true
   includeRedirects?:    boolean     // include published-URL redirects; default: true
@@ -134,9 +151,9 @@ The handler:
 
 1. Capability-gates on `data.export`.
 2. Loads the shell (always, for `sourceSiteName` even when `includeSite: false`), tables, rows.
-3. If `includeMedia: true`, reads media bytes from `uploadsDir` and encodes as base64.
-4. Assembles a `SiteBundle` JSON.
-5. Returns it with `Content-Type: application/json` and `Content-Disposition: attachment`.
+3. If `includeMedia: true`, stats each existing media file under `uploadsDir` and writes it as a streamed `media/<storagePath>` archive entry.
+4. Assembles `.instatic/site-bundle.json` as the first stored entry.
+5. Returns a stored ZIP64 stream with `Content-Type: application/zip` and `Content-Disposition: attachment`.
 
 Row visibility: callers without `content.edit.any` / `content.publish.any` / `content.manage` only export their own rows (gated by `canSeeAllDataRows`).
 
@@ -146,7 +163,8 @@ Row visibility: callers without `content.edit.any` / `content.publish.any` / `co
 
 `POST /admin/api/cms/import/preview`
 
-Body: a `SiteBundle` JSON (verbatim — no wrapper object).
+Body: an internal `SiteBundle` JSON (verbatim — no wrapper object). The admin importer builds this from the exported ZIP before previewing.
+For user-facing ZIP archives, the admin importer builds this preview payload from `.instatic/site-bundle.json` only; media entries use empty `bytesBase64` placeholders because preview never needs file bytes.
 
 Returns a `BundlePreview`:
 
@@ -169,7 +187,7 @@ Returns a `BundlePreview`:
   totals: {
     rows:          number   // total rows in bundle
     mediaFiles:    number   // total media assets in bundle
-    mediaEmbedded: boolean  // true if bytes are embedded
+    mediaEmbedded: boolean  // true if media bytes are present in the internal import payload
     mediaFolders:  number   // total folders in bundle
     redirects:     number   // total redirects in bundle
   }
@@ -186,7 +204,11 @@ Capability-gated by `data.export`.
 
 `POST /admin/api/cms/import[?strategy=replace|merge-add|merge-overwrite]`
 
-Body: a `SiteBundle` JSON (verbatim). Strategy is a query-string parameter (default: `replace`).
+Body: an internal `SiteBundle` JSON (verbatim). Strategy is a query-string parameter (default: `replace`).
+
+`POST /admin/api/cms/import/archive[?strategy=replace|merge-add|merge-overwrite]`
+
+Body: the user-facing ZIP archive emitted by export. The manifest must be the first stored entry at `.instatic/site-bundle.json`; media entries must be stored under `media/<storagePath>`. This is the path used by Super Import when a dropped ZIP is an Instatic transfer archive.
 
 ```ts
 type ImportStrategy = 'replace' | 'merge-add' | 'merge-overwrite'
@@ -200,7 +222,7 @@ type ImportStrategy = 'replace' | 'merge-add' | 'merge-overwrite'
 
 Folder membership (`media_asset_folders`) is restored **after** the media bytes land, and only into folders the bundle actually carried. Redirect rows are inserted after their target rows exist (in `replace`, the rows' cascade-delete clears the old redirects first). Folders + redirects ride only the `replace` (full-restore) path because merging a folder tree or redirect set into a populated instance risks unique-key collisions — the same reason the site shell is `replace`/`merge-overwrite`-only.
 
-The handler:
+The JSON handler:
 
 1. Validates the bundle against `SiteBundleSchema`.
 2. Runs the same preview logic to compute the change set.
@@ -210,6 +232,14 @@ The handler:
    - Site shell: if the bundle carries `site`, overwrite the `site` row.
 4. **Outside the transaction**, writes media bytes to `uploads/<storagePath>`. Before writing, the handler calls `assertPathWithin(uploadsDir, target)` (from `server/util/pathWithin.ts`) as a defense-in-depth check — the schema already forbids traversal, but the sink re-asserts containment after `path.join()` resolves symlinks. Media writes are best-effort — if a disk write fails, the row import has already committed and the asset is skipped with a log entry.
 5. Returns `ImportResult` with counts.
+
+The archive handler:
+
+1. Capability-gates on `data.import`.
+2. Reads and validates the first ZIP entry as `.instatic/site-bundle.json`.
+3. Delegates the manifest's site/data/folder/redirect content to the JSON import handler without media bytes.
+4. Streams each declared media entry from the request body to disk and upserts the matching media row.
+5. Returns the same `ImportResult` shape with `mediaImported` from the streamed entries.
 
 The transaction is **all-or-nothing** for the DB side — if any insert fails, the DB rolls back. Media may have been partially written; the warning reports which bytes landed.
 
@@ -265,13 +295,13 @@ POST /admin/api/cms/export
 }
 ```
 
-Save the response JSON to disk (browser handles the download automatically).
+Save the response ZIP to disk (browser handles the download automatically).
 
 ### Move a site between hosts
 
 1. On the source host: export with `includeSite: true, includeMedia: true`.
 2. On the destination host: setup wizard completes (creates an owner account, empty site).
-3. On the destination host: open **Import Site** from Spotlight or the Data workspace, then drop the exported JSON bundle.
+3. On the destination host: open **Import Site** from Spotlight or the Data workspace, then drop the exported ZIP bundle.
 4. Review the preview and import with `strategy: replace`.
 5. After import, the published HTML is regenerated on next publish (or `republish-all`).
 
@@ -331,6 +361,7 @@ A nightly cron can hit `/admin/api/cms/export` with an admin session cookie and 
   - `src/core/data/bundleSchema.ts` — `SiteBundleSchema`, `ImportStrategySchema`, `BundlePreviewSchema`, `ImportResultSchema`
   - `server/handlers/cms/export.ts` — `GET+POST /export`
   - `server/handlers/cms/import.ts` — `POST /import`
+  - `server/handlers/cms/importArchive.ts` — `POST /import/archive`
   - `server/handlers/cms/importPreview.ts` — `POST /import/preview`
   - `src/core/persistence/cmsTransfer.ts` — client-side transfer helpers, including native export form submission
   - `server/util/pathWithin.ts` — `assertPathWithin` containment helper (media write sink)

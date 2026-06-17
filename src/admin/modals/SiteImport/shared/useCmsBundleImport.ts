@@ -2,8 +2,11 @@ import { useState } from 'react'
 import { pushToast } from '@ui/components/Toast'
 import {
   importSiteBundle,
+  importSiteBundleArchive,
   parseSiteBundle,
   previewSiteBundle,
+  readSiteBundleArchiveManifestFile,
+  siteBundlePreviewFromArchiveManifest,
   SiteBundleParseError,
 } from '@core/persistence/cmsTransfer'
 import { getErrorMessage } from '@core/utils/errorMessage'
@@ -21,6 +24,7 @@ import type {
 interface CmsBundleState {
   filename: string
   bundle: SiteBundle
+  archiveFile: File | null
   preview: BundlePreview | null
   previewLoading: boolean
   previewError: string | null
@@ -33,7 +37,7 @@ interface UseCmsBundleImportInput {
   onImportComplete?: () => void
 }
 
-function isCmsBundleCandidate(file: File): boolean {
+function isCmsBundleJsonCandidate(file: File): boolean {
   return file.name.toLowerCase().endsWith('.json') || file.type === 'application/json'
 }
 
@@ -83,7 +87,7 @@ function previewHasContent(preview: BundlePreview | null): boolean {
 
 export function describeCmsBundleLoadError(err: unknown): string {
   return err instanceof SiteBundleParseError
-    ? `CMS bundle JSON is invalid: ${err.message}`
+    ? `CMS bundle is invalid: ${err.message}`
     : getErrorMessage(err, 'Failed to read CMS bundle')
 }
 
@@ -93,15 +97,15 @@ export function useCmsBundleImport({
 }: UseCmsBundleImportInput) {
   const [cmsBundleState, setCmsBundleState] = useState<CmsBundleState | null>(null)
 
-  async function loadCmsBundleFile(file: File): Promise<boolean> {
-    if (!isCmsBundleCandidate(file)) return false
-
-    const raw = await file.text()
-    const bundle = parseSiteBundle(raw)
-
+  async function beginCmsBundlePreview(
+    filename: string,
+    bundle: SiteBundle,
+    archiveFile: File | null,
+  ): Promise<void> {
     setCmsBundleState({
-      filename: file.name,
+      filename,
       bundle,
+      archiveFile,
       preview: null,
       previewLoading: true,
       previewError: null,
@@ -125,7 +129,23 @@ export function useCmsBundleImport({
           }
         : prev)
     }
+  }
 
+  async function loadCmsBundleFile(file: File): Promise<boolean> {
+    if (!isCmsBundleJsonCandidate(file)) return false
+
+    const raw = await file.text()
+    const bundle = parseSiteBundle(raw)
+    await beginCmsBundlePreview(file.name, bundle, null)
+
+    return true
+  }
+
+  async function loadCmsBundleArchiveFile(file: File): Promise<boolean> {
+    const manifest = await readSiteBundleArchiveManifestFile(file)
+    if (!manifest) return false
+
+    await beginCmsBundlePreview(file.name, siteBundlePreviewFromArchiveManifest(manifest), file)
     return true
   }
 
@@ -149,7 +169,9 @@ export function useCmsBundleImport({
 
     setCmsBundleState({ ...cmsBundleState, importing: true })
     try {
-      const importResult = await importSiteBundle(cmsBundleState.bundle, cmsBundleState.strategy)
+      const importResult = cmsBundleState.archiveFile
+        ? await importSiteBundleArchive(cmsBundleState.archiveFile, cmsBundleState.strategy)
+        : await importSiteBundle(cmsBundleState.bundle, cmsBundleState.strategy)
       pushToast({
         kind: 'success',
         title: 'Import complete',
@@ -194,6 +216,7 @@ export function useCmsBundleImport({
     cmsImportButtonLabel,
     clearCmsBundle,
     importCmsBundle,
+    loadCmsBundleArchiveFile,
     loadCmsBundleFile,
     setCmsStrategy,
   }

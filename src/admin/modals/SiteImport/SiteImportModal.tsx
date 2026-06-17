@@ -3,7 +3,7 @@
  *
  * A canonical import dialog for both static-site imports and CMS-native site
  * bundles. Static-site inputs (folder, .zip, loose files) import into the
- * visual editor in one undo-able operation. CMS-exported JSON bundles use the
+ * visual editor in one undo-able operation. CMS-exported ZIP bundles use the
  * server-side transfer endpoints for full import/export parity.
  *
  * Steps:
@@ -94,6 +94,7 @@ export function SiteImportModal({ onCmsBundleImportComplete }: SiteImportModalPr
     cmsImportButtonLabel,
     clearCmsBundle,
     importCmsBundle,
+    loadCmsBundleArchiveFile,
     loadCmsBundleFile,
     setCmsStrategy,
   } = useCmsBundleImport({
@@ -146,15 +147,27 @@ export function SiteImportModal({ onCmsBundleImportComplete }: SiteImportModalPr
     }
   }
 
-  async function handleZipReady(zipBytes: Uint8Array) {
+  async function handleZipReady(file: File) {
     setBusy(true)
     setErrorMsg(null)
     try {
+      if (await loadCmsBundleArchiveFile(file)) {
+        setFileMap(null)
+        setPlan(null)
+        setSelection(null)
+        setBusy(false)
+        setStep('cms-review')
+        return
+      }
+
+      const zipBytes = new Uint8Array(await file.arrayBuffer())
       const map = await ingestInput({ zipBytes })
       await finalizePlan(map)
     } catch (err) {
       console.error('[SiteImportModal] ingest failed:', err)
-      setErrorMsg(describeIngestError(err))
+      setErrorMsg(err instanceof Error && err.name === 'SiteBundleParseError'
+        ? describeCmsBundleLoadError(err)
+        : describeIngestError(err))
       setBusy(false)
     }
   }
@@ -552,7 +565,7 @@ export function SiteImportModal({ onCmsBundleImportComplete }: SiteImportModalPr
             busy={busy}
             errorMessage={errorMsg}
             onFilesReady={(files) => { void handleFilesReady(files) }}
-            onZipReady={(bytes) => { void handleZipReady(bytes) }}
+            onZipReady={(file) => { void handleZipReady(file) }}
           />
         )}
 

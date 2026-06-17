@@ -5,17 +5,20 @@
  *   POST /admin/api/cms/export
  *   POST /admin/api/cms/export/estimate   → { bytes } (size only, no download)
  *
- * Returns a `SiteBundle` JSON that captures a full or partial site state:
+ * Returns a ZIP archive that captures a full or partial site state:
+ *   - `.instatic/site-bundle.json` with the portable manifest
+ *   - `media/<storagePath>` raw files when media is included
+ *
+ * The manifest contains:
  *   - optionally the lean site shell (breakpoints, settings, classes, files, runtime)
  *   - selected (or all) data tables
  *   - selected (or all) non-deleted data rows
- *   - optionally: non-deleted media assets with bytes embedded as base64
+ *   - optionally: non-deleted media asset metadata
  *
  * The `/export/estimate` path runs the IDENTICAL selection logic but reports
  * only the bundle's byte size — without reading media files off disk or
- * base64-encoding them. The estimate is therefore exact (it serializes the
- * real selection and adds each asset's Base64 length analytically), so the
- * "Estimated size" line in the dialog can never drift from the real download.
+ * assembling the ZIP. The estimate is therefore exact: stored archive size
+ * depends only on manifest bytes, entry names, and media byte lengths.
  *
  * Filter options (GET → query string, POST → JSON body or form field via ExportRequestSchema):
  *   tables       — comma-separated table ids (GET) or string[] (POST); default all
@@ -33,7 +36,7 @@
  * leak (the previous implementation returned every row regardless of
  * the caller's content visibility scope).
  */
-import { readFile } from 'node:fs/promises'
+import { stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { DbClient } from '../../db/client'
 import { requireCapability } from '../../auth/authz'
@@ -45,8 +48,14 @@ import { listMediaAssetsForExport, countMediaAssetsForExport } from '../../repos
 import { listExportableMediaFolders } from '../../repositories/mediaFolders'
 import { jsonResponse, readValidatedBody } from '../../http'
 import { CMS_API_PREFIX, type CmsHandlerOptions } from './shared'
-import { ExportRequestSchema, type SiteBundle } from '@core/data/bundleSchema'
+import { ExportRequestSchema, type MediaAssetMetadata, type SiteBundle } from '@core/data/bundleSchema'
+import {
+  BUNDLE_ARCHIVE_MANIFEST_PATH,
+  mediaArchivePath,
+  type SiteBundleArchiveManifest,
+} from '@core/data/bundleArchive'
 import { canSeeAllDataRows } from './data/access'
+import { createStoredZipStream, estimateStoredZipSize, type StoredZipEntry } from '../../archive/storedZip'
 
 const EXPORT_PATH = `${CMS_API_PREFIX}/export`
 const EXPORT_ESTIMATE_PATH = `${CMS_API_PREFIX}/export/estimate`
@@ -55,20 +64,23 @@ const EXPORT_SUMMARY_PATH = `${CMS_API_PREFIX}/export/summary`
 /** A media asset row enriched with its storage path, as loaded for export. */
 type ExportableAsset = Awaited<ReturnType<typeof listMediaAssetsForExport>>[number]
 
-/** Bundle media entry without the heavy `bytesBase64` payload. */
-type MediaEntryMetadata = Omit<NonNullable<SiteBundle['media']>[number], 'bytesBase64'>
+interface ExportArchiveAsset {
+  asset: ExportableAsset
+  filePath: string
+  sizeBytes: number
+}
 
 /**
  * The metadata fields of a bundle media entry — everything except the Base64
  * payload. Shared by the real export (which appends the encoded bytes) and the
  * estimate (which appends an empty string and sizes the bytes analytically).
  */
-function mediaEntryMetadata(asset: ExportableAsset): MediaEntryMetadata {
+function mediaEntryMetadata(asset: ExportableAsset, sizeBytes = asset.sizeBytes): MediaAssetMetadata {
   return {
     id: asset.id,
     filename: asset.filename,
     mimeType: asset.mimeType,
-    sizeBytes: asset.sizeBytes,
+    sizeBytes,
     altText: asset.altText,
     caption: asset.caption,
     title: asset.title,
@@ -82,11 +94,6 @@ function mediaEntryMetadata(asset: ExportableAsset): MediaEntryMetadata {
     posterPath: asset.posterPath,
     folderIds: asset.folderIds,
   }
-}
-
-/** Exact length of the Base64 encoding (with padding) of `n` raw bytes. */
-function base64Length(n: number): number {
-  return Math.ceil(n / 3) * 4
 }
 
 interface ExportSelection {
@@ -222,76 +229,110 @@ export async function handleExportRoute(
   // both the estimate and the real export gate on this so they stay in sync.
   const wantMedia = includeMedia && Boolean(options.uploadsDir)
   const assets = wantMedia ? await listMediaAssetsForExport(db) : []
+  const archiveAssets = wantMedia && options.uploadsDir
+    ? await resolveArchiveAssets(assets, options.uploadsDir)
+    : []
 
   if (isEstimate) {
-    return estimateResponse(selection, wantMedia, assets)
+    return estimateResponse(selection, wantMedia, archiveAssets)
   }
 
-  return downloadResponse(selection, wantMedia, assets, options.uploadsDir)
+  return downloadResponse(selection, wantMedia, archiveAssets)
 }
 
 /**
- * Compute the exact bundle byte size without reading media files. Serializes
- * the real selection with empty `bytesBase64` strings, then adds each asset's
- * Base64-encoded length — which is precisely what would fill those strings.
- * (Base64 is ASCII, so its JSON-string length equals its byte length.)
+ * Compute the exact ZIP byte size without reading media files. Export archives
+ * use stored entries (no compression), so size depends only on manifest bytes,
+ * entry names, and media byte lengths.
  */
 function estimateResponse(
   selection: ExportSelection,
   wantMedia: boolean,
-  assets: ExportableAsset[],
+  assets: ExportArchiveAsset[],
 ): Response {
-  const mediaSkeleton: SiteBundle['media'] = wantMedia
-    ? assets.map((asset) => ({ ...mediaEntryMetadata(asset), bytesBase64: '' }))
+  const mediaMetadata: SiteBundleArchiveManifest['media'] = wantMedia
+    ? assets.map(({ asset, sizeBytes }) => mediaEntryMetadata(asset, sizeBytes))
     : undefined
 
-  const skeleton = buildBundle(selection, mediaSkeleton)
-  const structuralBytes = Buffer.byteLength(JSON.stringify(skeleton), 'utf8')
-  const mediaBytes = wantMedia
-    ? assets.reduce((sum, asset) => sum + base64Length(asset.sizeBytes), 0)
-    : 0
+  const manifest = buildArchiveManifest(selection, mediaMetadata)
+  const manifestBytes = new TextEncoder().encode(JSON.stringify(manifest))
+  const archiveEntries = [
+    {
+      path: BUNDLE_ARCHIVE_MANIFEST_PATH,
+      sizeBytes: manifestBytes.byteLength,
+      usesDataDescriptor: false,
+    },
+    ...(wantMedia
+      ? assets.map(({ asset, sizeBytes }) => ({
+          path: mediaArchivePath(asset.storagePath),
+          sizeBytes,
+        }))
+      : []),
+  ]
 
-  return jsonResponse({ bytes: structuralBytes + mediaBytes })
+  return jsonResponse({ bytes: estimateStoredZipSize(archiveEntries) })
 }
 
-/** Build the full bundle (reading + base64-encoding media bytes) and stream it as a download. */
+/** Build the full archive and stream it as a download. */
 async function downloadResponse(
   selection: ExportSelection,
   wantMedia: boolean,
-  assets: ExportableAsset[],
-  uploadsDir: string | undefined,
+  assets: ExportArchiveAsset[],
 ): Promise<Response> {
-  let media: SiteBundle['media']
-  if (wantMedia && uploadsDir) {
-    const mediaItems = await Promise.all(
-      assets.map(async (asset) => {
-        try {
-          const bytes = await readFile(join(uploadsDir, asset.storagePath))
-          return { ...mediaEntryMetadata(asset), bytesBase64: bytes.toString('base64') }
-        } catch {
-          // If a file is missing from disk, skip the asset rather than aborting
-          // the entire export. The import will recreate metadata rows but without
-          // the bytes.
-          return null
-        }
-      }),
-    )
-    media = mediaItems.filter((item): item is NonNullable<typeof item> => item !== null)
-  }
+  const media: SiteBundleArchiveManifest['media'] = wantMedia
+    ? assets.map(({ asset, sizeBytes }) => mediaEntryMetadata(asset, sizeBytes))
+    : undefined
 
-  const bundle = buildBundle(selection, media)
-  const json = JSON.stringify(bundle)
+  const manifest = buildArchiveManifest(selection, media)
+  const manifestBytes = new TextEncoder().encode(JSON.stringify(manifest))
+  const archiveEntries: StoredZipEntry[] = [
+    {
+      path: BUNDLE_ARCHIVE_MANIFEST_PATH,
+      sizeBytes: manifestBytes.byteLength,
+      source: manifestBytes,
+    },
+    ...assets.map(({ asset, filePath, sizeBytes }) => ({
+      path: mediaArchivePath(asset.storagePath),
+      sizeBytes,
+      source: filePath,
+    })),
+  ]
+
   const timestamp = new Date().toISOString().slice(0, 19).replace(/[:.]/g, '-')
-  return new Response(json, {
+  return new Response(createStoredZipStream(archiveEntries), {
     headers: {
-      'content-type': 'application/json; charset=utf-8',
-      'content-disposition': `attachment; filename="site-bundle-${timestamp}.json"`,
+      'content-type': 'application/zip',
+      'content-disposition': `attachment; filename="site-bundle-${timestamp}.zip"`,
     },
   })
 }
 
-/** Assemble the `SiteBundle` from a selection plus an already-resolved media array. */
-function buildBundle(selection: ExportSelection, media: SiteBundle['media']): SiteBundle {
+async function resolveArchiveAssets(
+  assets: ExportableAsset[],
+  uploadsDir: string,
+): Promise<ExportArchiveAsset[]> {
+  const resolved = await Promise.all(
+    assets.map(async (asset) => {
+      try {
+        const filePath = join(uploadsDir, asset.storagePath)
+        const fileStat = await stat(filePath)
+        if (!fileStat.isFile()) return null
+        return { asset, filePath, sizeBytes: fileStat.size }
+      } catch {
+        // Missing files are omitted from both the manifest and the archive so
+        // the exported bundle stays internally consistent.
+        return null
+      }
+    }),
+  )
+  return resolved.filter((item): item is ExportArchiveAsset => item !== null)
+}
+
+/** Assemble the archive manifest from a selection plus already-resolved media metadata. */
+function buildArchiveManifest(
+  selection: ExportSelection,
+  media: SiteBundleArchiveManifest['media'],
+): SiteBundleArchiveManifest {
   return {
     schemaVersion: 1,
     exportedAt: new Date().toISOString(),
