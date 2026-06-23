@@ -207,6 +207,18 @@ test.describe('admin navigation', () => {
           page.getByTestId('panel-close-content-explorer'),
           'mobile content panel close button',
         )
+        await expectLocatorContained(
+          page,
+          page.getByTestId('panel-close-content-settings'),
+          'mobile content settings close button',
+        )
+        await page.getByTestId('panel-close-content-settings').click()
+        await expect(rightSidebar).toHaveAttribute('data-expanded', 'false')
+        await expectLocatorContained(
+          page,
+          page.getByTestId('panel-close-content-explorer'),
+          'mobile content panel close button after closing settings',
+        )
       })
     } finally {
       await page.evaluate(
