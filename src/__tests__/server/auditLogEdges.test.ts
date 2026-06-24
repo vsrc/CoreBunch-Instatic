@@ -105,6 +105,9 @@ describe('audit log edge semantics', () => {
 
       for (let i = 0; i < 105; i += 1) {
         const metadata = i === 104 ? { nested: { unsupported: true } } : { sequence: i }
+        const actorUserId: string | null = null
+        const ipAddress: string | null = null
+        const userAgent: string | null = null
         await harness.db`
           insert into audit_events (
             id,
@@ -119,13 +122,13 @@ describe('audit log edge semantics', () => {
           )
           values (
             ${`audit-edge-${i.toString().padStart(3, '0')}`},
-            ${null},
+            ${actorUserId},
             ${'publish'},
             ${'site'},
             ${'site'},
             ${metadata},
-            ${null},
-            ${null},
+            ${ipAddress},
+            ${userAgent},
             ${new Date(baseTime + i * 1000).toISOString()}
           )
         `
