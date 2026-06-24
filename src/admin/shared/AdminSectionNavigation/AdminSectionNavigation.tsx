@@ -41,7 +41,7 @@ const NAV_ICON_SIZE = 13
 interface AdminSectionNavigationProps {
   section: AdminWorkspace
   currentUser?: CmsCurrentUser | null
-  onWorkspaceNavigateStart?: () => void
+  onWorkspaceNavigateStart?: () => unknown
 }
 
 // Session-scoped cache of the plugin admin pages list. Without it the
@@ -215,7 +215,7 @@ function NavItem({
   icon: ReactNode
   label: string
   active: boolean
-  onNavigateStart?: () => void
+  onNavigateStart?: () => unknown
 }) {
   if (active) {
     return (
@@ -244,7 +244,7 @@ function PluginsNavLink({
   onNavigateStart,
 }: {
   active: boolean
-  onNavigateStart?: () => void
+  onNavigateStart?: () => unknown
 }) {
   const issuesCount = useSyncExternalStore(
     subscribePluginIssues,
@@ -252,9 +252,8 @@ function PluginsNavLink({
     getPluginsInErrorCount,
   )
   const dot = issuesCount > 0 ? (
-    <span
+    <output
       className={toolbarStyles.pluginsErrorDot}
-      role="status"
       aria-label={`${issuesCount} plugin${issuesCount === 1 ? '' : 's'} in error state`}
       title={`${issuesCount} plugin${issuesCount === 1 ? '' : 's'} need${issuesCount === 1 ? 's' : ''} attention`}
     />
@@ -290,12 +289,12 @@ function AdminRouteLink({
 }: {
   to: string
   children: ReactNode
-  onNavigateStart?: () => void
+  onNavigateStart?: () => unknown
 }) {
   const navigate = useAdminNavigate()
   const location = useLocation()
 
-  function handleClick(event: MouseEvent<HTMLAnchorElement>) {
+  async function navigateToAdminRoute(event: MouseEvent<HTMLAnchorElement>) {
     // Modifier keys / non-primary buttons / target=_blank → let the native
     // <a> behaviour run (open-in-new-tab, etc.). Same-page clicks are a
     // no-op so the soft transition doesn't replay needlessly.
@@ -314,13 +313,24 @@ function AdminRouteLink({
     if (location.pathname === to) return
 
     event.preventDefault()
-    onNavigateStart?.()
-    navigate(to)
+    try {
+      const result = onNavigateStart?.()
+      if (isPromiseLike(result)) await result
+      navigate(to)
+    } catch (err) {
+      console.error('[AdminSectionNavigation] Navigation start hook failed:', err)
+    }
   }
 
   return (
-    <Link className={toolbarStyles.adminLink} to={to} onClick={handleClick}>
+    <Link className={toolbarStyles.adminLink} to={to} onClick={navigateToAdminRoute}>
       {children}
     </Link>
   )
+}
+
+function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
+  if (typeof value !== 'object' || value === null) return false
+  if (!('then' in value)) return false
+  return typeof (value as { then: unknown }).then === 'function'
 }

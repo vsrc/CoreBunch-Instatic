@@ -490,6 +490,65 @@ describe('ContentPage', () => {
     expect(layoutCss).not.toMatch(/\.canvasContent\s*\{[^}]*animation:/s)
   })
 
+  it('waits for async workspace navigation hooks before changing routes', async () => {
+    const transitionStarts: string[] = []
+    let resolveNavigation: (() => void) | null = null
+
+    render(
+      <AdminTestProviders initialEntries={['/admin/site']}>
+        <Routes>
+          <Route
+            path="/admin/site"
+            element={(
+              <>
+                <Toolbar
+                  section="site"
+                  adminNavigationSlot={(
+                    <AdminSectionNavigation
+                      section="site"
+                      onWorkspaceNavigateStart={() => new Promise<void>((resolve) => {
+                        transitionStarts.push('content')
+                        resolveNavigation = resolve
+                      })}
+                    />
+                  )}
+                  rightSlot={<span>site controls</span>}
+                />
+                <LocationProbe />
+              </>
+            )}
+          />
+          <Route
+            path="/admin/content"
+            element={(
+              <>
+                <Toolbar
+                  section="content"
+                  adminNavigationSlot={<AdminSectionNavigation section="content" />}
+                  rightSlot={<span>content controls</span>}
+                />
+                <LocationProbe />
+              </>
+            )}
+          />
+        </Routes>
+      </AdminTestProviders>,
+    )
+
+    fireEvent.click(screen.getByRole('link', { name: 'Content' }))
+
+    expect(transitionStarts).toEqual(['content'])
+    expect(screen.getByLabelText('current route').textContent).toBe('/admin/site')
+    expect(screen.getByText('site controls')).toBeDefined()
+
+    resolveNavigation?.()
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('current route').textContent).toBe('/admin/content')
+    })
+    expect(screen.getByText('content controls')).toBeDefined()
+  })
+
   it('keeps loading skeletons visible until content entries finish loading', async () => {
     let resolveEntries: ((response: Response) => void) | null = null
     const entriesResponse = new Promise<Response>((resolve) => {

@@ -140,9 +140,9 @@ type PublicRouteResolution =
  * matches the pre-unification routing order (`tryServePublishedPage`
  * ran before `tryServeContentRoute` in the dispatcher).
  *
- * The row path also needs the site snapshot to find the entry
- * template; when there isn't one (corrupt install / nothing published),
- * we return `not-found` rather than inventing a fallback document.
+ * The row path also needs the site snapshot to find explicitly authored entry
+ * templates; when there isn't one, we return `not-found` rather than inventing
+ * a fallback document.
  */
 async function resolvePublicRoute(
   db: DbClient,
@@ -166,12 +166,11 @@ async function resolvePublicRoute(
 
   const row = await getPublishedDataRowByRoute(db, route.tableRouteBase, route.rowSlug)
   if (row) {
-    // Every postType table has a default entry template auto-seeded
-    // into the `pages` table on creation (and the boot backfill catches
-    // any pre-existing table that's missing one). So a missing
-    // siteSnapshot here means a corrupt install — surface that as
-    // not-found rather than half-rendering. The snapshot is memoised per
-    // publish version, so warm row requests skip the full-site parse.
+    // Row routes render through explicitly authored entry templates. A missing
+    // site snapshot means there is no published template surface to consult, so
+    // surface that as not-found rather than inventing a fallback document. The
+    // snapshot is memoised per publish version, so warm row requests skip the
+    // full-site parse.
     const siteSnapshot = await getLatestSnapshotForVersion(db, getPublishVersion())
     if (!siteSnapshot) return { kind: 'not-found' }
     return { kind: 'row', snapshot: siteSnapshot, row }

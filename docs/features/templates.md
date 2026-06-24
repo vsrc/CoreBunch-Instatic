@@ -32,7 +32,6 @@ src/core/templates/
 └── tokenInterpolation.ts             — parseTokenString, interpolateTokens, walkFieldPath
 
 src/modules/base/outlet/               — base.outlet module (Content Outlet)
-server/publish/templateSeeding.ts  — seed + backfill for default entry templates
 server/publish/publicRouter.ts         — isTemplatePage guard on direct slug routing
 server/publish/publicRenderer.ts       — chain-aware render paths
 ```
@@ -318,14 +317,14 @@ Store action: `convertTemplateToPage(pageId)` in `siteSlice`.
 
 ---
 
-## Seeding — default entry templates
+## Entry templates are explicit
 
-When a postType `data_table` is created, `ensureDefaultEntryTemplate(db, table)` in `server/publish/templateSeeding.ts` inserts a default template page (idempotent — it no-ops if one already targets the table):
+Creating a postType `data_table` does not create a page. Entry templates are ordinary pages that users create, convert, and delete through the Site workspace. A published row detail URL (`/<route-base>/<row-slug>`) renders only when a matching template exists:
 
 - `templateEnabled: true`, `templateTarget: { kind: 'postTypes', tableSlugs: [table.slug] }`, `templatePriority: 0`
-- Page tree: `base.body` > `base.text` (`<h1>` bound to `currentEntry.title` via token interpolation) + `base.outlet` (bound to `currentEntry.body` via `html` format)
+- Page tree: any authored layout with a `base.outlet` where the row body should flow
 
-`backfillDefaultEntryTemplates(db)` at boot covers postType tables created before the template system was added.
+Without a matching entry template, the row remains publishable CMS content but its public detail URL returns 404.
 
 ---
 
@@ -340,12 +339,11 @@ When a postType `data_table` is created, `ensureDefaultEntryTemplate(db, table)`
 
 ### Add an entry template for a postType
 
-When a postType is created, the system seeds a default entry template automatically. To customize:
-
-1. Open the template page in the visual editor.
-2. Edit it like any page — bind nodes to `currentEntry.<field>` via the Properties panel.
-3. Add `base.outlet` anywhere you want the post body to flow.
-4. Publish.
+1. Create a new page or choose an existing page in the visual editor.
+2. Open Template settings and choose **Post types**.
+3. Select the target collection slug(s).
+4. Build the layout — bind nodes to `currentEntry.<field>` via the Properties panel, and add `base.outlet` where the post body should flow.
+5. Publish.
 
 ### Share a layout across post types
 
@@ -384,7 +382,7 @@ node.props.text = 'Posted by {currentEntry.author.displayName} on {currentEntry.
 |---------|------------|
 | Reading `currentEntry` from a module's `render` without bindings | Set `dynamicBindings` on the node — keeps the schema honest |
 | Hardcoding a template's slug in server handlers | Use `resolveTemplateChain(site, ctx)` |
-| Creating a template page via raw `INSERT INTO pages` | Use `ensureDefaultEntryTemplate(...)` or the admin dialog |
+| Creating a template page via raw `INSERT INTO pages` | Use the Site workspace template dialog |
 | Walking a deep binding path with `JSON.parse(JSON.stringify(...))` | Use `walkFieldPath(frame, 'a.b.c')` |
 | Expecting to visit a template page at its own slug | Template pages are never directly routable — the live router and bake loop both skip them |
 | Inlining `page.template?.target.kind === 'everywhere' ? … : …` in UI code | Use `templateTargetLabel(page)` from `@core/templates` |
@@ -411,7 +409,6 @@ node.props.text = 'Posted by {currentEntry.author.displayName} on {currentEntry.
   - `src/admin/pages/site/hooks/useTemplatePreviewContext.ts` — synthetic preview context for the canvas
   - `src/admin/pages/site/hooks/useActiveLivePath.ts` — resolves the toolbar "Open live page" path for templates
   - `src/core/templates/templatePreviewData.ts` — `buildPreviewCells`, `dataTablePreviewToLoopItem`
-  - `server/publish/templateSeeding.ts` — default-template seeding
   - `server/publish/publicRenderer.ts` — chain-aware render paths
   - `src/admin/pages/site/hooks/useInsertModule.ts` — hook-level outlet guard (toast + null return)
   - `src/admin/pages/site/store/slices/site/nodeActions.ts` — store-level outlet backstop in `insertNode`

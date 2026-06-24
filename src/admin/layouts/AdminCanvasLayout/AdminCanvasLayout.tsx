@@ -178,6 +178,10 @@ export function AdminCanvasLayout() {
     : null
 
   const loadEditorBody = usePostPaintEditorBodyGate()
+  async function saveBeforeWorkspaceNavigation(): Promise<void> {
+    if (!useEditorStore.getState().hasUnsavedChanges) return
+    await persistence.saveSite()
+  }
 
   return (
     <EditorPermissionsProvider value={permissions}>
@@ -196,6 +200,7 @@ export function AdminCanvasLayout() {
             <AdminSectionNavigation
               section="site"
               currentUser={currentUser}
+              onWorkspaceNavigateStart={canSaveSite ? saveBeforeWorkspaceNavigation : undefined}
             />
           )}
           overlay={previewOpen && (

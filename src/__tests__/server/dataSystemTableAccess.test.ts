@@ -5,6 +5,43 @@ import type { DataTable } from '@core/data/schemas'
 const TABLES = '/admin/api/cms/data/tables'
 
 describe('data system-table visibility + lockdown', () => {
+  it('does not create a template page when creating a post-type table', async () => {
+    const harness = await createCapabilityTestHarness()
+    try {
+      const ownerCookie = await harness.setupOwner()
+      const before = await harness.db<{ count: number }>`
+        select count(*) as count from data_rows where table_id = 'pages' and deleted_at is null
+      `
+
+      const created = await harness.cms(TABLES, {
+        method: 'POST',
+        cookie: ownerCookie,
+        json: {
+          name: 'Products',
+          slug: 'products',
+          kind: 'postType',
+          routeBase: '/products',
+          singularLabel: 'Product',
+          pluralLabel: 'Products',
+          primaryFieldId: 'title',
+          fields: [
+            { type: 'text', id: 'title', label: 'Title', required: true, builtIn: true },
+            { type: 'text', id: 'slug', label: 'Slug', required: true, builtIn: true },
+            { type: 'richText', id: 'body', label: 'Body', format: 'markdown', builtIn: true },
+          ],
+        },
+      })
+      expect(created.status).toBe(201)
+
+      const after = await harness.db<{ count: number }>`
+        select count(*) as count from data_rows where table_id = 'pages' and deleted_at is null
+      `
+      expect(after.rows[0]?.count).toBe(before.rows[0]?.count)
+    } finally {
+      await harness.cleanup()
+    }
+  })
+
   it('hides system tables from a custom-only persona but shows them to the owner', async () => {
     const harness = await createCapabilityTestHarness()
     try {

@@ -35,7 +35,6 @@ server/index.ts
     │     (selects migrations-pg.ts OR migrations-sqlite.ts based on dialect)
     │
     ├─→ syncSystemRoles(db)                  ← force-resets Owner capabilities every boot
-    ├─→ backfillDefaultEntryTemplates(db)    ← ensures every postType table has a default entry tpl
     ├─→ mediaStorageRegistry.configureLocalDisk({ uploadsDir })   ← register local-disk media adapter
     ├─→ activateInstalledServerPlugins(db, uploadsDir)            ← run plugin lifecycle: activate
     │
@@ -511,7 +510,6 @@ Server-side publishing helpers live in `server/publish/`:
 | `holeRuntime.ts`                  | Layer C client-side runtime (~668 B). Exports `runInstaticHoleRuntime` (TS source) and `HOLE_RUNTIME_JS` (IIFE-serialized for browser delivery). |
 | `publishSite.ts`                  | Full-site publish orchestrator (`publishDraftSite`): phase-1 builds, the short `persistSitePublish` transaction, Layer A bake + slot swap, Layer B bump. |
 | `publishRow.ts`                   | Per-row publish orchestrator (`publishDataRow`) + `removeDataRowArtefact`: persist via the data repository, in-place artefact update, Layer B bump. |
-| `templateSeeding.ts`              | Default entry-template seeding for postType tables (creates + publishes a page row; called by table-creation entry points, boot, and post-import backfill). |
 | `publicRenderer.ts`               | `renderPublishedSnapshot`, `renderPublishedDataRowTemplate` — snapshot-aware wrappers around `publishPage`. |
 | `publishedHtmlPipeline.ts`        | Plugin frontend-asset injection + `publish.html` filter chain. Runs at publish time for every baked page (complete doc or hole shell); also runs in the Layer B factory for query-string / live renders (cached). |
 | `siteCssBundle.ts`                | Per-site reset / framework / style CSS bundles (hashed filenames).  |
