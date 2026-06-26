@@ -182,7 +182,12 @@ export function FrameworkImportModal({
               <span className={styles.optionDesc}>{option.desc}</span>
               <ul className={styles.optionBullets}>
                 {option.bullets.map((bullet) => (
-                  <li key={bullet}>{bullet}</li>
+                  <li key={bullet}>
+                    <span className={styles.bulletIcon} aria-hidden="true">
+                      <CheckIcon size={11} />
+                    </span>
+                    <span>{bullet}</span>
+                  </li>
                 ))}
               </ul>
             </button>
