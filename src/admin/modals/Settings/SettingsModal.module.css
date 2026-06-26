@@ -428,35 +428,35 @@
 
 @media (max-width: 640px) {
   .dialogWrapper {
-    padding: 10px;
+    padding: var(--space-l);
     align-items: stretch;
   }
 
   .panel {
-    width: min(100%, calc(100vw - 20px));
-    height: min(760px, calc(100vh - 20px));
+    width: min(100%, calc(100vw - var(--space-4xl)));
+    height: min(760px, calc(100vh - var(--space-4xl)));
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr);
   }
 
   .rail {
-    padding: 12px;
-    border-bottom: 1px solid var(--panel-border);
+    padding: var(--space-l);
+    border-bottom: 1px solid var(--border);
   }
 
   .brand {
     min-height: 28px;
-    padding: 0 2px 10px;
+    padding: 0 var(--space-4xs) var(--space-l);
   }
 
   .sectionList {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 6px;
+    gap: var(--space-s);
   }
 
   .navItem.navItem {
     min-width: 0;
-    padding: 4px 6px 4px 4px;
+    padding: var(--space-2xs) var(--space-s) var(--space-2xs) var(--space-2xs);
   }
 
   .navIcon {
@@ -472,22 +472,22 @@
 
   .sectionHeader {
     min-height: 28px;
-    padding: 14px 14px 8px;
+    padding: var(--space-2xl) var(--space-2xl) var(--space-m);
   }
 
   .content {
-    padding: 4px 14px 16px;
+    padding: var(--space-2xs) var(--space-2xl) var(--space-2xl);
   }
 
   .sectionDescription {
-    margin-bottom: 16px;
+    margin-bottom: var(--space-2xl);
   }
 
   .toggleRow {
     flex-direction: column;
     align-items: stretch;
-    gap: 10px;
-    padding: 12px;
+    gap: var(--space-l);
+    padding: var(--space-l);
   }
 
   .toggleRow :global([role="switch"]) {
@@ -500,6 +500,6 @@
 
   .pubRuntimeList > div {
     grid-template-columns: minmax(0, 1fr);
-    gap: 4px;
+    gap: var(--space-2xs);
   }
 }

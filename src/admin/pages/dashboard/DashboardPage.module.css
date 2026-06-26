@@ -59,13 +59,13 @@
     .gridHeader {
         flex-direction: column;
         align-items: stretch;
-        gap: 10px;
+        gap: var(--space-l);
     }
 
     .gridHeaderLeft {
         justify-content: space-between;
         flex-wrap: wrap;
-        gap: 8px;
+        gap: var(--space-m);
     }
 
     .gridHeaderRight {

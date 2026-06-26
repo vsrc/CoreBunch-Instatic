@@ -299,8 +299,8 @@
         height: 68px;
         flex-wrap: wrap;
         align-content: center;
-        row-gap: 2px;
-        padding: 2px 6px;
+        row-gap: var(--space-4xs);
+        padding: var(--space-4xs) var(--space-s);
     }
 
     .siteName,
@@ -312,12 +312,12 @@
 
     .siteName {
         max-width: 104px;
-        margin-right: 2px;
+        margin-right: var(--space-4xs);
     }
 
     .siteNameSkeleton {
         width: 84px;
-        margin-right: 2px;
+        margin-right: var(--space-4xs);
     }
 
     .workspaceToolbarItems {

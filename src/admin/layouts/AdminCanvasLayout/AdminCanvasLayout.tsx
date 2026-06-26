@@ -74,6 +74,7 @@ import type { EditorPermissions } from '@site/editorPermissionsContext'
 interface AdminCanvasEditorBodyProps {
   canEditDraftSite: boolean
   canSaveSite: boolean
+  canUseAiChat: boolean
   loadError: string | null
 }
 

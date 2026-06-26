@@ -169,7 +169,7 @@
     align-items: center;
     justify-content: flex-end;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: var(--space-m);
 }
 
 .defaultActions .testResult {
