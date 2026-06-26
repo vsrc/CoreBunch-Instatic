@@ -12,7 +12,6 @@ import {
   getPublishedDataRowByRoute,
   getDataRowRedirectByRoute,
 } from '../../../server/repositories/data'
-import { ensureDefaultEntryTemplate } from '../../../server/publish/templateSeeding'
 import { handleServerRequest } from '../../../server/router'
 import { resetForTests } from '../../../server/publish/renderCache'
 import { createFakeDb } from './dbTestFake'
@@ -100,14 +99,7 @@ describe('data CMS repository', () => {
     }])
   })
 
-  it('creates a data table, then seeds its default entry template', async () => {
-    // `createDataTable` is pure data access; the seeding orchestration is a
-    // separate explicit call (`ensureDefaultEntryTemplate`) made by every
-    // table-creation entry point. This test exercises both in sequence.
-    // Tracks rows the template-seeding path inserts so we can return
-    // shaped responses to `select` queries that follow.
-    let seededPageRow: { id: string; cells: Record<string, unknown>; slug: string } | null = null
-
+  it('creates a post-type table without creating a template page row', async () => {
     const db = makeDataFakeDb([
       (sql, params) => {
         if (!sql.startsWith('insert into data_tables')) return undefined
@@ -133,89 +125,9 @@ describe('data CMS repository', () => {
           rowCount: 1,
         }
       },
-      // The explicit `ensureDefaultEntryTemplate` call below triggers the
-      // default-entry-template seeding. The seeding helper:
-      //   1. lists existing page rows to check whether a template already
-      //      targets this table's slug (returns empty → none exist),
-      //   2. picks an available slug (`<slug>-template`),
-      //   3. inserts a draft data_row,
-      //   4. re-reads the row,
-      //   5. transactions a publishDataRow which writes a data_row_version,
-      //      updates the data_row to status=published, and reads the
-      //      previous-published-route + version-number.
       (sql) => {
-        // Step 1: existence check.
-        if (sql.startsWith("select cells_json from data_rows") && sql.includes("table_id = 'pages'")) {
-          return { rows: [], rowCount: 0 }
-        }
-        return undefined
-      },
-      (sql) => {
-        // Step 2: slug collision check.
-        if (sql.startsWith('select id from data_rows') && sql.includes('and slug = ')) {
-          return { rows: [], rowCount: 0 }
-        }
-        return undefined
-      },
-      (sql, params) => {
-        // Step 3: insert seeded page row.
         if (sql.startsWith('insert into data_rows')) {
-          seededPageRow = {
-            id: String(params[0]),
-            cells: params[2] as Record<string, unknown>,
-            slug: String(params[3]),
-          }
-          return { rows: [{ id: seededPageRow.id }], rowCount: 1 }
-        }
-        return undefined
-      },
-      (sql, params) => {
-        // Steps 4 / re-read after insert + publish: getDataRow.
-        if (sql.startsWith('select') && sql.includes('from data_rows') && sql.includes('left join') && seededPageRow) {
-          if (String(params[0]) !== seededPageRow.id) return undefined
-          return {
-            rows: [{
-              id: seededPageRow.id,
-              table_id: 'pages',
-              cells_json: seededPageRow.cells,
-              slug: seededPageRow.slug,
-              status: 'draft',
-              author_user_id: null,
-              author_name: null,
-              author_role_slug: null,
-              author_role_name: null,
-              created_by_user_id: null,
-              updated_by_user_id: null,
-              published_by_user_id: null,
-              published_by_name: null,
-              published_by_role_slug: null,
-              published_by_role_name: null,
-              published_at: null,
-              created_at: rowDate('2026-05-01T10:00:00Z'),
-              updated_at: rowDate('2026-05-01T10:00:00Z'),
-              active_version_id: null,
-              scheduled_publish_at: null,
-            }],
-            rowCount: 1,
-          }
-        }
-        return undefined
-      },
-      (sql) => {
-        // Step 5: publishDataRow's previous-route lookup (returns empty
-        // since this is the first publish), version-number max, version
-        // insert, status update.
-        if (sql.startsWith('select data_row_versions.slug as previous_slug')) {
-          return { rows: [], rowCount: 0 }
-        }
-        if (sql.startsWith('select coalesce(max(version_number)')) {
-          return { rows: [{ next: 1 }], rowCount: 1 }
-        }
-        if (sql.startsWith('insert into data_row_versions')) {
-          return { rows: [], rowCount: 1 }
-        }
-        if (sql.startsWith('update data_rows') && sql.includes("set status = 'published'")) {
-          return { rows: [{ id: seededPageRow?.id ?? '' }], rowCount: 1 }
+          throw new Error('createDataTable must not create page rows')
         }
         return undefined
       },
@@ -237,19 +149,6 @@ describe('data CMS repository', () => {
       slug: 'products',
       fields: defaultFields,
     })
-
-    // createDataTable is data access only — no seeding side-effect yet.
-    expect(seededPageRow).toBeNull()
-
-    // Every table-creation entry point follows up with the seeding call.
-    await ensureDefaultEntryTemplate(db, table, null)
-
-    // Verify the seeding side-effect actually ran: a template page row
-    // got inserted with the right template config.
-    expect(seededPageRow).not.toBeNull()
-    const cells = (seededPageRow as unknown as { cells: Record<string, unknown> } | null)?.cells ?? {}
-    expect(cells.templateEnabled).toBe(true)
-    expect(cells.templateTarget).toEqual({ kind: 'postTypes', tableSlugs: ['products'] })
   })
 
   it('updates table identity, route, labels, and field settings', async () => {
@@ -432,13 +331,10 @@ describe('data CMS public routes', () => {
     // The row route consults the version-keyed published-snapshot memo; reset
     // publish state so a snapshot cached by another test file can't leak in.
     resetForTests()
-    // Defensive contract: `createDataTable` auto-seeds an entry template
-    // for every postType table, and the boot backfill catches any older
-    // table that's missing one. So `renderPublishedDataRowTemplate`
-    // returning `null` here represents a corrupt install (template was
-    // hard-deleted, no published site snapshot, etc.). The dispatcher
-    // surfaces that as a 404 rather than inventing a half-styled
-    // fallback document.
+    // A postType table only gets a public row route when the site has an
+    // explicitly authored entry template. Without one, the dispatcher surfaces
+    // the request as a 404 rather than inventing a half-styled fallback
+    // document.
     const db = makeDataFakeDb([
       (sql) => {
         if (sql.startsWith('select id, name, version, enabled, lifecycle_status')) {

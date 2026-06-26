@@ -35,7 +35,6 @@ import {
   createDataRow,
   listDataRows,
 } from '../../../repositories/data'
-import { ensureDefaultEntryTemplate } from '../../../publish/templateSeeding'
 import { normalizeDataTableFields } from '@core/data/fields'
 import { slugForTable } from '@core/data/cells'
 import { slugFromTitle } from '@core/utils/slug'
@@ -221,9 +220,6 @@ async function handleTablesCollection(req: Request, db: DbClient): Promise<Respo
       createdByUserId: user.id,
       updatedByUserId: user.id,
     })
-    // postType tables need a default entry template so the public route
-    // `/<route-base>/<row-slug>` resolves immediately (no-op for `data` kind).
-    await ensureDefaultEntryTemplate(db, table, user.id)
     await recordTableAuditEvent(db, user, req, 'data.table.create', table)
     return jsonResponse({ table }, { status: 201 })
   }
