@@ -5,7 +5,7 @@ import { cn } from '@ui/cn'
 import { Settings2SolidIcon } from 'pixel-art-icons/icons/settings-2-solid'
 import type { CmsMediaAsset } from '@core/persistence'
 import { MediaPickerField } from '@admin/pages/media/components/MediaPickerField'
-import { useEditorStore } from '@site/store/store'
+import { useWorkspaceLayout } from '@admin/state/workspaceLayout'
 import { dataTableHasField } from '@core/data/fields'
 import {
   POST_TYPE_FIELD_FEATURED_MEDIA,
@@ -37,6 +37,7 @@ interface ContentSettingsPanelProps {
   featuredMediaId: string | null
   featuredMediaAsset: CmsMediaAsset | null
   canEditEntry: boolean
+  canMoveEntry: boolean
   canPublishEntry: boolean
   canChangeAuthor: boolean
   onCollectionChange: (tableId: string) => void
@@ -92,6 +93,7 @@ export function ContentSettingsPanel({
   featuredMediaId,
   featuredMediaAsset,
   canEditEntry,
+  canMoveEntry,
   canPublishEntry,
   canChangeAuthor,
   onCollectionChange,
@@ -104,7 +106,7 @@ export function ContentSettingsPanel({
   onClearFeaturedMedia,
   onEditFeaturedMedia,
 }: ContentSettingsPanelProps) {
-  const setPropertiesPanel = useEditorStore((s) => s.setPropertiesPanel)
+  const setRightPanel = useWorkspaceLayout((s) => s.setRightPanel)
   const seoEnabled = selectedCollection ? dataTableHasField(selectedCollection, POST_TYPE_FIELD_SEO) : false
   const featuredMediaEnabled = selectedCollection ? dataTableHasField(selectedCollection, POST_TYPE_FIELD_FEATURED_MEDIA) : false
   const authorRoleLabel = selectedEntry ? contentAuthorRoleLabel(selectedEntry) : null
@@ -113,13 +115,15 @@ export function ContentSettingsPanel({
     ? [selectedAuthor, ...authors]
     : authors
   const canEditSelectedEntry = Boolean(selectedEntry && canEditEntry)
+  const canMoveSelectedEntry = Boolean(selectedEntry && canMoveEntry)
   const canChangeStatus = Boolean(selectedEntry && (canEditEntry || canPublishEntry))
   const statusOptions = [
     { value: 'draft', label: 'Draft', enabled: canEditEntry },
+    { value: 'scheduled', label: 'Scheduled', enabled: false },
     { value: 'published', label: 'Published', enabled: canPublishEntry },
     { value: 'unpublished', label: 'Unpublished', enabled: canEditEntry },
   ].filter((option) => option.enabled || option.value === selectedEntry?.status)
-    .map(({ value, label }) => ({ value, label }))
+    .map(({ value, label, enabled }) => ({ value, label, disabled: !enabled }))
 
   return (
     <aside
@@ -138,7 +142,7 @@ export function ContentSettingsPanel({
             <span className={propertiesStyles.headerNodeLabel}>Settings</span>
           </span>
         )}
-        onClose={() => setPropertiesPanel({ collapsed: true })}
+        onClose={() => setRightPanel({ collapsed: true })}
       />
 
       <div className={styles.settingsBody}>
@@ -151,7 +155,7 @@ export function ContentSettingsPanel({
               <Select
                 aria-label="Collection"
                 value={selectedEntry?.tableId ?? selectedCollection?.id ?? ''}
-                disabled={!canEditSelectedEntry}
+                disabled={!canMoveSelectedEntry}
                 onChange={(event) => onCollectionChange(event.target.value)}
                 options={collections.map((collection) => ({
                   value: collection.id,

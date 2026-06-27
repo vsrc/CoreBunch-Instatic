@@ -15,6 +15,9 @@ import {
   type CapabilityTestHarness,
 } from '../helpers/capabilityHarness'
 import type { SeoMetadata, SiteSeoSettings } from '@core/seo'
+import { pageFromRow } from '@core/data/pageFromRow'
+import type { DataRow } from '@core/data/schemas'
+import { makePage } from '../publisher/helpers'
 
 interface SeoTarget {
   kind: 'page' | 'template' | 'post'
@@ -52,18 +55,16 @@ async function fetchTargets(cookie: string): Promise<TargetsResponse> {
   return readJson<TargetsResponse>(res)
 }
 
+async function fetchPageIds(cookie: string): Promise<string[]> {
+  const res = await h.cms('/admin/api/cms/pages', { cookie })
+  expect(res.status).toBe(200)
+  const body = await readJson<{ rows: DataRow[] }>(res)
+  const pages = body.rows.map(pageFromRow)
+  return pages.map((page) => page.id)
+}
+
 describe('GET /admin/api/cms/seo/targets', () => {
   it('returns pages, entry templates, and post rows', async () => {
-    // Creating a postType table through the data API seeds its default entry
-    // template page — the migration-seeded `posts` table predates the boot
-    // backfill in this isolated test DB.
-    const createTableRes = await h.cms('/admin/api/cms/data/tables', {
-      method: 'POST',
-      cookie: owner,
-      json: { name: 'Guides', kind: 'postType', routeBase: '/guides' },
-    })
-    expect([200, 201]).toContain(createTableRes.status)
-
     // Create one post row through the data API so the index has a 'post' target.
     const createRes = await h.cms('/admin/api/cms/data/tables/posts/rows', {
       method: 'POST',
@@ -72,22 +73,43 @@ describe('GET /admin/api/cms/seo/targets', () => {
     })
     expect(createRes.status).toBe(201)
 
-    // An `everywhere` layout template must NOT appear in the index — it has
-    // no route or content of its own; the pages it wraps own the metadata.
-    const createLayoutRes = await h.cms('/admin/api/cms/data/tables/pages/rows', {
-      method: 'POST',
+    const pageIds = await fetchPageIds(owner)
+    const entryTemplate = makePage({
+      root: { moduleId: 'base.body', children: ['outlet'] },
+      outlet: { moduleId: 'base.outlet', props: { html: '' } },
+    })
+    entryTemplate.id = 'seo-entry-template'
+    entryTemplate.slug = 'seo-entry-template'
+    entryTemplate.title = 'Post entry template'
+    entryTemplate.template = {
+      enabled: true,
+      target: { kind: 'postTypes', tableSlugs: ['posts'] },
+      priority: 0,
+    }
+
+    const layoutTemplate = makePage({
+      root: { moduleId: 'base.body', children: ['outlet'] },
+      outlet: { moduleId: 'base.outlet', props: { html: '' } },
+    })
+    layoutTemplate.id = 'seo-main-layout'
+    layoutTemplate.slug = 'main-layout'
+    layoutTemplate.title = 'Main layout'
+    layoutTemplate.template = {
+      enabled: true,
+      target: { kind: 'everywhere' },
+      priority: 0,
+    }
+
+    const saveTemplatesRes = await h.cms('/admin/api/cms/pages', {
+      method: 'PUT',
       cookie: owner,
       json: {
-        cells: {
-          title: 'Main layout',
-          slug: 'main-layout',
-          templateEnabled: true,
-          templateTarget: { kind: 'everywhere' },
-          templatePriority: 0,
-        },
+        changedPages: [entryTemplate, layoutTemplate],
+        pageIds: [...pageIds, entryTemplate.id, layoutTemplate.id],
+        baselinePageIds: pageIds,
       },
     })
-    expect(createLayoutRes.status).toBe(201)
+    expect(saveTemplatesRes.status).toBe(200)
 
     const body = await fetchTargets(owner)
     expect(body.siteName.length).toBeGreaterThan(0)

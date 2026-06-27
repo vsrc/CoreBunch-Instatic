@@ -11,6 +11,9 @@ export type { AiContentBlock } from './contentBlock'
 export {
   InsertHtmlInputSchema,
   GetNodeHtmlInputSchema,
+  AgentDocumentRefSchema,
+  ReadDocumentInputSchema,
+  OpenDocumentInputSchema,
   ReplaceNodeHtmlInputSchema,
   DeleteNodeInputSchema,
   UpdateNodePropsInputSchema,
@@ -20,6 +23,11 @@ export {
   ApplyCssInputSchema,
   AssignClassInputSchema,
   RemoveClassInputSchema,
+  ListCodeAssetsInputSchema,
+  ReadCodeAssetInputSchema,
+  WriteCodeAssetInputSchema,
+  PatchCodeAssetInputSchema,
+  InspectCodeRuntimeInputSchema,
   AddPageInputSchema,
   DeletePageInputSchema,
   RenamePageInputSchema,
@@ -35,6 +43,9 @@ export {
 export type {
   InsertHtmlInput,
   GetNodeHtmlInput,
+  AgentDocumentRef,
+  ReadDocumentInput,
+  OpenDocumentInput,
   ReplaceNodeHtmlInput,
   DeleteNodeInput,
   UpdateNodePropsInput,
@@ -44,6 +55,11 @@ export type {
   ApplyCssInput,
   AssignClassInput,
   RemoveClassInput,
+  ListCodeAssetsInput,
+  ReadCodeAssetInput,
+  WriteCodeAssetInput,
+  PatchCodeAssetInput,
+  InspectCodeRuntimeInput,
   AddPageInput,
   DeletePageInput,
   RenamePageInput,
@@ -51,3 +67,19 @@ export type {
   SetPageTemplateInput,
   ClearPageTemplateInput,
 } from './toolSchemas'
+export {
+  describeAgentDocuments,
+  documentRefEquals,
+  documentRefForPage,
+} from './documentRefs'
+export type { AgentDocumentDescriptor } from './documentRefs'
+export {
+  renderAgentDocument,
+} from './readSurface'
+export type {
+  AgentDocumentRender,
+  AgentDocumentInfo,
+  AgentDocumentRange,
+  AgentDocumentCleanedStrings,
+  AgentDocumentRenderOptions,
+} from './readSurface'

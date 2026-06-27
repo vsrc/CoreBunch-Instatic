@@ -2,11 +2,11 @@
 .stepList {
     display: grid;
     align-content: start;
-    gap: 4px;
-    border: 1px solid var(--panel-border);
-    border-radius: var(--editor-radius);
-    background: var(--editor-surface);
-    padding: 6px;
+    gap: var(--space-3xs);
+    border: 1px solid var(--overlay-10);
+    border-radius: var(--radius);
+    background: var(--bg-surface);
+    padding: var(--space-xs);
     overflow: hidden;
 }
 
@@ -15,10 +15,10 @@
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
-    gap: 6px;
-    padding: 2px 4px;
-    color: var(--editor-text-muted);
-    font-size: 9.5px;
+    gap: var(--space-xs);
+    padding: var(--space-4xs) var(--space-3xs);
+    color: var(--text-subtle);
+    font-size: var(--text-2xs);
     font-weight: 700;
     letter-spacing: 0.06em;
     text-transform: uppercase;
@@ -31,7 +31,7 @@
 .steps {
     display: grid;
     align-content: start;
-    gap: 4px;
+    gap: var(--space-3xs);
     list-style: none;
     margin: 0;
     padding: 0;
@@ -40,29 +40,29 @@
 .stepRow {
     display: grid;
     grid-template-rows: auto auto;
-    gap: 6px;
-    padding: 8px 10px;
-    border-radius: var(--editor-radius-sm);
-    background: var(--editor-bg);
-    color: var(--editor-text);
+    gap: var(--space-xs);
+    padding: var(--space-s) var(--space-m);
+    border-radius: var(--radius-sm);
+    background: var(--bg-body);
+    color: var(--text);
     min-width: 0;
 }
 
 .stepRow[data-active="true"] {
-    background: var(--editor-surface-2);
+    background: var(--bg-surface-2);
 }
 
 .stepHeader {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
-    gap: 6px;
+    gap: var(--space-xs);
     min-width: 0;
 }
 
 .stepHeaderMeta {
-    color: var(--editor-text-muted);
-    font-size: 10px;
+    color: var(--text-subtle);
+    font-size: var(--text-2xs);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
 }
@@ -76,8 +76,8 @@
     width: 100%;
     min-width: 0;
     padding-inline: 0;
-    color: var(--editor-text);
-    font-size: 11px;
+    color: var(--text);
+    font-size: var(--text-xs);
     font-weight: 700;
     text-align: left;
     overflow: hidden;
@@ -96,22 +96,22 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     align-items: center;
-    gap: 8px;
+    gap: var(--space-s);
 }
 
 .stepPreviewCol {
     display: grid;
     grid-template-columns: minmax(34px, auto) minmax(0, 1fr);
     align-items: center;
-    gap: 6px;
-    color: var(--editor-text-muted);
-    font-size: 10px;
+    gap: var(--space-xs);
+    color: var(--text-subtle);
+    font-size: var(--text-2xs);
     font-variant-numeric: tabular-nums;
     min-width: 0;
 }
 
 .stepNumeric {
-    color: var(--editor-text-muted);
+    color: var(--text-subtle);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

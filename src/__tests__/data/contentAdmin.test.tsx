@@ -9,6 +9,8 @@ import { useLocation } from '@admin/lib/routing'
 import { ContentPage } from '@content/ContentPage'
 import { AdminSessionProvider } from '@admin/session'
 import { StepUpProvider } from '@admin/shared/StepUp'
+import { useAdminUi } from '@admin/state/adminUi'
+import { useWorkspaceLayout } from '@admin/state/workspaceLayout'
 import { useEditorStore } from '@site/store/store'
 import { makeSite } from '../fixtures'
 import { Toolbar } from '@site/toolbar/Toolbar'
@@ -168,7 +170,14 @@ function ambientFetchFallback(url: string): Response | undefined {
     return json({ plugins: [], adminPages: [] })
   }
   if (url.endsWith('/admin/api/cms/site')) {
-    return json({ site: null }, 404)
+    return json({ site: makeSite({ name: 'Content Shell Site' }) })
+  }
+  if (
+    url.endsWith('/admin/api/cms/pages') ||
+    url.endsWith('/admin/api/cms/components') ||
+    url.endsWith('/admin/api/cms/layouts')
+  ) {
+    return json({ rows: [] })
   }
   if (url.endsWith('/admin/api/cms/publish/status')) {
     return json({ ok: false }, 404)
@@ -222,6 +231,19 @@ function contentEditorUser(): CmsCurrentUser {
   }
 }
 
+function contentEditorWithoutAiChat(): CmsCurrentUser {
+  const base = contentEditorUser()
+  const capabilities = base.capabilities.filter((capability) => capability !== 'ai.chat')
+  return {
+    ...base,
+    capabilities,
+    role: {
+      ...base.role,
+      capabilities,
+    },
+  }
+}
+
 /**
  * Wraps test renders in the same provider stack production uses:
  *   MemoryRouter -> AdminSessionProvider -> StepUpProvider
@@ -264,6 +286,10 @@ beforeEach(() => {
   // jsdom's location persists across tests in a file, so reset it here to
   // simulate a fresh navigation and stop one test's URL leaking into the next.
   window.history.replaceState({}, '', '/')
+  useAdminUi.getState().setSiteSummary({
+    name: site.name,
+    faviconUrl: site.settings.faviconUrl ?? null,
+  })
   useEditorStore.setState({
     site,
     activePageId: site.pages[0].id,
@@ -292,6 +318,11 @@ beforeEach(() => {
     canRedo: false,
     hasUnsavedChanges: false,
   } as Parameters<typeof useEditorStore.setState>[0])
+  useWorkspaceLayout.setState({
+    leftSidebarWidth: 320,
+    rightPanel: { collapsed: false, width: 360 },
+    dataSidebarCollapsed: false,
+  })
 
   const calls: FetchCall[] = []
   ;(globalThis as typeof globalThis & { __contentFetchCalls?: FetchCall[] }).__contentFetchCalls = calls
@@ -332,6 +363,16 @@ beforeEach(() => {
       })
     }
 
+    if (url === '/admin/api/cms/data/rows/entry_1' && init?.method === 'DELETE') {
+      return json({
+        row: makeRow('entry_1', 'posts', { title: 'Untitled', slug: 'untitled' }, {
+          authorUserId: ownerAuthor.id,
+          author: ownerAuthor,
+          deletedAt: '2026-05-01T10:01:00.000Z',
+        }),
+      })
+    }
+
     if (url === '/admin/api/cms/data/rows/entry_1/publish' && init?.method === 'POST') {
       return json({
         row: {
@@ -367,6 +408,7 @@ beforeEach(() => {
 
 afterEach(() => {
   globalThis.fetch = originalFetch
+  useAdminUi.getState().setSiteSummary({ name: null, faviconUrl: null })
   cleanup()
 })
 
@@ -475,6 +517,65 @@ describe('ContentPage', () => {
     expect(layoutCss).not.toMatch(/\.canvasContent\s*\{[^}]*animation:/s)
   })
 
+  it('waits for async workspace navigation hooks before changing routes', async () => {
+    const transitionStarts: string[] = []
+    let resolveNavigation: (() => void) | null = null
+
+    render(
+      <AdminTestProviders initialEntries={['/admin/site']}>
+        <Routes>
+          <Route
+            path="/admin/site"
+            element={(
+              <>
+                <Toolbar
+                  section="site"
+                  adminNavigationSlot={(
+                    <AdminSectionNavigation
+                      section="site"
+                      onWorkspaceNavigateStart={() => new Promise<void>((resolve) => {
+                        transitionStarts.push('content')
+                        resolveNavigation = resolve
+                      })}
+                    />
+                  )}
+                  rightSlot={<span>site controls</span>}
+                />
+                <LocationProbe />
+              </>
+            )}
+          />
+          <Route
+            path="/admin/content"
+            element={(
+              <>
+                <Toolbar
+                  section="content"
+                  adminNavigationSlot={<AdminSectionNavigation section="content" />}
+                  rightSlot={<span>content controls</span>}
+                />
+                <LocationProbe />
+              </>
+            )}
+          />
+        </Routes>
+      </AdminTestProviders>,
+    )
+
+    fireEvent.click(screen.getByRole('link', { name: 'Content' }))
+
+    expect(transitionStarts).toEqual(['content'])
+    expect(screen.getByLabelText('current route').textContent).toBe('/admin/site')
+    expect(screen.getByText('site controls')).toBeDefined()
+
+    resolveNavigation?.()
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('current route').textContent).toBe('/admin/content')
+    })
+    expect(screen.getByText('content controls')).toBeDefined()
+  })
+
   it('keeps loading skeletons visible until content entries finish loading', async () => {
     let resolveEntries: ((response: Response) => void) | null = null
     const entriesResponse = new Promise<Response>((resolve) => {
@@ -534,7 +635,7 @@ describe('ContentPage', () => {
     // Settings panel is entry-specific — when no entry is selected, the panel is hidden.
     expect(screen.queryByTestId('content-settings-panel')).toBeNull()
     expect(screen.getByTestId('canvas-notch')).toBeDefined()
-    expect(screen.getByText('Content Shell Site')).toBeDefined()
+    expect(await screen.findByText('Content Shell Site')).toBeDefined()
   })
 
   it('keeps the site module picker out of the content insert notch', async () => {
@@ -555,6 +656,10 @@ describe('ContentPage', () => {
   })
 
   it('hides the right settings panel until an entry is selected, then shows it', async () => {
+    useWorkspaceLayout.setState({
+      rightPanel: { collapsed: false, width: 360 },
+    })
+
     render(
       <AdminTestProviders>
         <ContentPage />
@@ -566,6 +671,11 @@ describe('ContentPage', () => {
 
     // No entry selected → settings panel must not be in the DOM.
     expect(screen.queryByTestId('content-settings-panel')).toBeNull()
+    expect(screen.getByTestId('right-sidebar').getAttribute('data-expanded')).toBe('false')
+    expect(
+      screen.getByTestId('right-sidebar').style.getPropertyValue('--right-sidebar-panel-width'),
+    ).toBe('0px')
+    expect(screen.queryByTestId('right-sidebar-panel-slot')).toBeNull()
 
     fireEvent.click(
       within(screen.getByRole('region', { name: 'Posts' }))
@@ -574,6 +684,7 @@ describe('ContentPage', () => {
 
     // After creating (and auto-selecting) an entry, the settings panel appears.
     expect(await screen.findByTestId('content-settings-panel')).toBeDefined()
+    expect(screen.getByTestId('right-sidebar').getAttribute('data-expanded')).toBe('true')
   })
 
   it('reopens the selected entry settings panel from the canvas corner after closing it', async () => {
@@ -600,6 +711,44 @@ describe('ContentPage', () => {
 
     expect(await screen.findByTestId('content-settings-panel')).toBeDefined()
     expect(screen.queryByRole('button', { name: /open settings panel/i })).toBeNull()
+  })
+
+  it('does not reopen the settings preference when the last selected entry is cleared', async () => {
+    render(
+      <AdminTestProviders>
+        <ContentPage />
+      </AdminTestProviders>,
+    )
+
+    const postsRegion = await screen.findByRole('region', { name: 'Posts' })
+    fireEvent.click(within(postsRegion).getByRole('button', { name: /new post/i }))
+
+    expect(await screen.findByTestId('content-settings-panel')).toBeDefined()
+    fireEvent.click(screen.getByRole('button', { name: /close settings panel/i }))
+    expect(useWorkspaceLayout.getState().rightPanel.collapsed).toBe(true)
+
+    const entryButton = (await within(postsRegion).findByText('Untitled')).closest('button')
+    expect(entryButton).toBeTruthy()
+    fireEvent.contextMenu(entryButton as HTMLButtonElement, { clientX: 240, clientY: 320 })
+    fireEvent.click(
+      within(screen.getByRole('menu', { name: 'Content item options' }))
+        .getByRole('menuitem', { name: /^delete$/i }),
+    )
+
+    const calls = (globalThis as typeof globalThis & { __contentFetchCalls?: FetchCall[] }).__contentFetchCalls ?? []
+    await waitFor(() => {
+      expect(calls.some((call) =>
+        String(call.input) === '/admin/api/cms/data/rows/entry_1' &&
+        call.init?.method === 'DELETE'
+      )).toBe(true)
+    })
+    await waitFor(() => {
+      expect(within(postsRegion).queryByText('Untitled')).toBeNull()
+    })
+
+    expect(screen.queryByTestId('content-settings-panel')).toBeNull()
+    expect(screen.getByTestId('right-sidebar').getAttribute('data-expanded')).toBe('false')
+    expect(useWorkspaceLayout.getState().rightPanel.collapsed).toBe(true)
   })
 
   it('shows entry authors in the content list and reassigns the selected entry author', async () => {
@@ -709,6 +858,18 @@ describe('ContentPage', () => {
     // Layers + Dependencies remain editor-only and must NOT appear here.
     expect(screen.queryByLabelText('Open Layers panel')).toBeNull()
     expect(screen.queryByLabelText('Open Dependencies panel')).toBeNull()
+  })
+
+  it('hides the content AI assistant panel without ai.chat', async () => {
+    render(
+      <AdminTestProviders user={contentEditorWithoutAiChat()}>
+        <ContentPage />
+      </AdminTestProviders>,
+    )
+
+    await screen.findByTestId('content-explorer-panel')
+
+    expect(screen.queryByTestId('panel-rail-agent')).toBeNull()
   })
 
   it('reuses the shared media explorer panel in the content rail', async () => {

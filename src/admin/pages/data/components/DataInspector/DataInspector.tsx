@@ -2,7 +2,7 @@ import type { ReactElement } from 'react'
 import type { DataTable, DataRow, DataRowCells, UpdateDataTableInput } from '@core/data/schemas'
 import { PanelHeader } from '@admin/shared/PanelHeader'
 import { Settings2SolidIcon } from 'pixel-art-icons/icons/settings-2-solid'
-import { useEditorStore } from '@site/store/store'
+import { useWorkspaceLayout } from '@admin/state/workspaceLayout'
 import { cn } from '@ui/cn'
 import propertiesStyles from '@admin/pages/site/panels/PropertiesPanel/PropertiesPanel.module.css'
 import styles from './DataInspector.module.css'
@@ -30,7 +30,10 @@ interface DataInspectorProps {
   onOpenInSiteEditor?: (row: DataRow) => void
   onPublishRow?: (rowId: string) => Promise<DataRow>
   onSetRowStatus?: (rowId: string, status: 'draft' | 'unpublished') => Promise<DataRow>
+  /** Row-level content editing (RowDetail cell editors). */
   canEdit: boolean
+  /** Schema editing in Table settings — kind-aware (custom vs system manage). */
+  canManageSchema: boolean
   canDelete: boolean
 }
 
@@ -51,9 +54,10 @@ export function DataInspector({
   onPublishRow,
   onSetRowStatus,
   canEdit,
+  canManageSchema,
   canDelete,
 }: DataInspectorProps): ReactElement {
-  const setPropertiesPanel = useEditorStore((s) => s.setPropertiesPanel)
+  const setRightPanel = useWorkspaceLayout((s) => s.setRightPanel)
 
   function resolveRow(rowId: string): DataRow | null {
     return rows.find((r) => r.id === rowId) ?? null
@@ -80,7 +84,7 @@ export function DataInspector({
             <span className={propertiesStyles.headerNodeLabel}>{resolvedTitle}</span>
           </span>
         )}
-        onClose={() => setPropertiesPanel({ collapsed: true })}
+        onClose={() => setRightPanel({ collapsed: true })}
       />
 
       <div className={styles.body}>
@@ -104,7 +108,7 @@ export function DataInspector({
             rows={rows}
             onUpdateTable={onUpdateTable}
             onDeleteTable={onDeleteTable}
-            canEdit={canEdit}
+            canEdit={canManageSchema}
             canDelete={canDelete}
           />
         )}

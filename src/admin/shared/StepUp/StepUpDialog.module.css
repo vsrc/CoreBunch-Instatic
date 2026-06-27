@@ -1,7 +1,7 @@
 .backdrop {
     position: fixed;
     inset: 0;
-    background: var(--editor-overlay-black-55);
+    background: var(--scrim-60);
     z-index: 200;
     display: grid;
     place-items: center;
@@ -10,44 +10,44 @@
 .dialog {
     width: min(420px, calc(100vw - 32px));
     max-width: 100%;
-    background: var(--editor-surface);
-    border: 1px solid var(--editor-border);
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
     border-radius: var(--panel-radius);
-    box-shadow: 0 12px 48px var(--editor-overlay-black-50);
-    color: var(--editor-text);
-    padding: 20px;
+    box-shadow: 0 12px 48px var(--scrim-50);
+    color: var(--text);
+    padding: var(--space-4xl);
     display: grid;
-    gap: 14px;
+    gap: var(--space-xl);
 }
 
 .title {
     margin: 0;
-    color: var(--editor-text-bright);
-    font-size: 16px;
+    color: var(--text-bright);
+    font-size: var(--text-xl);
     font-weight: 800;
     line-height: 1.2;
 }
 
 .body {
     margin: 0;
-    color: var(--editor-text-muted);
-    font-size: 12px;
+    color: var(--text-subtle);
+    font-size: var(--text-s);
     line-height: 1.5;
 }
 
 .form {
     display: grid;
-    gap: 12px;
+    gap: var(--space-l);
 }
 
 .field {
     display: grid;
-    gap: 6px;
+    gap: var(--space-xs);
 }
 
 .label {
-    color: var(--editor-text-muted);
-    font-size: 11px;
+    color: var(--text-subtle);
+    font-size: var(--text-xs);
     font-weight: 700;
     letter-spacing: 0.02em;
     text-transform: uppercase;
@@ -55,8 +55,8 @@
 
 .error {
     margin: 0;
-    color: var(--editor-danger);
-    font-size: 12px;
+    color: var(--danger);
+    font-size: var(--text-s);
     font-weight: 700;
     line-height: 1.45;
 }
@@ -64,6 +64,6 @@
 .actions {
     display: flex;
     justify-content: flex-end;
-    gap: 8px;
-    margin-top: 4px;
+    gap: var(--space-s);
+    margin-top: var(--space-3xs);
 }

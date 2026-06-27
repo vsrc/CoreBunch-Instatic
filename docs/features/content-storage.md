@@ -166,7 +166,6 @@ This is the single source of truth for slug derivation used by all admin write p
 | `server/repositories/data/rows/mapper.ts`        | Internal: hydrated SELECT builder + `DataRowRow → DataRow` mapper (not part of the public barrel) |
 | `server/repositories/data/rows/index.ts`         | Barrel for the `rows/` directory                                     |
 | `server/repositories/data/publish.ts`            | Publish persistence (`persistDataRowPublish` writes `data_row_versions`) + public-route lookups; the orchestration (lock, artefacts, cache bump) is `server/publish/publishRow.ts` |
-| `server/publish/templateSeeding.ts`              | Seed default entry template for new postType tables (publish layer — it publishes a page row) |
 | `server/repositories/data/shared.ts`             | Shared helpers: `userRefAt` (typed accessor per prefix — unknown prefix is a compile error), `userRefColumns` / `userRefJoin` (SQL fragment builders — the single source for the four `<prefix>_*` user-ref join columns and LEFT JOIN clauses, spliced verbatim by both `rows/mapper.ts` and `publish.ts`), `UserJoinColumns` (interface for all four `<prefix>_*` column groups — always present via LEFT JOIN, `null` when no user matched) |
 | `server/repositories/data/index.ts`              | Barrel for the whole `data/` directory                               |
 
@@ -228,9 +227,7 @@ For postType rows, `publishDataRow` does the same but incrementally: writes the 
 
 See [docs/features/publisher.md](publisher.md) for the full pipeline.
 
-For **post-types**, each `data_table` has a **default entry template** (a `pages` row with `template.target = { kind: 'postTypes', tableSlugs: [table.slug] }`). When you publish a post, the renderer resolves the template chain for the entry route (`resolveTemplateChain`) and renders the merged tree with the post row pushed onto the entry stack as `currentEntry`. Dynamic bindings on the template nodes resolve `currentEntry.title`, `currentEntry.body`, etc.
-
-The entry template is seeded automatically when a new postType `data_table` is created (`backfillDefaultEntryTemplates(db)` at boot for tables that predate the template system). See [docs/features/templates.md](templates.md) for the full template model.
+For **post-types**, public row routes require an explicitly authored entry template (a `pages` row with `template.target = { kind: 'postTypes', tableSlugs: [table.slug] }`). When you publish a post, the renderer resolves the template chain for the entry route (`resolveTemplateChain`) and renders the merged tree with the post row pushed onto the entry stack as `currentEntry`. Dynamic bindings on the template nodes resolve `currentEntry.title`, `currentEntry.body`, etc. Without a matching entry template, the published row exists in the CMS but its public detail URL returns 404. See [docs/features/templates.md](templates.md) for the full template model.
 
 ### Scheduled publishing
 
@@ -252,9 +249,10 @@ The field appears in the postType's edit form and is queryable from loops.
 
 1. Open the Data workspace.
 2. Create a new `data_table` with `kind: 'postType'`.
-3. The system seeds the built-in fields (`title`, `slug`, `body`, `featuredMedia`, `seo`) and a default entry template.
+3. The system seeds the built-in fields (`title`, `slug`, `body`, `featuredMedia`, `seo`).
 4. Add custom fields as needed.
 5. Add posts via the Content workspace.
+6. Create a post-type template in the Site workspace if the collection needs public detail pages.
 
 ### Create a "data" table (no workflow)
 
@@ -352,7 +350,7 @@ Events are emitted from `server/publish/contentEvents.ts`, which also exports `a
   - `server/repositories/data/` — `tables.ts`, `rows/` (split by responsibility), `publish.ts`, `shared.ts`
   - `server/handlers/cms/data/` — generic data endpoints
   - `server/handlers/cms/pages.ts`, `components.ts`, `layouts.ts` — typed endpoints for the system tables
-  - `server/publish/publishRow.ts` — per-row publish orchestration; `server/publish/templateSeeding.ts` — default entry-template seeding
+  - `server/publish/publishRow.ts` — per-row publish orchestration
   - `server/publish/publishScheduler.ts` — scheduled-publish tick
 - Gate tests:
   - `src/__tests__/architecture/data-tables-system-flag.test.ts`

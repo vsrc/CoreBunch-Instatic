@@ -1,16 +1,16 @@
 # Design Tokens
 
-The complete catalog of design tokens declared in `src/styles/globals.css`. Every color, radius, shadow, font, and z-index used by the admin / editor / UI primitives is here. CSS Modules in `src/admin/`, `src/admin/pages/site/`, and `src/ui/` MUST reference these via `var(--*)` — hardcoded hex / rgb / hsl is gated by `css-token-policy.test.ts`.
+The complete catalog of design tokens declared in `src/styles/globals.css`. Every color, radius, shadow, font, font size, spacing value, and z-index used by the admin / editor / UI primitives is here. CSS Modules in `src/admin/`, `src/admin/pages/site/`, and `src/ui/` MUST reference these via `var(--*)` — hardcoded hex / rgb / hsl is gated by `css-token-policy.test.ts`, hardcoded font-size pixels are gated by `admin-typography-token-policy.test.ts`, and hardcoded margin / padding / gap pixels are gated by `admin-spacing-token-policy.test.ts`.
 
 ---
 
 ## TL;DR
 
 - One file: `src/styles/globals.css`.
-- Grouped by surface: editor chrome, panels, inputs, scrollbars, canvas, tooltips, spotlight, charts.
+- Grouped by role: fonts/fluid type, fluid spacing, core surfaces/text/borders, overlays/scrims, identity accents, semantic state, radii, shadows, canvas, syntax, and z-index.
 - **Two-layer color model**: achromatic base + semantic / categorical color layer on top. See [docs/design.md](../design.md) for the rationale.
 - Add a new token by editing `globals.css`. Reference it with `var(--your-token)` in CSS Modules.
-- The `src/modules/` directory is **exempt** from the no-hardcoded-color rule — module CSS ships to published pages where editor tokens aren't available.
+- The `src/modules/` directory is **exempt** from the no-hardcoded-color rule — module CSS ships to published pages where admin tokens are not guaranteed to exist.
 
 ---
 
@@ -25,23 +25,73 @@ Inter Variable is loaded via a targeted `@font-face` declaration in `globals.css
 
 If the admin UI needs broader character coverage, add a second `@font-face` block in `globals.css` with the appropriate `unicode-range` pointing at the matching subset file under `@fontsource-variable/inter/files/`.
 
-Type sizes are per-component and don't yet have a token scale. If a recurring size emerges across 3+ primitives, promote it to a token.
+## Fluid type scale
+
+Admin UI font sizes use the Core Framework-style `--text-*` scale directly. These tokens are fluid across viewport width but intentionally narrow for dense admin chrome. Use the nearest semantic step instead of introducing one-off pixel sizes.
+
+| Token        | Fluid range | Typical use                                      |
+|--------------|-------------|--------------------------------------------------|
+| `--text-3xs` | 8px → 9px   | Tiny badges, axis labels, micro metadata         |
+| `--text-2xs` | 9px → 10px  | Dense metadata, compact chips                    |
+| `--text-xs`  | 10px → 11px | Panel labels, toolbar chrome, descriptions       |
+| `--text-s`   | 11px → 12px | Default compact body text, inputs, buttons       |
+| `--text-m`   | 12px → 13px | Card/body copy and readable secondary text       |
+| `--text-l`   | 13px → 14px | Section titles and prominent labels              |
+| `--text-xl`  | 14px → 16px | Dialog titles and compact page titles            |
+| `--text-2xl` | 16px → 18px | Page headings                                    |
+| `--text-3xl` | 18px → 20px | Large page headings                              |
+| `--text-4xl` | 20px → 24px | Hero numbers / large empty states                |
+| `--text-5xl` | 24px → 28px | Display headings                                 |
+| `--text-6xl` | 32px → 40px | KPI values                                       |
+| `--text-7xl` | 40px → 56px | Largest admin display values                     |
+
+These are admin tokens. The published-site Framework engine also emits short names such as `--text-s`; those belong to the generated site CSS, not admin chrome. Editor chrome injected into the canvas iframe maps admin sizes to `--chrome-text-*` before using them so it cannot override the site's Framework typography.
 
 ---
 
-## Editor surface hierarchy (achromatic base)
+## Fluid spacing scale
+
+Admin UI spacing uses the Core Framework-style `--space-*` scale directly. Use these tokens for CSS-authored `margin`, `padding`, `gap`, `row-gap`, `column-gap`, and SVG width/height values in admin and shared UI CSS modules. Keep true hairlines on `--space-px`.
+
+| Token          | Fluid range | Typical use                                  |
+|----------------|-------------|----------------------------------------------|
+| `--space-px`   | 1px fixed   | Hairline gaps and exact 1px spacing          |
+| `--space-4xs`  | 2px → 3px   | Micro offsets, dense icon nudges             |
+| `--space-3xs`  | 3px → 4px   | Very tight inline padding                    |
+| `--space-2xs`  | 4px → 5px   | Tight chip gaps                              |
+| `--space-xs`   | 5px → 6px   | Compact control gaps                         |
+| `--space-s`    | 6px → 8px   | Default dense row gaps                       |
+| `--space-m`    | 8px → 10px  | Default panel/control spacing                |
+| `--space-l`    | 10px → 12px | Section row padding                          |
+| `--space-xl`   | 12px → 14px | Dialog/control interior padding              |
+| `--space-2xl`  | 14px → 16px | Larger panel gaps                            |
+| `--space-3xl`  | 16px → 18px | Icon-size SVGs and roomy control gaps        |
+| `--space-4xl`  | 18px → 20px | Compact empty-state spacing                  |
+| `--space-5xl`  | 20px → 24px | Card and modal spacing                       |
+| `--space-6xl`  | 24px → 28px | Large controls / icon tiles                  |
+| `--space-7xl`  | 28px → 32px | Page-section rhythm                          |
+| `--space-8xl`  | 32px → 40px | Large page body spacing                      |
+| `--space-9xl`  | 40px → 48px | Prominent empty-state spacing                |
+| `--space-10xl` | 48px → 56px | Large dashboard/display spacing              |
+| `--space-11xl` | 56px → 72px | Large SVG previews and major vertical gaps   |
+| `--space-12xl` | 84px → 108px| Largest admin display spacing                |
+
+These are admin tokens. The published-site Framework engine also emits short names such as `--space-s`; those belong to the generated site CSS, not admin chrome. Editor chrome injected into the canvas iframe maps admin spacing to `--chrome-space-*` before using it so it cannot override the site's Framework spacing.
+
+---
+
+## Surface hierarchy (achromatic base)
 
 Six surface tones for depth. Lighter is higher in the stack.
 
 | Token                  | Hex       | Use                                                            |
 |------------------------|-----------|----------------------------------------------------------------|
-| `--editor-bg`          | `#000000` | Page bottom — root, behind everything                          |
-| `--editor-bg-subtle`   | `#323232` | Chips, badges inside nested surfaces                           |
-| `--editor-surface`     | `#1b1b1b` | Darker parent of tile cards / sidebar fill                     |
-| `--editor-surface-2`   | `#282828` | Tile cards themselves, panel bodies                            |
-| `--editor-surface-3`   | `#323232` | Hover state for tiles, nested controls                         |
-| `--editor-surface-4`   | `#4a4a4a` | Active state                                                   |
-| `--editor-surface-5`   | `#605f5f` | Active + focused                                               |
+| `--bg-body`          | `#000000` | Page bottom — root, behind everything                          |
+| `--bg-surface`     | `#1b1b1b` | Darker parent of tile cards / sidebar fill                     |
+| `--bg-surface-2`   | `#282828` | Tile cards themselves, panel bodies                            |
+| `--bg-surface-3`   | `#323232` | Hover state, nested controls, chips, badges                    |
+| `--bg-surface-4`   | `#4a4a4a` | Active state                                                   |
+| `--bg-surface-5`   | `#605f5f` | Active + focused                                               |
 
 Hover and active states change **tone**, not border. Skip levels only with intent.
 
@@ -51,9 +101,9 @@ Hover and active states change **tone**, not border. Skip levels only with inten
 
 | Token                  | Hex       | Use                                                            |
 |------------------------|-----------|----------------------------------------------------------------|
-| `--editor-border`      | `#333333` | Default 1px borders on input controls, dividers                |
-| `--editor-border-med`  | `#2e2e2e` | Slightly elevated borders (active states on bordered controls) |
-| `--editor-panel-border`| `#1f1f1f` | Panels — quieter than `--editor-border`                        |
+| `--border`      | `#333333` | Default 1px borders on input controls, dividers                |
+| `--border-muted`  | `#2e2e2e` | Slightly elevated borders (active states on bordered controls) |
+| `--border-subtle`| `#1f1f1f` | Quiet dividers and low-emphasis panel edges                    |
 
 ---
 
@@ -63,11 +113,11 @@ Five tones, each a different meaning level.
 
 | Token                       | Hex       | Means                          |
 |-----------------------------|-----------|--------------------------------|
-| `--editor-text-bright`      | `#f4f4f5` | Titles, headings, KPIs         |
-| `--editor-text`             | `#ededed` | Primary body text              |
-| `--editor-text-secondary`   | `#a1a1aa` | Labels, secondary UI           |
-| `--editor-text-muted`       | `#787878` | Muted / placeholder            |
-| `--editor-text-subtle`      | `#52525b` | Disabled / very subtle         |
+| `--text-bright`      | `#f4f4f5` | Titles, headings, KPIs         |
+| `--text`             | `#ededed` | Primary body text              |
+| `--text-muted`   | `#a1a1aa` | Labels, secondary UI           |
+| `--text-subtle`       | `#787878` | Muted / placeholder            |
+| `--text-disabled`      | `#52525b` | Disabled / very subtle         |
 
 Add a new text tone only by adding a new token here.
 
@@ -79,57 +129,74 @@ Scrollbars are admin chrome, not identity. Keep them achromatic so the panel rai
 
 | Token                            | Value / source                                                      | Use                                           |
 |----------------------------------|---------------------------------------------------------------------|-----------------------------------------------|
-| `--editor-scrollbar-size`        | `6px`                                                               | WebKit/Blink scrollbar width and height       |
-| `--editor-scrollbar-radius`      | `var(--editor-radius-sm)`                                           | Thumb radius                                  |
-| `--editor-scrollbar-track`       | `transparent`                                                       | Track and corner background                   |
-| `--editor-scrollbar-thumb`       | `color-mix(in srgb, var(--editor-text-muted) 58%, transparent)`     | Default thumb color, also Firefox thumb color |
-| `--editor-scrollbar-thumb-hover` | `color-mix(in srgb, var(--editor-text-secondary) 72%, transparent)` | Hover thumb color                             |
+| `--scrollbar-size`        | `6px`                                                               | WebKit/Blink scrollbar width and height       |
+| `--scrollbar-radius`      | `var(--radius-sm)`                                           | Thumb radius                                  |
+| `--scrollbar-track`       | `transparent`                                                       | Track and corner background                   |
+| `--scrollbar-thumb`       | `color-mix(in srgb, var(--text-subtle) 58%, transparent)`     | Default thumb color, also Firefox thumb color |
+| `--scrollbar-thumb-hover` | `color-mix(in srgb, var(--text-muted) 72%, transparent)` | Hover thumb color                             |
 
 `globals.css` applies these through `scrollbar-color` for Firefox and `::-webkit-scrollbar` for WebKit/Blink. Scrollable panel layouts that place rail navigation beside content should use `scrollbar-gutter: stable`.
 
 ---
 
-## White accents (in the base layer)
+## Overlays and scrims
 
-Alpha-variants of white used for selected rows, pressed states, focus rings.
+White overlays are used for selected rows, pressed states, borders, and subtle surface lifts. Black scrims are used for shadows and modal backdrops. Suffixes are alpha x 100.
 
-| Token                     | Value                              | Use                                  |
-|---------------------------|------------------------------------|--------------------------------------|
-| `--editor-accent`         | `#ffffff`                          | Pure white accent (Vercel-style)     |
-| `--editor-accent-light`   | `#a1a1aa`                          | Subtle accent                        |
-| `--editor-accent-violet`  | `rgba(255, 255, 255, 0.8)`         | Canvas selection (despite the name — it's achromatic white) |
-| `--editor-selection`      | `rgba(255, 255, 255, 0.08)`        | Selected list rows, pressed buttons  |
+```css
+--overlay
+--overlay-5
+--overlay-10
+--overlay-20
+--overlay-30
+--overlay-40
+--overlay-50
+--overlay-60
+--overlay-70
+--overlay-80
+--overlay-90
+
+--scrim
+--scrim-10
+--scrim-20
+--scrim-30
+--scrim-40
+--scrim-50
+--scrim-60
+--scrim-70
+--scrim-80
+--scrim-90
+```
 
 ---
 
-## Rail tints (automatic identity layer)
+## Identity accents
 
-Token-backed identity colors for widget categories, panel rails, sidebar icons, and storage breakdown segments. Panel rails assign these automatically from the full panel identity with repeat avoidance inside the visible rail group.
+Token-backed identity colors for widget categories, panel rails, sidebar icons, tag pills, and storage breakdown segments. Panel rails assign these automatically from the full panel identity with repeat avoidance inside the visible rail group.
 
 | Token              | Hex       | Conventional category                                                  |
 |--------------------|-----------|------------------------------------------------------------------------|
-| `--rail-tint-mint` | `#8ee6c8` | "Saved / system / status"                                                  |
-| `--rail-tint-lilac`| `#c8b6ff` | "Pages / structure"                                                        |
-| `--rail-tint-sky`  | `#9bdcff` | "Storage / data / configuration"                                           |
-| `--rail-tint-peach`| `#ffc7a8` | "Posts / media / activity"                                                 |
-| `--rail-tint-rose` | `#ffb6cd` | Secondary warm identity tint                                               |
-| `--rail-tint-lime` | `#b8f28b` | Secondary green identity tint                                              |
-| `--rail-tint-gold` | `#f7df72` | Secondary yellow identity tint                                             |
-| `--rail-tint-cyan` | `#83e7ff` | Secondary blue identity tint                                               |
-| `--rail-tint-violet` | `#f0a6ff` | Secondary violet identity tint                                           |
-| `--rail-tint-coral` | `#ff9f9f` | Secondary red identity tint                                               |
+| `--accent-1` | `#8ee6c8` | "Saved / system / status"                                                  |
+| `--accent-2`| `#c8b6ff` | "Pages / structure"                                                        |
+| `--accent-3`  | `#9bdcff` | "Storage / data / configuration"                                           |
+| `--accent-4`| `#ffc7a8` | "Posts / media / activity"                                                 |
+| `--accent-5` | `#ffb6cd` | Secondary warm identity tint                                               |
+| `--accent-6` | `#b8f28b` | Secondary green identity tint                                              |
+| `--accent-7` | `#f7df72` | Secondary yellow identity tint                                             |
+| `--accent-8` | `#83e7ff` | Secondary blue identity tint                                               |
+| `--accent-9` | `#f0a6ff` | Secondary violet identity tint                                           |
+| `--accent-10` | `#ff9f9f` | Secondary red identity tint                                               |
 
-Used by `Widget` (`tint` prop), the rail accent helper (`src/ui/railAccent.ts`), and the storage breakdown chart. Adding another tint requires a new token — don't inline a color.
+Each accent also has a standard 10% tint (`--accent-1-10` through `--accent-10-10`) for soft backgrounds. Used by `Widget` (`tint` prop), the rail accent helper (`src/ui/railAccent.ts`), `TagPill`, and the storage breakdown chart. Adding another identity color requires a new token — don't inline a color.
 
 ---
 
-## Tag pill tints (automatic identity layer)
+## Tag pill accents
 
 `TagPill` maps the first meaningful alphanumeric character of its label to a
-stable token. Latin letters use `--tag-pill-tint-a` through
-`--tag-pill-tint-z`; digits use `--tag-pill-tint-0` through
-`--tag-pill-tint-9`. This keeps selector punctuation from driving the color
-while giving class names, HTML tags, and badges enough visual variety.
+stable numbered accent. This keeps selector punctuation from driving the color
+while giving class names, HTML tags, and badges enough visual variety without
+creating a second tag-specific tint scale.
 
 ---
 
@@ -139,46 +206,38 @@ while giving class names, HTML tags, and badges enough visual variety.
 
 | Token                       | Value                              | Use                                   |
 |-----------------------------|------------------------------------|---------------------------------------|
-| `--editor-danger`           | `#ef4444`                          | Error fill (button, badge, border)    |
-| `--editor-danger-light`     | `#f87171`                          | Lighter danger for text               |
-| `--editor-danger-lighter`   | `#fca5a5`                          | Very light danger tint                |
-| `--editor-danger-text`      | `#fecaca`                          | Danger badge text                     |
-| `--editor-danger-bg`        | `rgba(239, 68, 68, 0.1)`           | Danger pill / message surface         |
-| `--editor-danger-border`    | `rgba(239, 68, 68, 0.2)`           | Danger surface border                 |
+| `--danger`           | `#ef4444`                          | Error fill (button, badge, border)    |
+| `--danger-light`     | `#f87171`                          | Lighter danger for text               |
+| `--danger-lighter`   | `#fca5a5`                          | Very light danger tint                |
+| `--danger-text`      | `#fecaca`                          | Danger badge text                     |
+| `--danger-10`        | `rgba(239, 68, 68, 0.1)`           | Danger pill / message surface         |
+| `--danger-20`    | `rgba(239, 68, 68, 0.2)`           | Danger surface border                 |
 
 ### Warning
 
 | Token                       | Value                              | Use                                   |
 |-----------------------------|------------------------------------|---------------------------------------|
-| `--editor-warning`          | `#f59e0b`                          | Warning fill                          |
-| `--editor-warning-text`     | `#fde68a`                          | Warning badge text                    |
-| `--editor-warning-bg`       | `rgba(245, 158, 11, 0.1)`          | Warning surface                       |
-| `--editor-warning-border`   | `rgba(245, 158, 11, 0.3)`          | Warning surface border                |
+| `--warning`          | `#f59e0b`                          | Warning fill                          |
+| `--warning-text`     | `#fde68a`                          | Warning badge text                    |
+| `--warning-10`       | `rgba(245, 158, 11, 0.1)`          | Warning surface                       |
+| `--warning-30`   | `rgba(245, 158, 11, 0.3)`          | Warning surface border                |
 
 ### Success
 
 | Token                          | Value                              | Use                                   |
 |--------------------------------|------------------------------------|---------------------------------------|
-| `--editor-success-green`       | `#34d399`                          | Saved / OK indicator                  |
-| `--editor-success-bright`      | `#4ade80`                          | Agent tool success                    |
-| `--editor-success-text`        | `#d1fae5`                          | Success badge text                    |
-| `--editor-success-text-soft`   | `#a7f3d0`                          | Success hint text                     |
-| `--editor-success-bg`          | `rgba(52, 211, 153, 0.1)`          | Success pill surface                  |
-| `--editor-success-border`      | `rgba(52, 211, 153, 0.3)`          | Success pill / alert border           |
+| `--success`       | `#34d399`                          | Saved / OK indicator                  |
+| `--success-bright`      | `#4ade80`                          | Agent tool success                    |
+| `--success-text`        | `#d1fae5`                          | Success badge text                    |
+| `--success-text-muted`   | `#a7f3d0`                          | Success hint text                     |
+| `--success-10`          | `rgba(52, 211, 153, 0.1)`          | Success pill surface                  |
+| `--success-30`      | `rgba(52, 211, 153, 0.3)`          | Success pill / alert border           |
 
 ### Info
 
 | Token                  | Value         | Use                                            |
 |------------------------|---------------|------------------------------------------------|
-| `--editor-info-text`   | `#c4b5fd`     | Violet-tinted info text                        |
-
-### Mint surface (canvas chrome / mode toggle)
-
-| Token                  | Hex         | Use                                            |
-|------------------------|-------------|------------------------------------------------|
-| `--editor-mint-surface`| `#1a2924`   | Dark mint background for the canvas breakpoint indicator and mode toggle |
-
----
+| `--info-text`   | `#c4b5fd`     | Violet-tinted info text                        |
 
 ## Canvas (selection / hover affordances)
 
@@ -199,10 +258,10 @@ Bare colour variants (`*-ring-color`) are for surfaces that need an `outline` / 
 --canvas-placeholder-bg:
     repeating-linear-gradient(
         -45deg,
-        color-mix(in srgb, var(--editor-text-muted) 6%, transparent) 0 6px,
+        color-mix(in srgb, var(--text-subtle) 6%, transparent) 0 6px,
         transparent 6px 12px
     ),
-    color-mix(in srgb, var(--editor-text-muted) 4%, transparent);
+    color-mix(in srgb, var(--text-subtle) 4%, transparent);
 ```
 
 The shared diagonal-stripe pattern used by every module's "empty" placeholder (image, video, container, slot-outlet, VC ref placeholders). Strictly achromatic. Edit once, retune everywhere.
@@ -215,15 +274,15 @@ Used inside CodeMirror only. Don't reach for these in editor chrome.
 
 | Token                       | Hex         | Use                          |
 |-----------------------------|-------------|------------------------------|
-| `--editor-syntax-keyword`   | `#ff7b72`   | Keywords (`if`, `return`)    |
-| `--editor-syntax-entity`    | `#d2a8ff`   | Function names, types        |
-| `--editor-syntax-property`  | `#7ee787`   | Object properties            |
-| `--editor-syntax-variable`  | `#ffa657`   | Variables                    |
-| `--editor-syntax-string`    | `#a5d6ff`   | String literals              |
-| `--editor-syntax-constant`  | `#79c0ff`   | Numbers, constants           |
-| `--editor-syntax-comment`   | `#8b949e`   | Comments                     |
-| `--editor-syntax-operator`  | `#c9d1d9`   | Operators, punctuation       |
-| `--editor-syntax-invalid`   | `#ffa198`   | Invalid syntax               |
+| `--syntax-keyword`   | `#ff7b72`   | Keywords (`if`, `return`)    |
+| `--syntax-entity`    | `#d2a8ff`   | Function names, types        |
+| `--syntax-property`  | `#7ee787`   | Object properties            |
+| `--syntax-variable`  | `#ffa657`   | Variables                    |
+| `--syntax-string`    | `#a5d6ff`   | String literals              |
+| `--syntax-constant`  | `#79c0ff`   | Numbers, constants           |
+| `--syntax-comment`   | `#8b949e`   | Comments                     |
+| `--syntax-operator`  | `#c9d1d9`   | Operators, punctuation       |
+| `--syntax-invalid`   | `#ffa198`   | Invalid syntax               |
 
 ---
 
@@ -231,8 +290,8 @@ Used inside CodeMirror only. Don't reach for these in editor chrome.
 
 | Token                | Value | Use                                                          |
 |----------------------|-------|--------------------------------------------------------------|
-| `--editor-radius-sm` | 3px   | Tight chips, micro-badges, segmented-control inner indicator |
-| `--editor-radius`    | 6px   | Default editor controls, toolbar buttons, ghost menu items   |
+| `--radius-sm` | 3px   | Tight chips, micro-badges, segmented-control inner indicator |
+| `--radius`    | 6px   | Default editor controls, toolbar buttons, ghost menu items   |
 | `--panel-radius`     | 12px  | Floating overlay panels                                      |
 | `--card-radius`      | 16px  | Borderless tile cards (Widget, dashboard cells, module inserter tiles) |
 | `--input-radius`     | 1em   | Pill-shaped inputs, class / property chips                   |
@@ -244,24 +303,25 @@ Used inside CodeMirror only. Don't reach for these in editor chrome.
 
 | Token                          | Use                                                                       |
 |--------------------------------|---------------------------------------------------------------------------|
-| `--editor-focus-ring`          | `0 0 0 1px rgba(255, 255, 255, 0.25)` — 1px achromatic focus ring         |
-| `--panel-shadow`               | Composite for floating panels: bottom-inset shadow + drop shadow           |
-| `--panel-shadow-inset-bottom`  | Sub-token: `inset 0 -1px 0 rgba(0, 0, 0, 0.35)`                            |
-| `--panel-shadow-drop`          | Sub-token: `0 12px 40px rgba(0, 0, 0, 0.65)`                               |
-| `--input-shadow-focus`         | Inset composite achromatic glow for focused inputs                         |
-| `--tooltip-shadow`             | `0 4px 16px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.04)`   |
+| `--focus-ring`          | `0 0 0 1px var(--overlay-20)` — 1px achromatic focus ring         |
+| `--shadow-panel`               | Composite for floating panels: bottom-inset shadow + drop shadow           |
+| `--shadow-panel-inset-bottom`  | Sub-token: `inset 0 -1px 0 var(--scrim-40)`                            |
+| `--shadow-panel-drop`          | Sub-token: `0 12px 40px rgba(0, 0, 0, 0.65)`                               |
+| `--shadow-input-focus`         | Inset composite achromatic glow for focused inputs                         |
+| `--shadow-tooltip`             | `0 4px 16px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.04)`   |
 
-Use `--panel-shadow` directly when you need a floating-panel feel. Don't recompose from the sub-tokens.
+Use `--shadow-panel` directly when you need a floating-panel feel. Don't recompose from the sub-tokens.
 
 ---
 
 ## Floating overlay panels
 
 ```css
---panel-bg:                 rgb(30 30 30);
---panel-border:             rgba(255, 255, 255, 0.1);
---panel-radius:             12px;
---panel-blur:               24px;
+background: var(--bg-surface);
+border: 1px solid var(--overlay-10);
+border-radius: var(--panel-radius);
+backdrop-filter: blur(var(--panel-blur));
+box-shadow: var(--shadow-panel);
 ```
 
 Used by spotlight, popovers, modals — anything that floats above the editor with a blur backdrop.
@@ -271,10 +331,10 @@ Used by spotlight, popovers, modals — anything that floats above the editor wi
 ## Inline code surface
 
 ```css
---code-bg: rgba(0, 0, 0, 0.3);
+background: var(--scrim-30);
 ```
 
-Used by the `Code` primitive for inline code chip backgrounds. Don't reuse for block-level code editors (that's CodeMirror, which uses the `--editor-syntax-*` tokens).
+Used by the `Code` primitive for inline code chip backgrounds. Don't reuse for block-level code editors (that's CodeMirror, which uses the `--syntax-*` tokens).
 
 ---
 
@@ -288,8 +348,8 @@ A sculpted, top-lit dark mechanical keycap. The face is a vertical gradient; the
 | `--kbd-face-bottom`    | `#2f2f2f`                          | Bottom of the face gradient (just below surface-3)  |
 | `--kbd-face-top-hover` | `#4d4d4d`                          | Hover face gradient top (one step brighter)         |
 | `--kbd-face-bottom-hover`| `#363636`                        | Hover face gradient bottom                          |
-| `--kbd-border`         | `var(--editor-border)`             | Keycap border — achromatic, same as editor controls |
-| `--kbd-text`           | `var(--editor-text-secondary)`     | Key label text — same register as surrounding labels|
+| `--kbd-border`         | `var(--border)`             | Keycap border — achromatic, same as editor controls |
+| `--kbd-text`           | `var(--text-muted)`     | Key label text — same register as surrounding labels|
 | `--kbd-highlight`      | `rgba(255, 255, 255, 0.06)`        | Top inner highlight (inset box-shadow)              |
 | `--kbd-inner-shadow`   | `rgba(0, 0, 0, 0.22)`              | Soft concave bottom inner shadow                    |
 | `--kbd-edge`           | `rgba(0, 0, 0, 0.30)`              | 1px bottom edge — the key's simulated thickness     |
@@ -302,16 +362,15 @@ These tokens are scoped to `Kbd` and `ShortcutKeys`. Don't reach for them in oth
 ## Inputs
 
 ```css
---input-bg:             transparent;
---input-bg-focus:       transparent;                /* yes, also transparent */
---input-border:         rgba(255, 255, 255, 0.20);
---input-border-hover:   rgba(255, 255, 255, 0.25);
---input-border-focus:   rgba(255, 255, 255, 0.50);
---input-shadow:         none;
---input-shadow-focus:   inset 0 0 5px #ffffff0f,
-                        inset 0 -5px 8px #ffffff17,
-                        0 0 5px #0000003d;
---input-radius:         1em;
+background: transparent;
+border: 1px solid var(--overlay-20);
+border-radius: var(--input-radius);
+color: var(--text);
+```
+
+```css
+.field:hover { border-color: var(--overlay-30); }
+.field:focus { border-color: var(--overlay-50); box-shadow: var(--shadow-input-focus); }
 ```
 
 Cards are filled and borderless; inputs are unfilled and bordered. That's the load-bearing visual distinction between containers and controls.
@@ -375,36 +434,24 @@ Raw canvas-internal values are intentional exceptions — they cannot be tokens 
 
 ## Tooltips
 
-| Token                  | Value                                                                       |
-|------------------------|-----------------------------------------------------------------------------|
-| `--tooltip-bg`         | `#0a0a0c`                                                                   |
-| `--tooltip-fg`         | `#f4f4f5`                                                                   |
-| `--tooltip-border`     | `rgba(255, 255, 255, 0.06)`                                                 |
-| `--tooltip-shadow`     | `0 4px 16px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.04)`    |
-| `--tooltip-radius`     | `6px`                                                                       |
-| `--tooltip-z-index`    | `10001`                                                                     |
+Tooltip chrome uses `--bg-body`, `--text-bright`, `--overlay-5`, `--shadow-tooltip`, `--tooltip-radius`, and `--tooltip-z-index` directly.
 
 ---
 
 ## Spotlight (Cmd+K command palette)
 
-Spotlight has its own token group. Don't reuse outside Spotlight.
+Spotlight has only layout/z-index tokens of its own. Its colors come from the same global overlay, scrim, text, and semantic state tokens as the rest of the admin UI.
 
 | Token                              | Value                                  |
 |------------------------------------|----------------------------------------|
-| `--spotlight-backdrop`             | `rgba(0, 0, 0, 0.5)`                   |
-| `--spotlight-backdrop-blur`        | `8px`                                  |
+| `--scrim-50`                       | Backdrop fill                          |
+| `--backdrop-blur`        | `8px`                                  |
 | `--spotlight-z-index`              | `9000`                                 |
 | `--spotlight-width`                | `640px`                                |
-| `--spotlight-row-selected-bg`      | `rgba(255, 255, 255, 0.08)`            |
-| `--spotlight-mark-bg`              | `rgba(52, 211, 153, 0.20)`             |
-| `--spotlight-mark-fg`              | `var(--editor-text-bright)`            |
-| `--spotlight-footer-bg`            | `rgba(255, 255, 255, 0.03)`            |
-| `--spotlight-destructive-fg`       | `var(--editor-danger-light)`           |
-| `--spotlight-confirm-bg`           | `rgba(239, 68, 68, 0.08)`              |
-| `--spotlight-skeleton-base`        | `rgba(255, 255, 255, 0.06)`            |
-| `--spotlight-skeleton-shimmer`     | `rgba(255, 255, 255, 0.12)`            |
-| `--editor-progress-shimmer`        | `rgba(255, 255, 255, 0.4)`             | Travelling highlight on determinate progress bars (Super Import) |
+| `--overlay-10`                    | Selected row and skeleton shimmer      |
+| `--success-20`                    | Match highlight background             |
+| `--danger-light` / `--danger-10`  | Destructive command states             |
+| `--progress-shimmer`              | Travelling highlight on progress bars  |
 
 ---
 
@@ -414,14 +461,14 @@ Default chart tint, series colors, glow halos, empty-segment styling. Used by da
 
 | Token                          | Value                              | Use                                              |
 |--------------------------------|------------------------------------|--------------------------------------------------|
-| `--editor-chart-default-tint`  | `var(--rail-tint-peach)`           | Fallback when no per-call tint                   |
+| `--chart-default-tint`  | `var(--accent-4)`           | Fallback when no per-call tint                   |
 | `--chart-series-min`           | `#38bdf8` (sky 400)                | "Mobile" series                                  |
 | `--chart-series-min-glow`      | `rgba(56, 189, 248, 0.40)`         | Halo for active mobile segment                   |
 | `--chart-series-max`           | `#4ade80` (green 400)              | "Desktop" series                                 |
 | `--chart-series-max-glow`      | `rgba(74, 222, 128, 0.40)`         | Halo for active desktop segment                  |
-| `--chart-segment-empty`        | `rgba(255, 255, 255, 0.06)`        | Empty segment fill                               |
-| `--chart-segment-empty-border` | `rgba(255, 255, 255, 0.04)`        | Empty segment border                             |
-| `--chart-track-bg`             | `rgba(255, 255, 255, 0.04)`        | Track background behind chart segments           |
+| `--chart-segment-empty`        | `var(--overlay-5)`                 | Empty segment fill                               |
+| `--chart-segment-empty-border` | `var(--overlay-5)`                 | Empty segment border                             |
+| `--chart-track-bg`             | `var(--overlay-5)`                 | Track background behind chart segments           |
 
 ---
 
@@ -458,9 +505,9 @@ The two `!important` declarations here are the **only legitimate `!important` us
 
 | Pattern                                              | Use instead                              |
 |------------------------------------------------------|------------------------------------------|
-| `color: #ededed;` in an admin / ui CSS module        | `color: var(--editor-text);`             |
-| `border: 1px solid #333;`                            | `border: 1px solid var(--editor-border);`|
-| `box-shadow: 0 4px 16px rgba(0,0,0,0.5);`            | `box-shadow: var(--panel-shadow-drop);`  |
+| `color: #ededed;` in an admin / ui CSS module        | `color: var(--text);`             |
+| `border: 1px solid #333;`                            | `border: 1px solid var(--border);`|
+| `box-shadow: 0 4px 16px rgba(0,0,0,0.5);`            | `box-shadow: var(--shadow-panel-drop);`  |
 | Inventing a one-off radius                           | Use the radius scale                     |
 | Inventing a one-off z-index                          | Use the existing z-index tokens          |
 | Reaching for a one-off rail color                    | Use `railAccent` / `assignRailAccents`, or add a token |

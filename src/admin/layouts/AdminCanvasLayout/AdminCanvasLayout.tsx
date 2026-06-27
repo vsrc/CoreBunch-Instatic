@@ -38,7 +38,6 @@
  * No env vars, no API keys, no endpoint configuration required (Constraint #385).
  */
 import { Toolbar } from '@admin/pages/site/toolbar/Toolbar'
-import { SettingsButton } from '@admin/pages/site/toolbar/SettingsButton'
 import { ZoomControls } from '@admin/pages/site/toolbar/ZoomControls'
 import { PublishButton } from '@admin/pages/site/toolbar/PublishButton'
 import { useEditorSelectPreference } from '@admin/pages/site/preferences/editorPreferences'
@@ -55,6 +54,8 @@ import {
   CanvasFrameSkeletonFrame,
   DEFAULT_CANVAS_FRAME_SKELETON_BREAKPOINTS,
 } from '@admin/shared/CanvasFrameSkeleton'
+import { LazyChunkBoundary } from '@admin/lib/LazyChunkBoundary'
+import { prewarmedLazy } from '@admin/lib/prewarmedLazy'
 import styles from './AdminCanvasLayout.module.css'
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { useCurrentAdminUser } from '@admin/sessionContext'
@@ -63,13 +64,24 @@ import {
   canEditStructure as accessCanEditStructure,
   canEditStyle as accessCanEditStyle,
   canSaveDraftSite,
+  canRunPluginBackgroundWork,
+  canUseAiChat,
   hasCapability,
 } from '@admin/access'
 import { EditorPermissionsProvider } from '@site/EditorPermissionsProvider'
 import type { EditorPermissions } from '@site/editorPermissionsContext'
 
-const AdminCanvasEditorBody = lazy(() =>
-  import('./AdminCanvasEditorBody').then((m) => ({ default: m.AdminCanvasEditorBody })),
+interface AdminCanvasEditorBodyProps {
+  canEditDraftSite: boolean
+  canSaveSite: boolean
+  canUseAiChat: boolean
+  loadError: string | null
+}
+
+const AdminCanvasEditorBody = prewarmedLazy<AdminCanvasEditorBodyProps>(
+  () =>
+    import('./AdminCanvasEditorBody').then((m) => ({ default: m.AdminCanvasEditorBody })),
+  { displayName: 'AdminCanvasEditorBody' },
 )
 
 // SettingsModal is heavy (~37 KB raw) and closed 99% of the time. lazy()
@@ -111,6 +123,7 @@ export function AdminCanvasLayout() {
   const settingsOpen = useAdminUi((s) => s.settingsOpen)
   const publishSiteSummary = useAdminUi((s) => s.setSiteSummary)
   const currentUser = useCurrentAdminUser()
+  const pluginBackgroundWorkEnabled = canRunPluginBackgroundWork(currentUser)
 
   // Keep the adminUi site summary in sync with whatever the editor store
   // currently holds. AdminPageLayout reads siteName / faviconUrl from
@@ -132,6 +145,7 @@ export function AdminCanvasLayout() {
   const canEditContentFlag = accessCanEditContent(currentUser)
   const canEditStyleFlag = accessCanEditStyle(currentUser)
   const canSaveSite = canSaveDraftSite(currentUser)
+  const canUseAgent = canUseAiChat(currentUser)
   // Legacy "anything-editable" flag — true when the caller can drag/drop and
   // structurally modify the canvas. Most existing call sites are structural
   // by nature (DnD, context menu, rename, delete keyboard shortcut, plugin
@@ -157,12 +171,12 @@ export function AdminCanvasLayout() {
     enabled: true,
     loaded: persistence.saveStatus.state !== 'loading',
   })
-  useEditorLayoutPersistence('site')
-  useInstalledEditorPlugins()
+  useEditorLayoutPersistence()
+  useInstalledEditorPlugins(pluginBackgroundWorkEnabled)
   // Mount the SSE bridge ONCE per admin tab — gives toasts on plugin
   // crashes from any route, drives the red dot on the Plugins nav link,
   // and keeps the open Plugins page list refreshed.
-  usePluginEventBridge()
+  usePluginEventBridge(pluginBackgroundWorkEnabled)
 
   // UI density preference — `data-editor-density` on the editor root drives
   // CSS variables consumed by tree rows, toolbar buttons, and other density-
@@ -179,6 +193,10 @@ export function AdminCanvasLayout() {
     : null
 
   const loadEditorBody = usePostPaintEditorBodyGate()
+  async function saveBeforeWorkspaceNavigation(): Promise<void> {
+    if (!useEditorStore.getState().hasUnsavedChanges) return
+    await persistence.saveSite()
+  }
 
   return (
     <EditorPermissionsProvider value={permissions}>
@@ -197,6 +215,7 @@ export function AdminCanvasLayout() {
             <AdminSectionNavigation
               section="site"
               currentUser={currentUser}
+              onWorkspaceNavigateStart={canSaveSite ? saveBeforeWorkspaceNavigation : undefined}
             />
           )}
           overlay={previewOpen && (
@@ -212,19 +231,24 @@ export function AdminCanvasLayout() {
                 onSave={canSaveSite ? persistence.saveSite : undefined}
                 saveStatus={persistence.saveStatus}
               />
-              <SettingsButton />
             </>
           )}
         />
 
         {loadEditorBody ? (
-          <Suspense fallback={<AdminCanvasEditorBodyLoading />}>
+          <LazyChunkBoundary
+            location="site-editor-body"
+            fallback={<AdminCanvasEditorBodyLoading />}
+            resetKeys={[site?.id ?? null]}
+            onReset={AdminCanvasEditorBody.reset}
+          >
             <AdminCanvasEditorBody
               canEditDraftSite={canEditDraftSite}
               canSaveSite={canSaveSite}
+              canUseAiChat={canUseAgent}
               loadError={loadError}
             />
-          </Suspense>
+          </LazyChunkBoundary>
         ) : (
           <AdminCanvasEditorBodyLoading />
         )}

@@ -1,18 +1,18 @@
 .loadingText {
-  font-size: 11px;
-  color: var(--editor-text-muted);
+  font-size: var(--text-s);
+  color: var(--text-muted);
 }
 
 .error {
   margin: 0;
-  font-size: 11px;
-  color: var(--editor-danger-text);
+  font-size: var(--text-s);
+  color: var(--danger-text);
 }
 
 .bubbles {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--space-s);
 }
 
 .bubble {
@@ -24,5 +24,5 @@
 
 .bubbleAction {
   border-radius: var(--input-radius);
-  color: var(--editor-text-muted);
+  color: var(--text-muted);
 }

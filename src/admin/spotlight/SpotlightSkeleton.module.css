@@ -5,8 +5,8 @@
  * never flash a skeleton. Animation respects prefers-reduced-motion.
  *
  * Tokens from src/styles/globals.css:
- *   --spotlight-skeleton-base    base fill colour
- *   --spotlight-skeleton-shimmer highlight colour for the sweep
+ *   --overlay-5    base fill colour
+ *   --overlay-10 highlight colour for the sweep
  */
 
 /* ─── Group header (reuses the exact same style as Spotlight.module.css) ───── */
@@ -14,23 +14,23 @@
 .groupHeader {
     display: flex;
     align-items: center;
-    gap: 9px;
+    gap: var(--space-m);
     min-height: 32px;
-    padding: 4px 8px 6px;
+    padding: var(--space-3xs) var(--space-s) var(--space-xs);
     user-select: none;
 }
 
 .groupBar {
     width: 4px;
     height: 18px;
-    border-radius: var(--editor-radius-sm);
+    border-radius: var(--radius-sm);
     background: var(--spotlightAccent);
     flex-shrink: 0;
 }
 
 .groupTitle {
-    color: var(--editor-text-bright);
-    font-size: 16px;
+    color: var(--text-bright);
+    font-size: var(--text-xl);
     font-weight: 700;
 }
 
@@ -39,9 +39,9 @@
 .row {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: var(--space-m);
     height: 44px;
-    padding: 0 16px;
+    padding: 0 var(--space-2xl);
 }
 
 /* ─── Shimmer placeholders ────────────────────────────────────────────────── */
@@ -50,12 +50,12 @@
     flex-shrink: 0;
     width: 16px;
     height: 16px;
-    border-radius: var(--editor-radius-sm);
+    border-radius: var(--radius-sm);
     background: linear-gradient(
         90deg,
-        var(--spotlight-skeleton-base) 25%,
-        var(--spotlight-skeleton-shimmer) 50%,
-        var(--spotlight-skeleton-base) 75%
+        var(--overlay-5) 25%,
+        var(--overlay-10) 50%,
+        var(--overlay-5) 75%
     );
     background-size: 200% 100%;
     animation: shimmer 1.5s linear infinite;
@@ -66,18 +66,18 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: var(--space-xs);
     justify-content: center;
 }
 
 .titlePlaceholder {
     height: 11px;
-    border-radius: var(--editor-radius-sm);
+    border-radius: var(--radius-sm);
     background: linear-gradient(
         90deg,
-        var(--spotlight-skeleton-base) 25%,
-        var(--spotlight-skeleton-shimmer) 50%,
-        var(--spotlight-skeleton-base) 75%
+        var(--overlay-5) 25%,
+        var(--overlay-10) 50%,
+        var(--overlay-5) 75%
     );
     background-size: 200% 100%;
     animation: shimmer 1.5s linear infinite;
@@ -85,12 +85,12 @@
 
 .subtitlePlaceholder {
     height: 9px;
-    border-radius: var(--editor-radius-sm);
+    border-radius: var(--radius-sm);
     background: linear-gradient(
         90deg,
-        var(--spotlight-skeleton-base) 25%,
-        var(--spotlight-skeleton-shimmer) 50%,
-        var(--spotlight-skeleton-base) 75%
+        var(--overlay-5) 25%,
+        var(--overlay-10) 50%,
+        var(--overlay-5) 75%
     );
     background-size: 200% 100%;
     animation: shimmer 1.5s linear infinite;
@@ -125,7 +125,7 @@
     .titlePlaceholder,
     .subtitlePlaceholder {
         animation: none;
-        background: var(--spotlight-skeleton-base);
+        background: var(--overlay-5);
         opacity: 0.7;
     }
 }

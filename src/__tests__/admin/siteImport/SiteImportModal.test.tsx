@@ -15,8 +15,11 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
-import React from 'react'
+import React, { type ReactNode } from 'react'
 import { render, screen, cleanup, fireEvent, act, waitFor, within } from '@testing-library/react'
+import { strToU8, zipSync } from 'fflate'
+import { AdminSessionProvider } from '@admin/session'
+import { StepUpProvider } from '@admin/shared/StepUp'
 import { useEditorStore } from '@site/store/store'
 import { useAdminUi } from '@admin/state/adminUi'
 import { subscribeToasts, type Toast } from '@ui/components/Toast/toastBus'
@@ -32,6 +35,8 @@ import { SiteImportModal } from '@admin/modals/SiteImport'
 import type { ImportSelection } from '@admin/modals/SiteImport'
 import { commitImportPlan } from '@core/siteImport'
 import { pageToCells } from '@core/data/pageFromRow'
+import { BUNDLE_ARCHIVE_MANIFEST_PATH } from '@core/data/bundleArchive'
+import { CORE_CAPABILITIES } from '@core/capabilities'
 // Static-site import maps HTML into base modules during plan analysis.
 import '@modules/base'
 import type {
@@ -43,6 +48,7 @@ import type {
   SiteImportAdapter,
 } from '@core/siteImport'
 import type { DataRow, DataTable } from '@core/data/schemas'
+import type { CmsCurrentUser } from '@core/persistence'
 import type { SiteBundle } from '@core/data/bundleSchema'
 import type { Page, SiteDocument } from '@core/page-tree'
 import { makeSite } from '../../fixtures'
@@ -73,6 +79,7 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 const NOW = 1_700_000_000_000
+const NOW_ISO = '2026-01-01T00:00:00.000Z'
 
 function makeStyleRule(overrides: Partial<NewStyleRule> = {}): NewStyleRule {
   return {
@@ -138,6 +145,23 @@ const CMS_BUNDLE_TABLE: DataTable = {
   updatedAt: '2026-01-01T00:00:00.000Z',
 }
 
+const CMS_BUNDLE_PAGE_TABLE: DataTable = {
+  id: 'pages',
+  name: 'Pages',
+  slug: 'pages',
+  kind: 'page',
+  singularLabel: 'Page',
+  pluralLabel: 'Pages',
+  routeBase: '',
+  primaryFieldId: 'title',
+  fields: [],
+  system: true,
+  createdByUserId: null,
+  updatedByUserId: null,
+  createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-01T00:00:00.000Z',
+}
+
 const CMS_BUNDLE_ROW: DataRow = {
   id: 'cms-row-1',
   tableId: 'posts',
@@ -159,12 +183,44 @@ const CMS_BUNDLE_ROW: DataRow = {
   deletedAt: null,
 }
 
+const CMS_BUNDLE_PAGE_ROW: DataRow = {
+  ...CMS_BUNDLE_ROW,
+  id: 'cms-page-1',
+  tableId: 'pages',
+  cells: { title: 'Imported page', slug: 'imported-page' },
+  slug: 'imported-page',
+}
+
 const CMS_BUNDLE: SiteBundle = {
   schemaVersion: 1,
   exportedAt: '2026-05-19T10:00:00.000Z',
   sourceSiteName: 'Fixture CMS Site',
-  tables: [CMS_BUNDLE_TABLE],
-  rows: [CMS_BUNDLE_ROW],
+  tables: [CMS_BUNDLE_PAGE_TABLE, CMS_BUNDLE_TABLE],
+  rows: [CMS_BUNDLE_PAGE_ROW, CMS_BUNDLE_ROW],
+}
+
+const CMS_BUNDLE_ARCHIVE_MANIFEST = {
+  ...CMS_BUNDLE,
+  media: [
+    {
+      id: 'asset-logo',
+      filename: 'logo.png',
+      mimeType: 'image/png',
+      sizeBytes: 14,
+      altText: '',
+      caption: '',
+      title: '',
+      tags: [],
+      width: null,
+      height: null,
+      durationMs: null,
+      dominantColor: null,
+      blurHash: null,
+      storagePath: 'logo.png',
+      posterPath: null,
+      folderIds: [],
+    },
+  ],
 }
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -233,9 +289,82 @@ function dropCmsBundleFile(bundle: SiteBundle, name = 'site-bundle.json') {
   })
 }
 
+function makeCmsBundleZip(): Uint8Array {
+  return zipSync({
+    [BUNDLE_ARCHIVE_MANIFEST_PATH]: strToU8(JSON.stringify(CMS_BUNDLE_ARCHIVE_MANIFEST)),
+    'media/logo.png': strToU8('fake-png-bytes'),
+  }, { level: 0 })
+}
+
+function makeCmsBundleZipFile(name = 'site-bundle.zip'): File {
+  return new File([makeCmsBundleZip()], name, {
+    type: 'application/zip',
+  })
+}
+
+function dropCmsBundleZip(name = 'site-bundle.zip'): File {
+  const zipFile = makeCmsBundleZipFile(name)
+  fireEvent.drop(screen.getByLabelText(/drop site files/i), {
+    dataTransfer: { files: [zipFile] },
+  })
+  return zipFile
+}
+
 function SiteImportHarness({ onCmsBundleImportComplete }: { onCmsBundleImportComplete?: () => void }) {
   const open = useAdminUi((s) => s.siteImportOpen)
-  return open ? <SiteImportModal onCmsBundleImportComplete={onCmsBundleImportComplete} /> : null
+  return open ? (
+    <StepUpHarness>
+      <SiteImportModal onCmsBundleImportComplete={onCmsBundleImportComplete} />
+    </StepUpHarness>
+  ) : null
+}
+
+function adminUser(): CmsCurrentUser {
+  return {
+    id: 'site-import-admin',
+    email: 'admin@example.com',
+    displayName: 'Admin',
+    status: 'active',
+    role: {
+      id: 'owner',
+      slug: 'owner',
+      name: 'Owner',
+      description: '',
+      isSystem: true,
+      capabilities: [...CORE_CAPABILITIES],
+    },
+    capabilities: [...CORE_CAPABILITIES],
+    lastLoginAt: null,
+    failedLoginCount: 0,
+    lockedUntil: null,
+    passwordUpdatedAt: null,
+    mfaEnabled: false,
+    mfaEnabledAt: null,
+    mfaRecoveryCodesRemaining: 0,
+    stepUpAuthMode: 'required',
+    stepUpWindowMinutes: 15,
+    avatarMediaId: null,
+    avatarUrl: null,
+    gravatarHash: '',
+    createdAt: NOW_ISO,
+    updatedAt: NOW_ISO,
+  }
+}
+
+function StepUpHarness({ children }: { children: ReactNode }) {
+  return (
+    <AdminSessionProvider user={adminUser()}>
+      <StepUpProvider>{children}</StepUpProvider>
+    </AdminSessionProvider>
+  )
+}
+
+function renderSiteImportModal() {
+  return render(
+    <StepUpHarness>
+      <SiteImportModal />
+    </StepUpHarness>,
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -264,7 +393,7 @@ describe('SiteImportModal — render', () => {
   it('renders the initial drop-step dialog when opened', () => {
     const site = makeSite()
     useEditorStore.setState({ site } as Parameters<typeof useEditorStore.setState>[0])
-    render(<SiteImportModal />)
+    renderSiteImportModal()
     expect(document.querySelector('[role="dialog"]')).not.toBeNull()
     expect(screen.getByText('Import site')).toBeDefined()
     expect(screen.getByText('Choose files')).toBeDefined()
@@ -272,6 +401,54 @@ describe('SiteImportModal — render', () => {
 })
 
 describe('SiteImportModal — CMS bundle import', () => {
+  it('reviews a CMS-exported zip bundle in the shared category navigator', async () => {
+    globalThis.fetch = async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url === '/admin/api/cms/import/preview') {
+        return jsonResponse({
+          meta: {
+            exportedAt: CMS_BUNDLE.exportedAt,
+            sourceSiteName: CMS_BUNDLE.sourceSiteName,
+            schemaVersion: 1,
+          },
+          tables: [
+            {
+              id: 'posts',
+              name: 'Posts',
+              kind: 'postType',
+              inBundle: 1,
+              willReplace: 0,
+              willAdd: 1,
+              currentLocal: 0,
+            },
+          ],
+          totals: {
+            rows: 1,
+            mediaFiles: 1,
+            mediaEmbedded: true,
+            mediaFolders: 0,
+            redirects: 0,
+          },
+        })
+      }
+      return jsonResponse({ error: `Unexpected request: ${url}` }, 500)
+    }
+
+    useEditorStore.setState({
+      site: makeSite(),
+    } as Parameters<typeof useEditorStore.setState>[0])
+
+    renderSiteImportModal()
+
+    dropCmsBundleZip()
+
+    expect(await screen.findByText('Review import')).toBeDefined()
+    expect(await screen.findByTestId('site-import-review-category-pages')).toBeDefined()
+    expect(screen.getByTestId('site-import-review-category-posts')).toBeDefined()
+    expect(screen.getByTestId('site-import-review-category-media')).toBeDefined()
+    expect(screen.queryByText(/diff against current site/i)).toBeNull()
+  })
+
   it('routes a CMS-exported JSON bundle into the bundle preview flow', async () => {
     let previewRequestBody: unknown = null
     globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -299,6 +476,8 @@ describe('SiteImportModal — CMS bundle import', () => {
             rows: 1,
             mediaFiles: 0,
             mediaEmbedded: false,
+            mediaFolders: 0,
+            redirects: 0,
           },
         })
       }
@@ -309,17 +488,382 @@ describe('SiteImportModal — CMS bundle import', () => {
       site: makeSite(),
     } as Parameters<typeof useEditorStore.setState>[0])
 
-    render(<SiteImportModal />)
+    renderSiteImportModal()
 
     dropCmsBundleFile(CMS_BUNDLE)
 
-    expect(await screen.findByText(/diff against current site/i)).toBeDefined()
-    expect(screen.getByText(/fixture cms site/i)).toBeDefined()
-    expect(screen.getByText(/import strategy/i)).toBeDefined()
+    expect(await screen.findByText('Review import')).toBeDefined()
+    expect(screen.getAllByText(/fixture cms site/i).length).toBeGreaterThan(0)
+    expect(screen.getByTestId('site-import-review-category-mode')).toBeDefined()
+    expect(screen.getByText(/replace everything/i)).toBeDefined()
     expect((previewRequestBody as SiteBundle).schemaVersion).toBe(1)
   })
 
-  it('imports the CMS bundle with the selected strategy and closes through the store flag', async () => {
+  it('routes a CMS-exported zip bundle into the bundle preview flow without base64-expanding media bytes', async () => {
+    let previewRequestBody: unknown = null
+    globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (url === '/admin/api/cms/import/preview') {
+        previewRequestBody = JSON.parse(String(init?.body ?? '{}'))
+        return jsonResponse({
+          meta: {
+            exportedAt: CMS_BUNDLE.exportedAt,
+            sourceSiteName: CMS_BUNDLE.sourceSiteName,
+            schemaVersion: 1,
+          },
+          tables: [
+            {
+              id: 'posts',
+              name: 'Posts',
+              kind: 'postType',
+              inBundle: 1,
+              willReplace: 0,
+              willAdd: 1,
+              currentLocal: 0,
+            },
+          ],
+          totals: {
+            rows: 1,
+            mediaFiles: 1,
+            mediaEmbedded: true,
+            mediaFolders: 0,
+            redirects: 0,
+          },
+        })
+      }
+      return jsonResponse({ error: `Unexpected request: ${url}` }, 500)
+    }
+
+    useEditorStore.setState({
+      site: makeSite(),
+    } as Parameters<typeof useEditorStore.setState>[0])
+
+    renderSiteImportModal()
+
+    dropCmsBundleZip()
+
+    expect(await screen.findByText('Review import')).toBeDefined()
+    expect(screen.getAllByText(/fixture cms site/i).length).toBeGreaterThan(0)
+
+    const previewBundle = previewRequestBody as SiteBundle
+    expect(previewBundle.media?.[0]?.bytesBase64).toBe('')
+  })
+
+  it('imports a CMS-exported zip bundle through the archive endpoint', async () => {
+    let importUrl: string | null = null
+    let importBody: BodyInit | null | undefined = null
+    globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (url === '/admin/api/cms/import/preview') {
+        return jsonResponse({
+          meta: {
+            exportedAt: CMS_BUNDLE.exportedAt,
+            sourceSiteName: CMS_BUNDLE.sourceSiteName,
+            schemaVersion: 1,
+          },
+          tables: [
+            {
+              id: 'posts',
+              name: 'Posts',
+              kind: 'postType',
+              inBundle: 1,
+              willReplace: 0,
+              willAdd: 1,
+              currentLocal: 0,
+            },
+          ],
+          totals: {
+            rows: 1,
+            mediaFiles: 1,
+            mediaEmbedded: true,
+            mediaFolders: 0,
+            redirects: 0,
+          },
+        })
+      }
+      if (url.startsWith('/admin/api/cms/import/archive')) {
+        importUrl = url
+        importBody = init?.body
+        return jsonResponse({
+          ok: true,
+          strategy: 'merge-add',
+          tablesAffected: 1,
+          rowsInserted: 1,
+          rowsReplaced: 0,
+          rowsSkipped: 0,
+          mediaImported: 1,
+          mediaFoldersImported: 0,
+          redirectsImported: 0,
+        })
+      }
+      return jsonResponse({ error: `Unexpected request: ${url}` }, 500)
+    }
+
+    useEditorStore.setState({
+      site: makeSite(),
+    } as Parameters<typeof useEditorStore.setState>[0])
+
+    renderSiteImportModal()
+
+    const zipFile = dropCmsBundleZip()
+    expect(await screen.findByText('Review import')).toBeDefined()
+
+    fireEvent.click(screen.getByRole('button', { name: /add rows/i }))
+
+    await waitFor(() => {
+      expect(importUrl).toContain('/admin/api/cms/import/archive')
+    })
+    expect(importUrl).toContain('strategy=merge-add')
+    expect(importBody).toBe(zipFile)
+  })
+
+  it('sends CMS bundle category selection to the archive endpoint without rewriting the zip body', async () => {
+    let importUrl: string | null = null
+    let importBody: BodyInit | null | undefined = null
+    globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (url === '/admin/api/cms/import/preview') {
+        return jsonResponse({
+          meta: {
+            exportedAt: CMS_BUNDLE.exportedAt,
+            sourceSiteName: CMS_BUNDLE.sourceSiteName,
+            schemaVersion: 1,
+          },
+          tables: [
+            {
+              id: 'posts',
+              name: 'Posts',
+              kind: 'postType',
+              inBundle: 1,
+              willReplace: 0,
+              willAdd: 1,
+              currentLocal: 0,
+            },
+          ],
+          totals: {
+            rows: 1,
+            mediaFiles: 1,
+            mediaEmbedded: true,
+            mediaFolders: 0,
+            redirects: 0,
+          },
+        })
+      }
+      if (url.startsWith('/admin/api/cms/import/archive')) {
+        importUrl = url
+        importBody = init?.body
+        return jsonResponse({
+          ok: true,
+          strategy: 'merge-add',
+          tablesAffected: 1,
+          rowsInserted: 1,
+          rowsReplaced: 0,
+          rowsSkipped: 0,
+          mediaImported: 0,
+          mediaFoldersImported: 0,
+          redirectsImported: 0,
+        })
+      }
+      return jsonResponse({ error: `Unexpected request: ${url}` }, 500)
+    }
+
+    useEditorStore.setState({
+      site: makeSite(),
+    } as Parameters<typeof useEditorStore.setState>[0])
+
+    renderSiteImportModal()
+
+    const zipFile = dropCmsBundleZip()
+    expect(await screen.findByText('Review import')).toBeDefined()
+
+    fireEvent.click(screen.getByTestId('site-import-review-category-media'))
+    fireEvent.click(screen.getByRole('switch', { name: /include logo\.png/i }))
+    fireEvent.click(screen.getByRole('button', { name: /add rows/i }))
+
+    await waitFor(() => {
+      expect(importUrl).toContain('/admin/api/cms/import/archive')
+    })
+    const url = new URL(importUrl!, 'http://localhost')
+    const selection = JSON.parse(url.searchParams.get('selection') ?? '{}') as Record<string, unknown>
+    expect(selection.includeMedia).toBe(false)
+    expect(selection.tables).toEqual([{ tableId: 'pages' }, { tableId: 'posts' }])
+    expect(importBody).toBe(zipFile)
+  })
+
+  it('routes CMS bundle row slug conflicts through the shared conflicts stage before import', async () => {
+    let importUrl: string | null = null
+    globalThis.fetch = async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url === '/admin/api/cms/import/preview') {
+        return jsonResponse({
+          meta: {
+            exportedAt: CMS_BUNDLE.exportedAt,
+            sourceSiteName: CMS_BUNDLE.sourceSiteName,
+            schemaVersion: 1,
+          },
+          tables: [
+            {
+              id: 'pages',
+              name: 'Pages',
+              kind: 'page',
+              inBundle: 1,
+              willReplace: 0,
+              willAdd: 1,
+              currentLocal: 1,
+            },
+          ],
+          rowConflicts: [
+            {
+              tableId: 'pages',
+              tableName: 'Pages',
+              rowId: 'cms-page-1',
+              rowTitle: 'Imported page',
+              slug: 'imported-page',
+              existingRowId: 'local-page-1',
+              suggestedSlug: 'imported-page-2',
+            },
+          ],
+          totals: {
+            rows: 1,
+            mediaFiles: 1,
+            mediaEmbedded: true,
+            mediaFolders: 0,
+            redirects: 0,
+          },
+        })
+      }
+      if (url.startsWith('/admin/api/cms/import/archive')) {
+        importUrl = url
+        return jsonResponse({
+          ok: true,
+          strategy: 'merge-add',
+          tablesAffected: 0,
+          rowsInserted: 1,
+          rowsReplaced: 0,
+          rowsSkipped: 0,
+          mediaImported: 1,
+          mediaFoldersImported: 0,
+          redirectsImported: 0,
+        })
+      }
+      return jsonResponse({ error: `Unexpected request: ${url}` }, 500)
+    }
+
+    useEditorStore.setState({
+      site: makeSite(),
+    } as Parameters<typeof useEditorStore.setState>[0])
+
+    renderSiteImportModal()
+
+    dropCmsBundleZip()
+    expect(await screen.findByText('Review import')).toBeDefined()
+
+    fireEvent.click(screen.getByRole('button', { name: /add rows/i }))
+
+    expect(await screen.findByText('Resolve conflicts')).toBeDefined()
+    expect(screen.getByText(/row slug conflicts/i)).toBeDefined()
+    expect(screen.getByText(/Imported page/)).toBeDefined()
+    expect(importUrl).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: /^import$/i }))
+
+    await waitFor(() => {
+      expect(importUrl).toContain('/admin/api/cms/import/archive')
+    })
+    const url = new URL(importUrl!, 'http://localhost')
+    const selection = JSON.parse(url.searchParams.get('selection') ?? '{}') as {
+      rowSlugOverrides?: Array<{ tableId: string; rowId: string; slug: string }>
+    }
+    expect(selection.rowSlugOverrides).toEqual([
+      { tableId: 'pages', rowId: 'cms-page-1', slug: 'imported-page-2' },
+    ])
+  })
+
+  it('opens the shared step-up dialog and retries when replace import requires step-up', async () => {
+    let importAttempts = 0
+    const stepUpRequests: Array<Record<string, unknown>> = []
+    globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (url === '/admin/api/cms/import/preview') {
+        return jsonResponse({
+          meta: {
+            exportedAt: CMS_BUNDLE.exportedAt,
+            sourceSiteName: CMS_BUNDLE.sourceSiteName,
+            schemaVersion: 1,
+          },
+          tables: [
+            {
+              id: 'posts',
+              name: 'Posts',
+              kind: 'postType',
+              inBundle: 1,
+              willReplace: 0,
+              willAdd: 1,
+              currentLocal: 0,
+            },
+          ],
+          totals: {
+            rows: 1,
+            mediaFiles: 1,
+            mediaEmbedded: true,
+            mediaFolders: 0,
+            redirects: 0,
+          },
+        })
+      }
+      if (url.startsWith('/admin/api/cms/import/archive')) {
+        importAttempts += 1
+        if (importAttempts === 1) return jsonResponse({ error: 'step_up_required' }, 401)
+        return jsonResponse({
+          ok: true,
+          strategy: 'replace',
+          tablesAffected: 1,
+          rowsInserted: 1,
+          rowsReplaced: 0,
+          rowsSkipped: 0,
+          mediaImported: 1,
+          mediaFoldersImported: 0,
+          redirectsImported: 0,
+        })
+      }
+      if (url === '/admin/api/cms/auth/step-up' && init?.method === 'POST') {
+        stepUpRequests.push(JSON.parse(String(init.body)) as Record<string, unknown>)
+        return jsonResponse({ ok: true, stepUpExpiresAt: '2026-01-01T00:15:00.000Z' })
+      }
+      return jsonResponse({ error: `Unexpected request: ${url}` }, 500)
+    }
+
+    useEditorStore.setState({
+      site: makeSite(),
+    } as Parameters<typeof useEditorStore.setState>[0])
+
+    render(
+      <StepUpHarness>
+        <SiteImportModal />
+      </StepUpHarness>,
+    )
+
+    dropCmsBundleZip()
+    expect(await screen.findByText('Review import')).toBeDefined()
+    fireEvent.click(screen.getByText(/replace everything/i))
+    fireEvent.click(screen.getByRole('button', { name: /replace site/i }))
+
+    expect(await screen.findByTestId('step-up-dialog')).toBeTruthy()
+    expect(screen.queryByText('step_up_required')).toBeNull()
+
+    fireEvent.change(screen.getByTestId('step-up-password'), {
+      target: { value: 'long-enough-password' },
+    })
+    fireEvent.click(screen.getByTestId('step-up-confirm'))
+
+    await waitFor(() => {
+      expect(importAttempts).toBe(2)
+    })
+    expect(stepUpRequests).toEqual([{ password: 'long-enough-password' }])
+    expect(screen.queryByTestId('step-up-dialog')).toBeNull()
+  })
+
+  it('imports the CMS bundle with the selected strategy through the shared import step', async () => {
     let importUrl: string | null = null
     let importBody: unknown = null
     let callbackCalled = false
@@ -347,6 +891,8 @@ describe('SiteImportModal — CMS bundle import', () => {
             rows: 1,
             mediaFiles: 0,
             mediaEmbedded: false,
+            mediaFolders: 0,
+            redirects: 0,
           },
         })
       }
@@ -361,6 +907,8 @@ describe('SiteImportModal — CMS bundle import', () => {
           rowsReplaced: 0,
           rowsSkipped: 0,
           mediaImported: 0,
+          mediaFoldersImported: 0,
+          redirectsImported: 0,
         })
       }
       return jsonResponse({ error: `Unexpected request: ${url}` }, 500)
@@ -381,14 +929,16 @@ describe('SiteImportModal — CMS bundle import', () => {
       )
 
       dropCmsBundleFile(CMS_BUNDLE)
-      expect(await screen.findByText(/diff against current site/i)).toBeDefined()
+      expect(await screen.findByText('Review import')).toBeDefined()
 
       fireEvent.click(screen.getByRole('button', { name: /add rows/i }))
 
       await waitFor(() => {
         expect(callbackCalled).toBe(true)
       })
-      expect(useAdminUi.getState().siteImportOpen).toBe(false)
+      expect(useAdminUi.getState().siteImportOpen).toBe(true)
+      expect(await screen.findByText('Import complete')).toBeDefined()
+      expect(screen.getByText(/1 row added/i)).toBeDefined()
       expect(importUrl).toContain('strategy=merge-add')
       expect((importBody as SiteBundle).schemaVersion).toBe(1)
       expect(capturedToasts.some((toast) => toast.kind === 'success' && toast.title === 'Import complete')).toBe(true)
@@ -427,6 +977,8 @@ describe('SiteImportModal — CMS bundle import', () => {
             rows: 0,
             mediaFiles: 0,
             mediaEmbedded: false,
+            mediaFolders: 0,
+            redirects: 0,
           },
         })
       }
@@ -437,7 +989,7 @@ describe('SiteImportModal — CMS bundle import', () => {
       site: makeSite(),
     } as Parameters<typeof useEditorStore.setState>[0])
 
-    render(<SiteImportModal />)
+    renderSiteImportModal()
 
     dropCmsBundleFile(emptyBundle, 'empty-site-bundle.json')
 
@@ -455,7 +1007,7 @@ describe('SiteImportModal — global static import', () => {
       site: null,
     } as Parameters<typeof useEditorStore.setState>[0])
 
-    render(<SiteImportModal />)
+    renderSiteImportModal()
 
     const htmlFile = new File(
       ['<!doctype html><html><head><title>Imported page</title></head><body><h1>Imported page</h1></body></html>'],

@@ -1,7 +1,7 @@
 /* Section - shared collapsible category primitive for inspector panels. */
 
 .section {
-    padding: 2px 4px;
+    padding: var(--space-4xs) var(--space-3xs);
 }
 
 /* Flush variant — no vertical padding; the parent grid gap is the only spacing
@@ -12,29 +12,29 @@
 }
 
 .sectionOpen {
-    background: var(--editor-overlay-white-012);
+    background: var(--overlay-5);
 }
 
 .sectionToggle {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--space-3xs);
     width: 100%;
     min-height: 32px;
-    padding: 0 8px;
+    padding: 0 var(--space-s);
     background: transparent;
     border: 0;
     cursor: pointer;
-    color: var(--editor-text-secondary);
-    background: var(--editor-overlay-white-10);
+    color: var(--text-muted);
+    background: var(--overlay-10);
     border-radius: 12px;
     font-family: inherit;
     text-align: left;
 }
 
 .sectionToggle:hover {
-    background: var(--editor-overlay-white-12);
-    color: var(--editor-text);
+    background: var(--overlay-10);
+    color: var(--text);
 }
 
 .sectionIcon {
@@ -42,7 +42,7 @@
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    color: var(--editor-text-muted);
+    color: var(--text-subtle);
 }
 
 .sectionIcon {
@@ -55,7 +55,7 @@
     min-width: 0;
     display: inline-flex;
     align-items: center;
-    gap: 7px;
+    gap: var(--space-s);
 }
 
 .sectionTitle {
@@ -63,9 +63,9 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 12px;
+    font-size: var(--text-s);
     font-weight: 700;
-    color: var(--editor-text);
+    color: var(--text);
 }
 
 .sectionMeta {
@@ -73,8 +73,8 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    color: var(--editor-text-muted);
-    font-size: 10px;
+    color: var(--text-subtle);
+    font-size: var(--text-2xs);
     font-weight: 500;
     letter-spacing: 0;
     text-transform: none;
@@ -84,12 +84,12 @@
     width: 5px;
     height: 5px;
     border-radius: 50%;
-    background: var(--editor-success-green);
+    background: var(--success);
     flex-shrink: 0;
 }
 
 .sectionContent {
-    padding: 8px 0 8px 8px;
+    padding: var(--space-s) 0 var(--space-s) var(--space-s);
 }
 
 /**
@@ -101,5 +101,5 @@
  */
 .sectionBody {
     display: grid;
-    gap: 8px;
+    gap: var(--space-s);
 }

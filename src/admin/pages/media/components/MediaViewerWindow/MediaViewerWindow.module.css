@@ -1,17 +1,19 @@
 .window {
     position: fixed;
-    /* Sit above the sidebars (z-index 55, see LeftSidebar.module.css) so the
+    /* Sit above the sidebars (z-index 85, see LeftSidebar.module.css) so the
      viewer always wins when dragged across them. The toolbar's own dropdowns
      and modals live at 200+ which is intentionally still above us. */
-    z-index: 70;
-    left: var(--panel-x);
-    top: var(--panel-y);
-    width: min(880px, calc(100vw - 32px));
-    height: min(640px, calc(100vh - 32px));
-    background: var(--panel-bg);
-    border: 1px solid var(--panel-border);
+    z-index: 90;
+    --media-viewer-width: min(880px, calc(100vw - var(--space-2xl)));
+    --media-viewer-height: min(640px, calc(100vh - var(--space-2xl)));
+    left: max(var(--space-m), min(var(--panel-x), calc(100vw - var(--media-viewer-width) - var(--space-m))));
+    top: max(var(--space-m), min(var(--panel-y), calc(100vh - var(--media-viewer-height) - var(--space-m))));
+    width: var(--media-viewer-width);
+    height: var(--media-viewer-height);
+    background: var(--bg-surface);
+    border: 1px solid var(--overlay-10);
     border-radius: var(--panel-radius);
-    box-shadow: var(--panel-shadow);
+    box-shadow: var(--shadow-panel);
     backdrop-filter: blur(var(--panel-blur));
     display: flex;
     flex-direction: column;
@@ -32,57 +34,57 @@
     justify-content: stretch;
     min-width: 0;
     min-height: 0;
-    background: var(--editor-bg);
+    background: var(--bg-body);
 }
 
 .sidebar {
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    padding: 12px;
+    gap: var(--space-l);
+    padding: var(--space-l);
     overflow: auto;
-    background: var(--editor-bg);
+    background: var(--bg-body);
 }
 
 .section {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: var(--space-xs);
 }
 
 .sectionTitle {
-    font-size: 10px;
+    font-size: var(--text-2xs);
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: var(--editor-text-muted);
+    color: var(--text-subtle);
     margin: 0;
 }
 
 .field {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: var(--space-3xs);
 }
 
 .fieldLabel {
-    font-size: 10px;
+    font-size: var(--text-2xs);
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: var(--editor-text-muted);
+    color: var(--text-subtle);
 }
 
 .actionsRow {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: var(--space-xs);
 }
 
 .detailList {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: var(--space-3xs);
     margin: 0;
     padding: 0;
 }
@@ -90,14 +92,14 @@
 .detailRow {
     display: flex;
     align-items: baseline;
-    gap: 8px;
-    font-size: 12px;
+    gap: var(--space-s);
+    font-size: var(--text-s);
 }
 
 .detailLabel {
     flex: 0 0 70px;
-    font-size: 11px;
-    color: var(--editor-text-muted);
+    font-size: var(--text-xs);
+    color: var(--text-subtle);
     margin: 0;
 }
 
@@ -106,15 +108,15 @@
     margin: 0;
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    color: var(--editor-text);
+    gap: var(--space-3xs);
+    color: var(--text);
     word-break: break-word;
 }
 
 .folderList {
     display: flex;
     flex-wrap: wrap;
-    gap: 4px;
+    gap: var(--space-3xs);
     list-style: none;
     padding: 0;
     margin: 0;
@@ -123,22 +125,33 @@
 .folderChip {
     display: inline-flex;
     align-items: center;
-    padding: 2px 6px;
-    background: var(--editor-surface-2);
-    border: 1px solid var(--editor-border);
-    border-radius: var(--editor-radius-sm);
-    font-size: 11px;
-    color: var(--editor-text);
+    padding: var(--space-4xs) var(--space-xs);
+    background: var(--bg-surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: var(--text-xs);
+    color: var(--text);
 }
 
 .placeholder {
-    font-size: 11px;
-    color: var(--editor-text-muted);
+    font-size: var(--text-xs);
+    color: var(--text-subtle);
     margin: 0;
 }
 
 .warning {
-    font-size: 11px;
-    color: var(--editor-warning);
-    margin: 0 0 6px 0;
+    font-size: var(--text-xs);
+    color: var(--warning);
+    margin: 0 0 var(--space-xs) 0;
+}
+
+@media (max-width: 700px) {
+    .body {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: minmax(180px, 36%) minmax(0, 1fr);
+    }
+
+    .sidebar {
+        min-height: 0;
+    }
 }

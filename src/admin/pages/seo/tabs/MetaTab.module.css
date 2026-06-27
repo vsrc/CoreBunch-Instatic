@@ -4,7 +4,7 @@
 .columns {
     display: grid;
     grid-template-columns: 300px minmax(0, 1fr) minmax(300px, 400px);
-    gap: 24px;
+    gap: var(--space-6xl);
     align-items: start;
 }
 
@@ -14,7 +14,7 @@
     align-self: start;
     display: flex;
     flex-direction: column;
-    gap: 18px;
+    gap: var(--space-3xl);
     min-width: 0;
 }
 

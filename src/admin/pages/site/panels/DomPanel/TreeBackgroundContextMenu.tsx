@@ -29,12 +29,11 @@ import {
 } from '@ui/components/ContextMenu'
 import { useEditorStore, selectActiveCanvasPage } from '@site/store/store'
 import { useInsertModule } from '@site/hooks/useInsertModule'
-import { useInsertFormPreset } from '@site/hooks/useInsertFormPreset'
 import { ModulePicker } from '@site/module-picker'
-import type { FormPreset } from '@site/module-picker'
 import type { AnyModuleDefinition } from '@core/module-engine'
 import { FilesStack2SolidIcon } from 'pixel-art-icons/icons/files-stack-2-solid'
 import { PlusIcon } from 'pixel-art-icons/icons/plus'
+import { isNarrowEditorChromeViewport } from '@site/layout/responsiveChrome'
 
 interface TreeBackgroundContextMenuProps {
   x: number
@@ -55,7 +54,6 @@ export function TreeBackgroundContextMenu({
   const insertComponentRef = useEditorStore((s) => s.insertComponentRef)
   const pasteNodeAction = useEditorStore((s) => s.pasteNode)
   const insertModule = useInsertModule()
-  const insertFormPreset = useInsertFormPreset()
 
   // Reactive boolean for the conditional Paste item — re-renders whenever
   // the clipboard entry transitions between null and non-null.
@@ -73,13 +71,9 @@ export function TreeBackgroundContextMenu({
 
   const handleSelectModule = (mod: AnyModuleDefinition) => {
     if (!rootNodeId) return
-    insertModule(mod, rootNodeId)
-    onClose()
-  }
-
-  const handleSelectFormPreset = (preset: FormPreset) => {
-    if (!rootNodeId) return
-    insertFormPreset(preset, rootNodeId)
+    insertModule(mod, rootNodeId, {
+      preservePropertiesPanelCollapse: isNarrowEditorChromeViewport(),
+    })
     onClose()
   }
 
@@ -125,7 +119,6 @@ export function TreeBackgroundContextMenu({
       >
         <ModulePicker
           onSelectModule={handleSelectModule}
-          onSelectFormPreset={handleSelectFormPreset}
           onSelectVC={handleSelectVC}
         />
       </ContextMenuSubmenu>

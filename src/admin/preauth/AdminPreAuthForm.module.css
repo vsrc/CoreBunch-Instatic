@@ -1,10 +1,10 @@
 .brandRow {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 20px;
-  color: var(--editor-text-secondary);
-  font-size: 12px;
+  gap: var(--space-m);
+  margin-bottom: var(--space-4xl);
+  color: var(--text-muted);
+  font-size: var(--text-s);
   font-weight: 600;
 }
 
@@ -14,8 +14,8 @@
   height: 28px;
   place-items: center;
   border-radius: 6px;
-  background: var(--editor-overlay-white-08);
-  color: var(--editor-text);
+  background: var(--overlay-10);
+  color: var(--text);
 }
 
 /* Operator-provided favicon used as the login brand mark. Object-fit cover
@@ -32,14 +32,14 @@
 
 .form {
   display: grid;
-  gap: 14px;
+  gap: var(--space-xl);
 }
 
 .field {
   display: grid;
-  gap: 6px;
-  color: var(--editor-text-secondary);
-  font-size: 12px;
+  gap: var(--space-xs);
+  color: var(--text-muted);
+  font-size: var(--text-s);
   font-weight: 600;
 }
 

@@ -14,7 +14,7 @@ import {
   updateCmsDataTable,
   updateCmsDataRowStatus,
 } from '@core/persistence'
-import { useEditorStore } from '@site/store/store'
+import { useWorkspaceLayout } from '@admin/state/workspaceLayout'
 import type {
   DataTable,
   DataRow,
@@ -38,6 +38,7 @@ interface UseContentWorkspaceOptions {
 export function useContentWorkspace({
   loadAuthors: shouldLoadAuthors = true,
 }: UseContentWorkspaceOptions = {}) {
+  const setRightPanel = useWorkspaceLayout((s) => s.setRightPanel)
   const [collections, setCollections] = useState<DataTable[]>([])
   const [entries, setEntries] = useState<DataRow[]>([])
   const [authors, setAuthors] = useState<DataUserReference[]>([])
@@ -67,8 +68,8 @@ export function useContentWorkspace({
   // needs a stable identity for react-hooks/exhaustive-deps.
   const selectEntry = useCallback((entry: DataRow | null) => {
     setSelectedEntry(entry)
-    useEditorStore.getState().setPropertiesPanel({ collapsed: false })
-  }, [])
+    if (entry) setRightPanel({ collapsed: false })
+  }, [setRightPanel])
 
   useEffect(() => {
     let cancelled = false

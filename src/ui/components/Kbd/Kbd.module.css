@@ -21,9 +21,9 @@
     justify-content: center;
     min-width: 19px;
     height: 19px;
-    padding: 0 6px;
+    padding: 0 var(--space-xs);
     border: 1px solid var(--kbd-border);
-    border-radius: var(--editor-radius-sm);
+    border-radius: var(--radius-sm);
     background: linear-gradient(
         var(--kbd-face-top),
         var(--kbd-face-bottom)
@@ -35,7 +35,7 @@
         0 1px 2px var(--kbd-drop);
     color: var(--kbd-text);
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: var(--text-xs);
     font-weight: 500;
     line-height: 1;
     white-space: nowrap;
@@ -68,7 +68,7 @@
 .sequence {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--space-3xs);
 }
 
 @media (prefers-reduced-motion: reduce) {

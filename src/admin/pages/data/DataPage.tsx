@@ -8,15 +8,19 @@ import { useEffect, useState } from 'react'
 import { AdminWorkspaceCanvasLayout } from '@admin/layouts/AdminWorkspaceCanvasLayout'
 import { useAuthenticatedAdminUser } from '@admin/sessionContext'
 import { useNavigate } from '@admin/lib/routing'
-import { useEditorStore } from '@site/store/store'
 import { useConfirmDelete } from '@admin/shared/dialogs/ConfirmDeleteDialog'
 import { StepUpCancelledMessage, useStepUp } from '@admin/shared/StepUp'
 import { CMS_SITE_BUNDLE_IMPORTED_EVENT } from '@admin/state/adminEvents'
 import { useAdminUi } from '@admin/state/adminUi'
+import { useWorkspaceLayout } from '@admin/state/workspaceLayout'
 import {
+  canAccessDataRows,
   canCreateContent,
   canEditAnyContent,
+  canExportData,
+  canImportData,
   canManageDataTables,
+  canManageTable,
 } from '@admin/access'
 import type { DataRow, DataRowCells, DataRowStatus } from '@core/data/schemas'
 import { useDataWorkspace } from './hooks/useDataWorkspace'
@@ -24,20 +28,6 @@ import { DataSidebar } from './components/DataSidebar/DataSidebar'
 import { DataCanvas } from './components/DataCanvas/DataCanvas'
 import { DataInspector } from './components/DataInspector/DataInspector'
 import { NewTableDialog } from './components/NewTableDialog/NewTableDialog'
-import { ExportDialog } from './components/ExportDialog/ExportDialog'
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-interface ExportDialogOpenState {
-  kind: 'open'
-  initialScope: 'all' | 'selected'
-  selectedRowIds: string[]
-  activeTableId: string | null
-}
-
-type ExportDialogState = { kind: 'closed' } | ExportDialogOpenState
 
 // ---------------------------------------------------------------------------
 // DataPage
@@ -54,19 +44,22 @@ export function DataPage() {
   // briefly painted full-admin UI in any session-rehydration race.)
   const permissionUser = useAuthenticatedAdminUser()
 
-  const canEdit = canEditAnyContent(permissionUser)
-  const canCreate = canCreateContent(permissionUser)
-  const canManage = canManageDataTables(permissionUser)
-  const canDelete = canManage
+  const canEditRows = canEditAnyContent(permissionUser)
+  const canCreateRows = canCreateContent(permissionUser)
+  const canManageCustomTables = canManageDataTables(permissionUser)
+  const canDeleteRows = canEditRows
+  const canExport = canExportData(permissionUser)
+  const canImport = canImportData(permissionUser)
+  const canLoadRows = canAccessDataRows(permissionUser)
 
-  const workspace = useDataWorkspace()
-  const setPropertiesPanel = useEditorStore((s) => s.setPropertiesPanel)
+  const workspace = useDataWorkspace({ shouldLoadRows: canLoadRows })
+  const setRightPanel = useWorkspaceLayout((s) => s.setRightPanel)
   const openSiteImport = useAdminUi((s) => s.openSiteImport)
+  const openSiteExport = useAdminUi((s) => s.openSiteExport)
   const confirmDelete = useConfirmDelete()
   const { runStepUp } = useStepUp()
 
   const [newTableDialogOpen, setNewTableDialogOpen] = useState(false)
-  const [exportDialog, setExportDialog] = useState<ExportDialogState>({ kind: 'closed' })
 
   useEffect(() => {
     function refreshAfterBundleImport() {
@@ -142,18 +135,18 @@ export function DataPage() {
   function handleSelectRow(rowId: string | null) {
     workspace.selectRow(rowId)
     if (rowId !== null) {
-      setPropertiesPanel({ collapsed: false })
+      setRightPanel({ collapsed: false })
     }
   }
 
   function handleOpenRow(rowId: string) {
     workspace.selectRow(rowId)
-    setPropertiesPanel({ collapsed: false })
+    setRightPanel({ collapsed: false })
   }
 
   function handleOpenTableSettings(tableId: string) {
     workspace.selectTable(tableId)
-    setPropertiesPanel({ collapsed: false })
+    setRightPanel({ collapsed: false })
   }
 
   function handleDeleteTable(tableId: string): void {
@@ -203,6 +196,12 @@ export function DataPage() {
   // Right panel (inspector)
   // ---------------------------------------------------------------------------
 
+  // Schema management is kind-aware: custom tables need `data.custom.tables.manage`,
+  // system tables need `data.system.tables.manage`. Deletion is never allowed on
+  // a system table (the server blocks it; the UI hides the affordance).
+  const canManageSchema = selectedTable ? canManageTable(permissionUser, selectedTable) : canManageCustomTables
+  const canDeleteTable = Boolean(selectedTable) && canManageSchema && !selectedTable?.system
+
   const rightPanel = selectedTable ? (
     <DataInspector
       table={selectedTable}
@@ -220,8 +219,9 @@ export function DataPage() {
       onOpenInSiteEditor={handleOpenInSiteEditor}
       onPublishRow={async (rowId) => workspace.publishRow(rowId)}
       onSetRowStatus={async (rowId, status) => workspace.setRowStatus(rowId, status)}
-      canEdit={canEdit}
-      canDelete={canDelete}
+      canEdit={canEditRows}
+      canManageSchema={canManageSchema}
+      canDelete={canDeleteTable}
     />
   ) : undefined
 
@@ -243,15 +243,15 @@ export function DataPage() {
             onOpenTableSettings={handleOpenTableSettings}
             onDeleteTable={(table) => handleDeleteTable(table.id)}
             onCreateTable={() => setNewTableDialogOpen(true)}
-            onOpenExport={() => setExportDialog({
-              kind: 'open',
-              initialScope: 'all',
-              selectedRowIds: [],
+            onOpenExport={() => openSiteExport({
               activeTableId: workspace.selectedTableId,
+              initialScope: 'all',
             })}
             onOpenImport={openSiteImport}
-            canCreate={canCreate}
-            canManage={canManage}
+            canCreateTable={canManageCustomTables}
+            canManage={canManageCustomTables}
+            canExport={canExport}
+            canImport={canImport}
           />
         )}
         contentCanvas={(
@@ -271,15 +271,15 @@ export function DataPage() {
             onOpenInSiteEditor={handleOpenInSiteEditor}
             onOpenRow={handleOpenRow}
             onSetRowStatus={handleSetRowStatus}
-            onExportRows={(rowIds) => setExportDialog({
-              kind: 'open',
-              initialScope: 'selected',
-              selectedRowIds: rowIds,
+            onExportRows={(rowIds) => openSiteExport({
               activeTableId: workspace.selectedTableId,
+              selectedRowIds: rowIds,
+              initialScope: 'selected',
             })}
-            canCreate={canCreate}
-            canEdit={canEdit}
-            canDelete={canDelete}
+            canCreate={canCreateRows}
+            canEdit={canEditRows}
+            canDelete={canDeleteRows}
+            canExport={canExport}
           />
         )}
         contentRightPanel={rightPanel}
@@ -293,17 +293,6 @@ export function DataPage() {
             await runStepUp(() => workspace.createTable(input))
             setNewTableDialogOpen(false)
           }}
-        />
-      )}
-
-      {exportDialog.kind === 'open' && (
-        <ExportDialog
-          open={true}
-          onClose={() => setExportDialog({ kind: 'closed' })}
-          tables={workspace.tables}
-          activeTableId={exportDialog.activeTableId}
-          selectedRowIds={exportDialog.selectedRowIds}
-          initialScope={exportDialog.initialScope}
         />
       )}
 

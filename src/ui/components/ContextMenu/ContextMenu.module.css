@@ -6,11 +6,11 @@
     width: min(var(--context-menu-width), var(--context-menu-max-width), calc(100vw - 16px));
     min-width: var(--context-menu-min-width);
     overflow: hidden;
-    padding: 4px;
+    padding: var(--space-3xs);
     border: 0;
     border-radius: 16px;
-    background: var(--editor-surface-3);
-    box-shadow: 0 12px 28px var(--editor-overlay-black-50);
+    background: var(--bg-surface-3);
+    box-shadow: 0 12px 28px var(--scrim-50);
     /* Anchor the subtle scale to the menu's top edge — the menu drops down
        from the click point / trigger, so growing from the top reads natural. */
     transform-origin: top center;
@@ -96,17 +96,17 @@
    menu's fixed header slot, so it does not scroll — just a small gap below it
    separates the field from the list. */
 .searchHeader {
-    padding-bottom: 4px;
+    padding-bottom: var(--space-3xs);
 }
 
 .item {
     min-height: 28px;
-    padding: 0 9px;
-    gap: 9px;
+    padding: 0 var(--space-m);
+    gap: var(--space-m);
     border-radius: 12px;
-    font-size: 12px;
+    font-size: var(--text-s);
     font-weight: 560;
-    color: var(--editor-text);
+    color: var(--text);
 }
 
 .item > span[aria-hidden="true"] {
@@ -119,8 +119,8 @@
 
 .separator {
     width: auto;
-    margin: 4px 6px;
-    background: var(--editor-surface-2);
+    margin: var(--space-3xs) var(--space-xs);
+    background: var(--bg-surface-2);
 }
 
 /* ── ContextMenuSubmenu ──────────────────────────────────────────────────── */
@@ -136,7 +136,7 @@
 .submenuTriggerContent {
     display: flex;
     align-items: center;
-    gap: 9px;
+    gap: var(--space-m);
     flex: 1;
     min-width: 0;
     text-align: left;

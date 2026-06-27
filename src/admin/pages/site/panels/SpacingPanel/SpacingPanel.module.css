@@ -4,8 +4,8 @@
 .previewBar {
     display: inline-block;
     height: 6px;
-    border-radius: var(--editor-radius-sm);
-    background: var(--editor-text);
+    border-radius: var(--radius-sm);
+    background: var(--text);
     opacity: 0.7;
     max-width: 100%;
 }
@@ -26,9 +26,9 @@
 .barChart {
     display: grid;
     grid-template-columns: 14px minmax(0, 1fr);
-    column-gap: 4px;
+    column-gap: var(--space-3xs);
     row-gap: 0;
-    padding: 4px 0 0;
+    padding: var(--space-3xs) 0 0;
 }
 
 .barChartIcon {
@@ -41,7 +41,7 @@
     grid-row: 1;
     grid-column: 1;
     align-self: end;
-    padding-bottom: 2px;
+    padding-bottom: var(--space-4xs);
     color: var(--chart-series-max);
 }
 
@@ -49,7 +49,7 @@
     grid-row: 3;
     grid-column: 1;
     align-self: start;
-    padding-top: 2px;
+    padding-top: var(--space-4xs);
     color: var(--chart-series-min);
 }
 
@@ -61,7 +61,7 @@
     grid-column: 2;
     position: relative;
     width: 100%;
-    padding: 0 4px;
+    padding: 0 var(--space-3xs);
     min-height: 4px;
 }
 
@@ -96,8 +96,8 @@
     align-self: stretch;
     display: flex;
     align-items: stretch;
-    gap: 3px;
-    padding: 0 4px;
+    gap: var(--space-4xs);
+    padding: 0 var(--space-3xs);
     pointer-events: none;
 }
 
@@ -107,7 +107,7 @@
 }
 
 .barChartBaseHighlightCell[data-base="true"] {
-    background: var(--editor-surface-3);
+    background: var(--bg-surface-3);
     border-radius: 12px;
 }
 
@@ -125,7 +125,7 @@
     display: grid;
     grid-auto-flow: column;
     grid-auto-columns: minmax(0, 1fr);
-    gap: 3px;
+    gap: var(--space-4xs);
     pointer-events: none;
 }
 
@@ -162,7 +162,7 @@
     display: grid;
     grid-auto-flow: column;
     grid-auto-columns: minmax(0, 1fr);
-    gap: 2px;
+    gap: var(--space-4xs);
     pointer-events: none;
 }
 
@@ -197,8 +197,8 @@
 
 .barValueLabel {
     overflow: hidden;
-    color: var(--editor-text-muted);
-    font-size: 8px;
+    color: var(--text-subtle);
+    font-size: var(--text-3xs);
     font-variant-numeric: tabular-nums;
     line-height: 1.1;
     letter-spacing: 0.02em;
@@ -212,7 +212,7 @@
     color: color-mix(
         in srgb,
         var(--chart-series-max) 70%,
-        var(--editor-text-muted)
+        var(--text-subtle)
     );
 }
 
@@ -220,7 +220,7 @@
     color: color-mix(
         in srgb,
         var(--chart-series-min) 70%,
-        var(--editor-text-muted)
+        var(--text-subtle)
     );
 }
 
@@ -236,9 +236,9 @@
     position: relative;
     display: grid;
     grid-template-columns: 14px minmax(0, 1fr);
-    column-gap: 4px;
+    column-gap: var(--space-3xs);
     align-items: center;
-    margin: 2px 0;
+    margin: var(--space-4xs) 0;
 }
 
 /* Same grid template as the bar rows (1fr per column, 3px gap, 4px side
@@ -251,14 +251,14 @@
     grid-auto-flow: column;
     grid-auto-columns: minmax(0, 1fr);
     align-items: center;
-    gap: 3px;
-    padding: 0 4px;
+    gap: var(--space-4xs);
+    padding: 0 var(--space-3xs);
 }
 
 .barChartStepLabel {
-    padding: 0 4px;
-    color: var(--editor-text-muted);
-    font-size: 9px;
+    padding: 0 var(--space-3xs);
+    color: var(--text-subtle);
+    font-size: var(--text-3xs);
     font-weight: 700;
     letter-spacing: 0.06em;
     line-height: 1.4;
@@ -270,6 +270,6 @@
 }
 
 .barChartStepLabel[data-base="true"] {
-    color: var(--editor-text);
+    color: var(--text);
     font-weight: 800;
 }

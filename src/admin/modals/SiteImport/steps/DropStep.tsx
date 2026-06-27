@@ -2,9 +2,9 @@
  * DropStep — the first step of the Super Import wizard.
  *
  * Accepts files via drag-and-drop, folder picker, or multi-file picker.
- * Handles directory entry walking for dropped folders. A single .zip file
- * is handed off as raw bytes; everything else is passed as a File array.
- * The parent detects CMS-exported .json bundles before static-site ingestion.
+ * Handles directory entry walking for dropped folders. A single .zip file is
+ * handed off as a File so the parent can route Instatic archives before static-
+ * site ingestion; everything else is passed as a File array.
  *
  * Validation errors (oversized, zip-bomb, traversal) are shown via the
  * `errorMessage` prop — the MODAL catches them from ingestInput() and passes
@@ -24,8 +24,8 @@ interface DropStepProps {
   errorMessage: string | null
   /** Called when the user drops/picks loose files (non-zip). */
   onFilesReady: (files: File[]) => void
-  /** Called when a single .zip was dropped or picked — bytes ready for ingestInput. */
-  onZipReady: (zipBytes: Uint8Array) => void
+  /** Called when a single .zip was dropped or picked. */
+  onZipReady: (zipFile: File) => void
 }
 
 export function DropStep({ busy, errorMessage, onFilesReady, onZipReady }: DropStepProps) {
@@ -41,8 +41,7 @@ export function DropStep({ busy, errorMessage, onFilesReady, onZipReady }: DropS
         files[0].type === 'application/zip' ||
         files[0].type === 'application/x-zip-compressed')
     ) {
-      const buf = await files[0].arrayBuffer()
-      onZipReady(new Uint8Array(buf))
+      onZipReady(files[0])
       return
     }
     onFilesReady(files)
@@ -95,7 +94,7 @@ export function DropStep({ busy, errorMessage, onFilesReady, onZipReady }: DropS
       >
         <UploadIcon size={28} aria-hidden="true" className={styles.dropIcon} />
         <p className={styles.dropTitle}>Drop a site folder, CMS bundle, or .zip here</p>
-        <p className={styles.dropHint}>HTML, CSS, images, fonts, and CMS .json bundles are supported</p>
+        <p className={styles.dropHint}>HTML, CSS, images, fonts, and CMS bundles are supported</p>
         <div className={styles.dropActions}>
           <Button
             variant="secondary"

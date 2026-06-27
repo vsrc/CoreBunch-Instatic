@@ -9,18 +9,18 @@
     min-height: 42px;
     grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-s);
     border-radius: 12px;
-    background: var(--editor-surface);
-    color: var(--editor-text);
+    background: var(--bg-surface);
+    color: var(--text);
     font: inherit;
-    padding: 6px 8px;
+    padding: var(--space-xs) var(--space-s);
 }
 
 .swatches {
     display: flex;
     align-items: center;
-    gap: 3px;
+    gap: var(--space-4xs);
 }
 
 .rowToggle {
@@ -40,14 +40,14 @@
 .rowText {
     display: grid;
     min-width: 0;
-    gap: 2px;
+    gap: var(--space-4xs);
 }
 
 .rowTitle {
     min-width: 0;
     overflow: hidden;
-    color: var(--editor-text);
-    font-size: 12px;
+    color: var(--text);
+    font-size: var(--text-s);
     font-weight: 750;
     line-height: 1.2;
     text-overflow: ellipsis;
@@ -55,8 +55,8 @@
 }
 
 .rowMeta {
-    color: var(--editor-text-muted);
-    font-size: 10px;
+    color: var(--text-subtle);
+    font-size: var(--text-2xs);
     font-weight: 600;
     line-height: 1.2;
     white-space: nowrap;

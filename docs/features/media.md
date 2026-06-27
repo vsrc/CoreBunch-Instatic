@@ -2,7 +2,7 @@
 
 The Media workspace — a dedicated admin page for managing every file on the site. Folder tree, file grid, bulk operations, usage tracking, floating windows for upload queue / viewer / bulk edit. Lives at `/admin/media`.
 
-The workspace is canvas-style: it uses `AdminWorkspaceCanvasLayout`, the lighter canvas shell shared by Content, Data, and Media. The sidebar is a panel rail with folder-tree navigation / storage controls; the canvas is an OS-style file manager grid driven by `MediaCanvas`, where folders and assets share the same browsing surface. Overlays are draggable windows persisted via `panelLayoutStorage`.
+The workspace is canvas-style: it uses `AdminWorkspaceCanvasLayout`, the lighter canvas shell shared by Content, Data, and Media. The sidebar is a panel rail with folder-tree navigation / storage controls; the canvas is an OS-style file manager grid driven by `MediaCanvas`, where folders and assets share the same browsing surface. Sidebar width and floating overlay positions are persisted through `workspaceLayoutStorage`.
 
 ---
 
@@ -13,7 +13,7 @@ The workspace is canvas-style: it uses `AdminWorkspaceCanvasLayout`, the lighter
 - **State:** one hook — `useMediaWorkspace()` — orchestrates folders, assets, selection, filters, upload queue, and folder moves. The editor store doesn't grow new slices; the Media page is self-contained.
 - **Folders:** folders render as first-class grid/list items in the canvas. Opening a folder filters the canvas to its contents, and nested folders show a parent-folder entry to navigate back.
 - **Drag/drop:** assets can be dragged into folders from the canvas or folder tree. A drop replaces the asset's folder memberships with the target folder, matching desktop file-manager move semantics.
-- **Floating windows:** Asset viewer, upload queue, bulk edit. Each is `useDraggablePanel('mediaViewer' | 'mediaUploadQueue' | 'mediaBulkEdit')`. Position survives reload via `panelLayoutStorage`.
+- **Floating windows:** Asset viewer, upload queue, bulk edit. Each is `useDraggablePanel('mediaViewer' | 'mediaUploadQueue' | 'mediaBulkEdit')`. Position survives reload via `workspaceLayoutStorage`.
 - **Auto-open behavior:** upload queue opens when uploads start; bulk-edit opens at 2+ selected; viewer opens on primary selection.
 - **Server side:** `media_assets`, `media_folders`, `media_asset_folders` tables. Handlers under `/admin/api/cms/media`, `/admin/api/cms/media/folders`, `/admin/api/cms/media/storage`. Repositories at `server/repositories/media*.ts`.
 - **Storage adapters:** built-in local-disk plus plugin-registered adapters. Non-public-url adapters route through `/_instatic/media/<adapterId>/<storagePath>` for signed redirects.
@@ -71,7 +71,7 @@ src/admin/pages/media/
     <BulkEditWindow>        ← 2+ selected
 ```
 
-`MediaPage` orchestrates window visibility and reads `useMediaWorkspace()` for everything else. Window **position** lives in `panelLayoutStorage` (`useDraggablePanel(id)`). Window **visibility** is either derived from selection or held in local state — see "Floating windows" below.
+`MediaPage` orchestrates window visibility and reads `useMediaWorkspace()` for everything else. Window **position** lives in `workspaceLayoutStorage` (`useDraggablePanel(id)`). Window **visibility** is either derived from selection or held in local state — see "Floating windows" below.
 
 ### `useMediaWorkspace` — the orchestrator
 
@@ -88,7 +88,7 @@ const {
 } = useMediaWorkspace()
 ```
 
-The editor store does **not** grow new slices. The Media page is self-contained — it talks to the CMS API directly through the persistence layer.
+The editor store does **not** grow new slices. The Media page is self-contained — it talks to the CMS API directly through the persistence layer, and its shared chrome state uses `src/admin/state/workspaceLayout.ts`.
 
 ### Folder navigation and moves
 
@@ -102,7 +102,7 @@ Drag/drop logic is split across two layers:
 
 - **`utils/mediaDragDrop.ts`** — TypeBox-validated `DataTransfer` payload read/write helpers. Declares the `MediaDropPayload` union (`{ kind: 'assets', assetIds }` | `{ kind: 'folder', folderId }`).
 - **`utils/mediaDnd.ts`** — the single source of truth for drop-legality rules. Exports `canMoveFolderTo`, `canAcceptDrop`, and `commitDropPayload` as pure functions operating on a `MediaDndTarget` interface (folders, folderById, moveAssetsToFolder, moveFolder). Also exports `folderDropKey` and `ROOT_FOLDER_DROP_KEY` for the root sentinel.
-- **`hooks/useMediaDnd.ts`** — wraps the rules with React state (active drop-target highlight) and returns `handleDragOver`, `handleDragLeave`, `handleDrop`, `isDropTarget`, and `clearDropTarget`. Both `MediaCanvas` and `MediaFolderPanel` consume this hook — no DnD logic is duplicated between the two surfaces.
+- **`hooks/useMediaDnd.ts`** — wraps the rules with React state (active drop-target highlight) and returns `handleDragOver`, `handleDragLeave`, `handleDrop`, `isDropTarget`, and `clearDropTarget`. Both `MediaCanvas` and `MediaFolderPanel` consume this hook — no DnD logic is duplicated between the two surfaces. The hook accepts an `enabled` flag so read-only media users can browse without seeing internal move drop targets.
 
 Drop rules enforced by `canMoveFolderTo`:
 
@@ -113,7 +113,14 @@ Drop rules enforced by `canMoveFolderTo`:
 | Folder into one of its own descendants | No — cycle |
 | Any other folder target | Yes |
 
-Asset drops are always accepted; `commitDropPayload` calls `moveAssetsToFolder(assetIds, targetFolderId)`. Dropping on **All files** moves assets/folders back to the root (`targetFolderId: null`).
+Asset drops are accepted when the caller has `media.write`; `commitDropPayload` calls `moveAssetsToFolder(assetIds, targetFolderId)`. Dropping on **All files** moves assets/folders back to the root (`targetFolderId: null`).
+
+The admin UI mirrors the server capability split:
+
+- `media.read` can open the workspace, browse assets/folders, open the viewer, and copy public URLs.
+- `media.write` exposes upload, metadata editing, rename, folder management, restore, bulk metadata edits, and internal folder/asset moves.
+- `media.replace` exposes the Replace file action.
+- `media.delete` exposes soft-delete and purge actions.
 
 Storage remains `media_asset_folders` (many-to-many), but the canvas move interaction is intentionally file-manager-like: moving an asset to a folder removes its previous folder assignments and adds only the target folder. The user-facing model is one current folder per asset move.
 
@@ -137,7 +144,7 @@ The count badge shown next to each smart folder in the sidebar is computed clien
 
 ### Floating windows
 
-Each floating window has a unique `FloatingPanelId` (`'mediaViewer' | 'mediaUploadQueue' | 'mediaBulkEdit'`), uses `useDraggablePanel(id)` for position, and gets its position persisted via `panelLayoutStorage.ts`. Visibility differs by window:
+Each floating window has a unique `FloatingPanelId` (`'mediaViewer' | 'mediaUploadQueue' | 'mediaBulkEdit'`), uses `useDraggablePanel(id)` for position, and gets its position persisted via `workspaceLayoutStorage.ts`. Visibility differs by window:
 
 | Window          | How visibility is determined                                                                    |
 |-----------------|-------------------------------------------------------------------------------------------------|

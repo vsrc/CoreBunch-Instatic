@@ -2,22 +2,22 @@
  * URL-mode body and inline status lines. */
 .status {
     margin: 0;
-    font-size: 11px;
-    color: var(--editor-danger-text);
+    font-size: var(--text-s);
+    color: var(--danger-text);
 }
 
 .urlBody {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: var(--space-s);
     min-width: 0;
 }
 
 .urlPreview {
     display: block;
     overflow: hidden;
-    border-radius: var(--editor-radius);
-    background: var(--editor-surface-3);
+    border-radius: var(--radius);
+    background: var(--bg-surface-3);
 }
 
 .urlPreview img {

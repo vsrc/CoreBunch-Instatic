@@ -1,8 +1,8 @@
 .wrapper {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 8px 0;
+  gap: var(--space-l);
+  padding: var(--space-s) 0;
 }
 
 .dropZone {
@@ -10,19 +10,19 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 40px 24px;
-  border: 1.5px dashed var(--editor-border);
-  border-radius: var(--editor-radius);
-  background: var(--editor-surface);
+  gap: var(--space-s);
+  padding: var(--space-8xl) var(--space-5xl);
+  border: 1.5px dashed var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
   cursor: default;
   text-align: center;
   transition: background 80ms ease-out, border-color 80ms ease-out;
 }
 
 .dropZone[data-dragging='true'] {
-  background: var(--editor-surface-2);
-  border-color: var(--editor-text-subtle);
+  background: var(--bg-surface-2);
+  border-color: var(--text-disabled);
 }
 
 .dropZone[data-disabled='true'] {
@@ -31,43 +31,43 @@
 }
 
 .dropIcon {
-  color: var(--editor-text-muted);
+  color: var(--text-subtle);
 }
 
 .dropTitle {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--text-l);
   font-weight: 500;
-  color: var(--editor-text);
+  color: var(--text);
 }
 
 .dropHint {
   margin: 0;
-  font-size: 12px;
-  color: var(--editor-text-muted);
+  font-size: var(--text-s);
+  color: var(--text-subtle);
 }
 
 .dropActions {
   display: flex;
-  gap: 8px;
-  margin-top: 4px;
+  gap: var(--space-s);
+  margin-top: var(--space-3xs);
 }
 
 .status {
   margin: 0;
-  font-size: 12px;
-  color: var(--editor-text-secondary);
+  font-size: var(--text-s);
+  color: var(--text-muted);
   text-align: center;
 }
 
 .error {
   margin: 0;
-  padding: 10px 12px;
-  font-size: 12px;
-  color: var(--editor-danger-light);
-  background: var(--editor-danger-bg);
-  border: 1px solid var(--editor-danger-border);
-  border-radius: var(--editor-radius);
+  padding: var(--space-m) var(--space-l);
+  font-size: var(--text-s);
+  color: var(--danger-light);
+  background: var(--danger-10);
+  border: 1px solid var(--danger-20);
+  border-radius: var(--radius);
 }
 
 .hiddenInput {

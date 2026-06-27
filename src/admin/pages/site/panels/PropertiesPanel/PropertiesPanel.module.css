@@ -5,10 +5,10 @@
     --panel-x: calc(100% - 376px);
     --panel-y: 16px;
     /* Background the inner fade gradients (ClassPicker fade, search-bar fade,
-       locked-preview teaser) blend into. Floating panel surface is --panel-bg;
-       the docked variant is transparent over the --editor-bg sidebar, so it
+       locked-preview teaser) blend into. Floating panel surface is --bg-surface;
+       the docked variant is transparent over the --bg-body sidebar, so it
        overrides this below. Descendants read it via var(--panel-fade-bg). */
-    --panel-fade-bg: var(--panel-bg);
+    --panel-fade-bg: var(--bg-surface);
     left: var(--panel-x);
     top: var(--panel-y);
     bottom: 12px;
@@ -18,11 +18,11 @@
     width: var(--panel-w);
     max-height: calc(100vh - 28px);
     overflow: hidden;
-    border: 1px solid var(--panel-border);
+    border: 1px solid var(--overlay-10);
     border-radius: var(--panel-radius);
-    background: var(--panel-bg);
+    background: var(--bg-surface);
     backdrop-filter: blur(var(--panel-blur));
-    box-shadow: var(--panel-shadow);
+    box-shadow: var(--shadow-panel);
     outline: none;
     transition: width 150ms ease-in-out;
     transform: translateZ(0);
@@ -31,9 +31,9 @@
 
 .panelDocked {
     position: relative;
-    /* Docked surface is transparent over the --editor-bg sidebar, so the inner
-       fades must blend into --editor-bg rather than the floating --panel-bg. */
-    --panel-fade-bg: var(--editor-bg);
+    /* Docked surface is transparent over the --bg-body sidebar, so the inner
+       fades must blend into --bg-body rather than the floating --bg-surface. */
+    --panel-fade-bg: var(--bg-body);
     left: auto;
     top: auto;
     bottom: auto;
@@ -80,27 +80,27 @@
 .nodeViewSwitcher {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 10px 14px 0;
+    gap: var(--space-l);
+    padding: var(--space-m) var(--space-xl) 0;
 }
 
 .nodeViewSwitcher .nodeViewButton {
     height: auto;
     padding: 0;
-    border-radius: var(--editor-radius-sm);
-    color: var(--editor-text-subtle);
-    font-size: 10px;
+    border-radius: var(--radius-sm);
+    color: var(--text-disabled);
+    font-size: var(--text-2xs);
     font-weight: 800;
     line-height: 1.4;
 }
 
 .nodeViewSwitcher .nodeViewButton:hover {
     background: transparent;
-    color: var(--editor-text-secondary);
+    color: var(--text-muted);
 }
 
 .nodeViewSwitcher .nodeViewButton[data-active="true"] {
-    color: var(--editor-text);
+    color: var(--text);
     font-weight: 800;
 }
 
@@ -112,7 +112,7 @@
 .headerClassPicker {
     position: relative;
     z-index: 1;
-    padding: 10px 14px 0;
+    padding: var(--space-m) var(--space-xl) 0;
 }
 
 /*  Soft fade just below the ClassPicker — mirrors the bottom search bar's
@@ -132,7 +132,7 @@
     display: flex;
     align-items: center;
     min-width: 0;
-    gap: 4px;
+    gap: var(--space-3xs);
 }
 
 .headerNodeLabel {
@@ -158,8 +158,8 @@
 /* ── SelectorInspector: search bar + scroll-container+rail grid ────────────── */
 
 .selectorSearchBar {
-    padding: 12px 14px;
-    background: var(--editor-overlay-white-012);
+    padding: var(--space-l) var(--space-xl);
+    background: var(--overlay-5);
 }
 
 .selectorSurfaceLayout {
@@ -167,7 +167,7 @@
     min-height: 0;
     display: grid;
     grid-template-columns: minmax(0, 1fr) 32px;
-    gap: 4px;
+    gap: var(--space-3xs);
     min-width: 0;
     overflow: hidden;
 }

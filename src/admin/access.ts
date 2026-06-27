@@ -1,4 +1,4 @@
-import type { DataRow } from '@core/data/schemas'
+import type { DataRow, DataTable } from '@core/data/schemas'
 import type { CmsCurrentUser } from '@core/persistence'
 import type { CoreCapability } from '@core/capabilities'
 import type { AdminWorkspace } from './workspace'
@@ -22,8 +22,10 @@ const CONTENT_ACCESS_CAPABILITIES: CoreCapability[] = [
 ]
 
 const DATA_WORKSPACE_READ_CAPABILITIES: CoreCapability[] = [
-  'data.tables.read',
-  'data.tables.manage',
+  'data.custom.tables.read',
+  'data.custom.tables.manage',
+  'data.system.tables.read',
+  'data.system.tables.manage',
   // Also accept any `content.*` cap so the loop / template pickers in
   // the site editor can still resolve data tables for someone whose
   // workspace gate is content rather than data.
@@ -101,15 +103,19 @@ function canAccessContent(user: CmsCurrentUser | null): boolean {
   return hasAnyCapability(user, CONTENT_ACCESS_CAPABILITIES)
 }
 
+export function canAccessDataRows(user: CmsCurrentUser | null): boolean {
+  return canAccessContent(user)
+}
+
 export function canCreateContent(user: CmsCurrentUser | null): boolean {
   return hasCapability(user, 'content.create')
 }
 
 export function canManageContentCollections(user: CmsCurrentUser | null): boolean {
-  // The Data workspace's "create table / edit fields" actions now live on
-  // `data.tables.manage`. Keep `content.manage` accepted too — historical
+  // Creating / editing custom tables (collections) lives on
+  // `data.custom.tables.manage`. Keep `content.manage` accepted too — historical
   // installs and the content-row level granted them together.
-  return hasAnyCapability(user, ['data.tables.manage', 'content.manage'])
+  return hasAnyCapability(user, ['data.custom.tables.manage', 'content.manage'])
 }
 
 export function canEditAnyContent(user: CmsCurrentUser | null): boolean {
@@ -129,14 +135,39 @@ export function canPublishContentEntry(user: CmsCurrentUser | null, row: DataRow
 // Data workspace helpers
 // ---------------------------------------------------------------------------
 
-/** Caller can browse the Data workspace (schema viewer). */
+/** Caller can browse the Data workspace (schema viewer) — any table family. */
 export function canReadDataTables(user: CmsCurrentUser | null): boolean {
-  return hasAnyCapability(user, ['data.tables.read', 'data.tables.manage'])
+  return hasAnyCapability(user, [
+    'data.custom.tables.read',
+    'data.custom.tables.manage',
+    'data.system.tables.read',
+    'data.system.tables.manage',
+  ])
 }
 
-/** Caller can create/rename/delete tables and edit fields. */
+/** Caller can create custom tables (the "+ New table" affordance). */
 export function canManageDataTables(user: CmsCurrentUser | null): boolean {
-  return hasCapability(user, 'data.tables.manage')
+  return hasCapability(user, 'data.custom.tables.manage')
+}
+
+/**
+ * Whether the caller may SEE a specific table, by family. System tables
+ * (`posts`/`pages`/`components`/`layouts`) need a system read cap; custom
+ * tables need a custom read cap.
+ */
+export function canReadTable(user: CmsCurrentUser | null, table: Pick<DataTable, 'system'>): boolean {
+  return table.system
+    ? hasAnyCapability(user, ['data.system.tables.read', 'data.system.tables.manage'])
+    : hasAnyCapability(user, ['data.custom.tables.read', 'data.custom.tables.manage'])
+}
+
+/**
+ * Whether the caller may MANAGE a specific table's schema. For system tables
+ * this only governs custom fields + primary field (identity and built-in fields
+ * are immutable for everyone — enforced server-side).
+ */
+export function canManageTable(user: CmsCurrentUser | null, table: Pick<DataTable, 'system'>): boolean {
+  return hasCapability(user, table.system ? 'data.system.tables.manage' : 'data.custom.tables.manage')
 }
 
 /** Caller can move a row from one table to another (`PATCH /rows/:id/table`). */
@@ -179,6 +210,37 @@ export function canDeleteMedia(user: CmsCurrentUser | null): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// Plugin workspace helpers
+// ---------------------------------------------------------------------------
+
+/** Caller can open plugin settings and mutate plugin-owned records. */
+export function canConfigurePlugins(user: CmsCurrentUser | null): boolean {
+  return hasCapability(user, 'plugins.configure')
+}
+
+/** Caller can install, upgrade, uninstall, and re-sync plugin packs. */
+export function canInstallPlugins(user: CmsCurrentUser | null): boolean {
+  return hasCapability(user, 'plugins.install')
+}
+
+/** Caller can enable, disable, restart, and run/pause/resume schedules. */
+export function canManagePluginLifecycle(user: CmsCurrentUser | null): boolean {
+  return hasCapability(user, 'plugins.lifecycle')
+}
+
+// ---------------------------------------------------------------------------
+// AI helpers
+// ---------------------------------------------------------------------------
+
+/** Caller can open AI conversations and use read-only AI tools. */
+export function canUseAiChat(user: CmsCurrentUser | null): boolean {
+  // Layout tests can render outside AdminSessionProvider; keep that preview
+  // mode unrestricted. Real authenticated layouts always receive a user.
+  if (!user) return true
+  return hasCapability(user, 'ai.chat')
+}
+
+// ---------------------------------------------------------------------------
 // Workspace gating
 // ---------------------------------------------------------------------------
 
@@ -196,6 +258,13 @@ function canAccessDataWorkspace(user: CmsCurrentUser | null): boolean {
 
 function canAccessPluginsWorkspace(user: CmsCurrentUser | null): boolean {
   return hasAnyCapability(user, PLUGIN_READ_CAPABILITIES)
+}
+
+export function canRunPluginBackgroundWork(user: CmsCurrentUser | null): boolean {
+  // Layout tests can render outside AdminSessionProvider; keep that preview
+  // mode unrestricted. Real authenticated layouts always receive a user.
+  if (!user) return true
+  return canAccessPluginsWorkspace(user)
 }
 
 export function canAccessWorkspace(user: CmsCurrentUser | null, workspace: AdminWorkspace): boolean {

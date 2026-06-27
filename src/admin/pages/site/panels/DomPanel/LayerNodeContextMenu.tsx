@@ -45,11 +45,9 @@ import { useEditorStore, selectActiveCanvasPage } from '@site/store/store'
 import { useShallow } from 'zustand/react/shallow'
 import { registry } from '@core/module-engine'
 import { useInsertModule } from '@site/hooks/useInsertModule'
-import { useInsertFormPreset } from '@site/hooks/useInsertFormPreset'
 import { resolveInsertLocation } from '@site/store/insertLocation'
 import { ModulePicker } from '@site/module-picker'
 import { canComponentizeNode } from '@site/componentization'
-import type { FormPreset } from '@site/module-picker'
 import { useConfirmDelete } from '@admin/shared/dialogs/ConfirmDeleteDialog'
 import type { AnyModuleDefinition } from '@core/module-engine'
 import { PenSquareSolidIcon } from 'pixel-art-icons/icons/pen-square-solid'
@@ -66,6 +64,7 @@ import { CodeIcon } from 'pixel-art-icons/icons/code'
 import { BoxSolidIcon } from 'pixel-art-icons/icons/box-solid'
 import { LayoutSolidIcon } from 'pixel-art-icons/icons/layout-solid'
 import { EyeSolidIcon } from 'pixel-art-icons/icons/eye-solid'
+import { isNarrowEditorChromeViewport } from '@site/layout/responsiveChrome'
 import styles from './LayerNodeContextMenu.module.css'
 
 interface LayerNodeContextMenuProps {
@@ -222,14 +221,9 @@ export function LayerNodeContextMenu({
 
   const handleSelectModule = (mod: AnyModuleDefinition) => {
     if (!nodeId) return
-    insertModule(mod, nodeId)
-  }
-
-  const insertFormPreset = useInsertFormPreset()
-
-  const handleSelectFormPreset = (preset: FormPreset) => {
-    if (!nodeId) return
-    insertFormPreset(preset, nodeId)
+    insertModule(mod, nodeId, {
+      preservePropertiesPanelCollapse: isNarrowEditorChromeViewport(),
+    })
   }
 
   const handleSelectVC = (vcId: string) => {
@@ -464,7 +458,6 @@ export function LayerNodeContextMenu({
         >
           <ModulePicker
             onSelectModule={handleSelectModule}
-            onSelectFormPreset={handleSelectFormPreset}
             onSelectVC={handleSelectVC}
           />
         </ContextMenuSubmenu>

@@ -1,7 +1,7 @@
 .section {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--space-s);
 }
 
 .list {
@@ -9,7 +9,7 @@
     list-style: none;
     margin: 0;
     padding: 0;
-    gap: 1px;
+    gap: var(--space-px);
     border-radius: var(--card-radius);
     overflow: hidden;
 }
@@ -19,7 +19,7 @@
     list-style: none;
     margin: 0;
     padding: 0;
-    gap: 1px;
+    gap: var(--space-px);
     border-radius: var(--card-radius);
     overflow: hidden;
 }
@@ -28,30 +28,30 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
-    gap: 6px;
-    padding: 6px 12px;
+    gap: var(--space-xs);
+    padding: var(--space-xs) var(--space-l);
     border-radius: var(--card-radius);
-    background: var(--editor-surface-2);
-    color: var(--editor-text);
+    background: var(--bg-surface-2);
+    color: var(--text);
     min-width: 0;
     transition: background-color 120ms ease;
 }
 
 .row:hover,
 .row:focus-within {
-    background: var(--editor-surface-3);
+    background: var(--bg-surface-3);
 }
 
 .rowMain {
     display: grid;
     grid-template-rows: auto auto;
-    gap: 2px;
+    gap: var(--space-4xs);
     min-width: 0;
 }
 
 .rowFamily {
-    color: var(--editor-text);
-    font-size: 16px;
+    color: var(--text);
+    font-size: var(--text-xl);
     font-weight: 600;
     line-height: 1.2;
     overflow: hidden;
@@ -60,8 +60,8 @@
 }
 
 .rowMeta {
-    color: var(--editor-text-muted);
-    font-size: 10px;
+    color: var(--text-subtle);
+    font-size: var(--text-2xs);
     font-variant-numeric: tabular-nums;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -76,21 +76,21 @@
 .addRow {
     display: flex;
     justify-content: flex-end;
-    gap: 6px;
+    gap: var(--space-xs);
 }
 
 .tokenToolbar {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 10px;
+    gap: var(--space-m);
     min-width: 0;
 }
 
 .tokenToolbarTitle {
     min-width: 0;
-    color: var(--editor-text-muted);
-    font-size: 10px;
+    color: var(--text-subtle);
+    font-size: var(--text-2xs);
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -98,8 +98,8 @@
 
 .errorAlert {
     margin: 0;
-    color: var(--editor-danger);
-    font-size: 11px;
+    color: var(--danger);
+    font-size: var(--text-xs);
     line-height: 1.4;
 }
 
@@ -108,7 +108,7 @@
 .dialogBody {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: var(--space-l);
     overflow-y: auto;
     flex: 1 1 auto;
     min-height: 0;
@@ -117,26 +117,26 @@
 .tokenDialogBody {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: var(--space-l);
     overflow-y: auto;
 }
 
 .tokenField {
     display: grid;
-    gap: 6px;
+    gap: var(--space-xs);
     min-width: 0;
 }
 
 .tokenFieldLabel {
-    color: var(--editor-text-muted);
-    font-size: 12px;
+    color: var(--text-subtle);
+    font-size: var(--text-s);
     font-weight: 700;
 }
 
 .tokenNotice {
     margin: 0;
-    color: var(--editor-text-muted);
-    font-size: 11px;
+    color: var(--text-subtle);
+    font-size: var(--text-xs);
     line-height: 1.4;
 }
 
@@ -147,28 +147,28 @@
 .estimateHintError {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--space-xs);
     margin-inline-end: auto;
-    color: var(--editor-text-muted);
-    font-size: 11px;
+    color: var(--text-subtle);
+    font-size: var(--text-xs);
     line-height: 1.2;
     min-width: 0;
 }
 
 .estimateHintError {
-    color: var(--editor-danger);
+    color: var(--danger);
 }
 
 .estimateValue {
-    color: var(--editor-text);
-    font-size: 12px;
+    color: var(--text);
+    font-size: var(--text-s);
     font-weight: 700;
     font-variant-numeric: tabular-nums;
 }
 
 .estimateMeta {
-    color: var(--editor-text-muted);
-    font-size: 10px;
+    color: var(--text-subtle);
+    font-size: var(--text-2xs);
     text-transform: uppercase;
     letter-spacing: 0.06em;
     font-weight: 700;
@@ -190,9 +190,9 @@
     align-content: start;
     list-style: none;
     margin: 0;
-    gap: 1px;
+    gap: var(--space-px);
     border-radius: var(--card-radius);
-    background: var(--editor-surface);
+    background: var(--bg-surface);
     overflow-y: auto;
 }
 
@@ -206,13 +206,13 @@
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    gap: 10px;
+    gap: var(--space-m);
     min-height: 96px;
-    padding: 14px 16px;
+    padding: var(--space-xl) var(--space-2xl);
     border-radius: var(--card-radius);
     border: 0;
-    background: var(--editor-surface-2);
-    color: var(--editor-text);
+    background: var(--bg-surface-2);
+    color: var(--text);
     font-family: inherit;
     cursor: pointer;
     text-align: left;
@@ -226,12 +226,12 @@
 
 .pickerItem:hover,
 .pickerItem:focus-visible {
-    background: var(--editor-surface-3);
+    background: var(--bg-surface-3);
     outline: none;
 }
 
 .pickerItem:active {
-    background: var(--editor-surface-4);
+    background: var(--bg-surface-4);
 }
 
 .pickerItem:disabled {
@@ -240,10 +240,10 @@
 }
 
 .pickerName {
-    font-size: 26px;
+    font-size: var(--text-5xl);
     font-weight: 500;
     line-height: 1.1;
-    color: var(--editor-text);
+    color: var(--text);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -253,13 +253,13 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
+    gap: var(--space-s);
     min-width: 0;
 }
 
 .pickerCategory {
-    color: var(--editor-text-muted);
-    font-size: 9.5px;
+    color: var(--text-subtle);
+    font-size: var(--text-2xs);
     text-transform: uppercase;
     letter-spacing: 0.08em;
     font-weight: 700;
@@ -270,8 +270,8 @@
 }
 
 .pickerInstalled {
-    color: var(--editor-text-muted);
-    font-size: 9.5px;
+    color: var(--text-subtle);
+    font-size: var(--text-2xs);
     text-transform: uppercase;
     letter-spacing: 0.08em;
     font-weight: 700;
@@ -280,15 +280,15 @@
 
 .pickerEmpty {
     grid-column: 1 / -1;
-    padding: 32px 18px;
-    color: var(--editor-text-muted);
-    font-size: 12px;
+    padding: var(--space-7xl) var(--space-3xl);
+    color: var(--text-subtle);
+    font-size: var(--text-s);
     text-align: center;
 }
 
 .pickerInfo {
-    color: var(--editor-text-muted);
-    font-size: 11px;
+    color: var(--text-subtle);
+    font-size: var(--text-xs);
 }
 
 /* ─── Variants + subsets picker (step 2) ─────────────────────────────── */
@@ -299,10 +299,10 @@
 .preview {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    padding: 18px 20px 20px;
+    gap: var(--space-s);
+    padding: var(--space-3xl) var(--space-4xl) var(--space-4xl);
     border-radius: var(--card-radius);
-    background: var(--editor-surface-2);
+    background: var(--bg-surface-2);
     min-width: 0;
 }
 
@@ -310,12 +310,12 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
+    gap: var(--space-l);
 }
 
 .previewFamilyName {
-    color: var(--editor-text-muted);
-    font-size: 10px;
+    color: var(--text-subtle);
+    font-size: var(--text-2xs);
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -325,16 +325,16 @@
 }
 
 .previewCategory {
-    color: var(--editor-text-muted);
-    font-size: 10px;
+    color: var(--text-subtle);
+    font-size: var(--text-2xs);
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
 }
 
 .previewSample {
-    color: var(--editor-text);
-    font-size: 36px;
+    color: var(--text);
+    font-size: var(--text-6xl);
     line-height: 1.15;
     margin: 0;
     word-break: break-word;
@@ -353,26 +353,26 @@
 .dialogSection {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: var(--space-m);
 }
 
 .dialogSectionHeader {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
+    gap: var(--space-l);
 }
 
 .dialogSectionTitle {
-    color: var(--editor-text-muted);
-    font-size: 14px;
+    color: var(--text-subtle);
+    font-size: var(--text-l);
     font-weight: 700;
     margin: 0;
 }
 
 .dialogSectionSelectAll {
-    color: var(--editor-text-muted);
-    font-size: 11px;
+    color: var(--text-subtle);
+    font-size: var(--text-xs);
     background: transparent;
     border: 0;
     padding: 0;
@@ -383,7 +383,7 @@
 
 .dialogSectionSelectAll:hover,
 .dialogSectionSelectAll:focus-visible {
-    color: var(--editor-text);
+    color: var(--text);
     outline: none;
     text-decoration: underline;
 }
@@ -394,7 +394,7 @@
 .variantList {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    gap: 1px;
+    gap: var(--space-px);
     list-style: none;
     margin: 0;
     padding: 0;
@@ -404,27 +404,27 @@
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
-    gap: 10px;
-    padding: 8px 12px;
+    gap: var(--space-m);
+    padding: var(--space-s) var(--space-l);
     border-radius: var(--card-radius);
-    background: var(--editor-surface-2);
+    background: var(--bg-surface-2);
     border: 0;
-    color: var(--editor-text);
+    color: var(--text);
     cursor: pointer;
     line-height: 1.2;
     min-width: 0;
 }
 
 .variantRow:hover {
-    background: var(--editor-surface-3);
+    background: var(--bg-surface-3);
 }
 
 .variantRow[data-checked="true"] {
-    background: var(--editor-surface-4);
+    background: var(--bg-surface-4);
 }
 
 .variantSample {
-    font-size: 18px;
+    font-size: var(--text-2xl);
     line-height: 1.1;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -432,8 +432,8 @@
 }
 
 .variantWeightLabel {
-    color: var(--editor-text-muted);
-    font-size: 10px;
+    color: var(--text-subtle);
+    font-size: var(--text-2xs);
     font-variant-numeric: tabular-nums;
     text-transform: uppercase;
     letter-spacing: 0.06em;
@@ -445,7 +445,7 @@
 .subsetChips {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: var(--space-xs);
     margin: 0;
     padding: 0;
     list-style: none;
@@ -454,15 +454,15 @@
 .subsetChip {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    padding: 4px 10px;
-    border-radius: var(--editor-radius);
+    gap: var(--space-xs);
+    padding: var(--space-3xs) var(--space-m);
+    border-radius: var(--radius);
     border: 0;
-    background: var(--editor-surface-2);
-    color: var(--editor-text);
+    background: var(--bg-surface-2);
+    color: var(--text);
     cursor: pointer;
     font-family: inherit;
-    font-size: 11px;
+    font-size: var(--text-xs);
     font-weight: 600;
     line-height: 1.4;
     transition:
@@ -471,17 +471,17 @@
 }
 
 .subsetChip:hover {
-    background: var(--editor-surface-3);
+    background: var(--bg-surface-3);
 }
 
 .subsetChip[aria-pressed="true"] {
-    background: var(--editor-surface-4);
-    color: var(--editor-text);
+    background: var(--bg-surface-4);
+    color: var(--text);
 }
 
 .subsetChip:focus-visible {
     outline: none;
-    box-shadow: var(--input-shadow-focus);
+    box-shadow: var(--shadow-input-focus);
 }
 
 /* ─── Custom-font file picker ─────────────────────────────────────────── */
@@ -490,55 +490,55 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     align-content: start;
-    gap: 1px;
+    gap: var(--space-px);
     list-style: none;
     margin: 0;
     padding: 0;
     border-radius: var(--card-radius);
-    background: var(--editor-surface);
+    background: var(--bg-surface);
     overflow-y: auto;
 }
 
 .customFontItem {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    gap: 12px;
-    padding: 14px 16px;
+    gap: var(--space-l);
+    padding: var(--space-xl) var(--space-2xl);
     border-radius: var(--card-radius);
     border: 0;
-    background: var(--editor-surface-2);
-    color: var(--editor-text);
+    background: var(--bg-surface-2);
+    color: var(--text);
     min-width: 0;
     transition: background-color 120ms ease;
 }
 
 .customFontItem:hover,
 .customFontItem:focus-within {
-    background: var(--editor-surface-3);
+    background: var(--bg-surface-3);
 }
 
 .customFontItem[data-checked="true"] {
-    background: var(--editor-surface-4);
+    background: var(--bg-surface-4);
 }
 
 .customPickLabel {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
     align-items: center;
-    gap: 12px;
+    gap: var(--space-l);
     min-width: 0;
     cursor: pointer;
 }
 
 .customFontFileText {
     display: grid;
-    gap: 6px;
+    gap: var(--space-xs);
     min-width: 0;
 }
 
 .customFontPreviewName {
-    color: var(--editor-text);
-    font-size: 24px;
+    color: var(--text);
+    font-size: var(--text-4xl);
     font-weight: 500;
     line-height: 1.1;
     overflow: hidden;
@@ -547,8 +547,8 @@
 }
 
 .customFontMeta {
-    color: var(--editor-text-muted);
-    font-size: 9.5px;
+    color: var(--text-subtle);
+    font-size: var(--text-2xs);
     text-transform: uppercase;
     letter-spacing: 0.08em;
     font-weight: 700;
@@ -561,17 +561,17 @@
     display: grid;
     grid-template-columns: minmax(150px, 220px) auto;
     align-items: center;
-    gap: 10px;
-    padding-inline-start: 28px;
+    gap: var(--space-m);
+    padding-inline-start: var(--space-6xl);
     min-width: 0;
 }
 
 .customItalicToggle {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    color: var(--editor-text-muted);
-    font-size: 11px;
+    gap: var(--space-xs);
+    color: var(--text-subtle);
+    font-size: var(--text-xs);
     font-weight: 600;
     white-space: nowrap;
     cursor: pointer;

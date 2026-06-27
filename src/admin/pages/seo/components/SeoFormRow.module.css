@@ -5,8 +5,8 @@
     --seo-label-col: 150px;
     display: grid;
     grid-template-columns: var(--seo-label-col) minmax(0, 1fr);
-    column-gap: 18px;
-    row-gap: 6px;
+    column-gap: var(--space-3xl);
+    row-gap: var(--space-s);
     align-items: center;
     outline: none;
 }
@@ -25,13 +25,13 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
+    gap: var(--space-m);
 }
 
 .label {
-    font-size: 13px;
+    font-size: var(--text-l);
     font-weight: 600;
-    color: var(--editor-text);
+    color: var(--text);
 }
 
 /* Boolean rows: hint left, switch pinned right. */
@@ -39,14 +39,14 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 16px;
+    gap: var(--space-2xl);
 }
 
 .hint {
-    font-size: 12px;
+    font-size: var(--text-m);
     font-weight: 500;
     line-height: 1.5;
-    color: var(--editor-text-secondary);
+    color: var(--text-subtle);
 }
 
 @media (max-width: 700px) {

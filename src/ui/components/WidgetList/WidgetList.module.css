@@ -21,11 +21,11 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
-    gap: 10px;
-    padding: 10px 0;
-    border-top: 1px solid var(--editor-border);
-    font-size: 13px;
-    color: var(--editor-text);
+    gap: var(--space-m);
+    padding: var(--space-m) 0;
+    border-top: 1px solid var(--border);
+    font-size: var(--text-m);
+    color: var(--text);
 }
 
 .row:first-child {
@@ -38,17 +38,17 @@
     text-overflow: ellipsis;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-s);
     font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--editor-text-subtle);
+    font-size: var(--text-xs);
+    color: var(--text-disabled);
 }
 
 .meta {
     font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--editor-text-muted);
+    font-size: var(--text-xs);
+    color: var(--text-subtle);
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-s);
 }

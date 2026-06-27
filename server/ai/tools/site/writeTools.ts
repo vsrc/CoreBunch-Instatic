@@ -8,7 +8,8 @@
  * runner routes browser-execution tools through the bridge instead.
  *
  * Node/class/page/template mutation tools + design-system token tools +
- * render_snapshot + getNodeHtml (22 total).
+ * browser-backed read/orientation tools (read_document, open_document,
+ * render_snapshot, getNodeHtml).
  *
  * The input schemas are the single source of truth in `@core/ai`
  * (`src/core/ai/toolSchemas.ts`). This module imports each `*InputSchema`
@@ -21,6 +22,8 @@
 import {
   InsertHtmlInputSchema,
   GetNodeHtmlInputSchema,
+  ReadDocumentInputSchema,
+  OpenDocumentInputSchema,
   ReplaceNodeHtmlInputSchema,
   DeleteNodeInputSchema,
   UpdateNodePropsInputSchema,
@@ -30,6 +33,11 @@ import {
   ApplyCssInputSchema,
   AssignClassInputSchema,
   RemoveClassInputSchema,
+  ListCodeAssetsInputSchema,
+  ReadCodeAssetInputSchema,
+  WriteCodeAssetInputSchema,
+  PatchCodeAssetInputSchema,
+  InspectCodeRuntimeInputSchema,
   AddPageInputSchema,
   DeletePageInputSchema,
   RenamePageInputSchema,
@@ -50,8 +58,9 @@ import type { AiTool } from '../types'
 // (structure / content / style — see server/handlers/cms/siteDiff.ts and the
 // `site.structure.edit` gate on PUT /admin/api/cms/pages). Selection-time
 // gating only: persistence is independently re-validated server-side.
-// `getNodeHtml` and `render_snapshot` are reads of the browser snapshot and
-// stay ungated beyond the toolset's own write/read split.
+// `getNodeHtml`, `read_document`, `open_document`, and `render_snapshot` are
+// reads/orientation tools backed by the browser snapshot and stay ungated
+// beyond the toolset's own write/read split.
 // ---------------------------------------------------------------------------
 
 const SITE_STRUCTURE_CAPS: readonly CoreCapability[] = ['site.structure.edit']
@@ -75,7 +84,7 @@ const insertHtmlTool: AiTool = {
   execution: 'browser',
   requiredCapabilities: SITE_STRUCTURE_CAPS,
   description:
-    'Insert semantic HTML as a subtree of editable nodes under an existing parent. Write structure as HTML (<section>, <h1>, <a>, <button>, <img>, <ul>, ...) and style it with CSS in the same call: put a <style> block in the HTML and/or class= attributes. The importer parses every rule — a bare `.foo {}` selector becomes a reusable Selectors-panel class bound to class="foo"; any other selector (`.hero a`, `a:hover`, `nav > li`) becomes an ambient rule. Inline style= attributes land on the node\'s inline styles. To author or edit CSS on its own — pseudo/hover/descendant selectors, or restyling existing rules — use the dedicated applyCss tool instead (insertHtml is for inserting structure).',
+    'Insert semantic HTML as a subtree of editable nodes under an existing parent. Write structure as HTML (<section>, <h1>, <a>, <button>, <img>, <ul>, ...) and style it with CSS in the same call: put a <style> block in the HTML and/or class= attributes. Custom importer markers: <instatic-loop data-source-id="…" ...> creates a real Loop node (call list_loop_sources first for source/table ids and {currentEntry.*} tokens); <instatic-outlet> creates a template content outlet. The importer parses every rule — a bare `.foo {}` selector becomes a reusable Selectors-panel class bound to class="foo"; any other selector (`.hero a`, `a:hover`, `nav > li`) becomes an ambient rule. Inline style= attributes land on the node\'s inline styles. To author or edit CSS on its own — pseudo/hover/descendant selectors, or restyling existing rules — use the dedicated applyCss tool instead (insertHtml is for inserting structure).',
   inputSchema: InsertHtmlInputSchema,
 }
 
@@ -88,13 +97,33 @@ const getNodeHtmlTool: AiTool = {
   inputSchema: GetNodeHtmlInputSchema,
 }
 
+const readDocumentTool: AiTool = {
+  name: 'read_document',
+  scope: 'site',
+  execution: 'browser',
+  requiredCapabilities: ['site.read'],
+  description:
+    'Read any editable document as annotated HTML + relevant CSS without switching the visible canvas. Pass a document ref from list_documents; omit document to read the current document. If pageInfo.nextPart is not null, call read_document again with the same document and part.',
+  inputSchema: ReadDocumentInputSchema,
+}
+
+const openDocumentTool: AiTool = {
+  name: 'open_document',
+  scope: 'site',
+  execution: 'browser',
+  requiredCapabilities: ['site.read'],
+  description:
+    'Visibly open a page/template/visual component document in the editor. Use before render_snapshot or when the user asks to navigate. For background inspection, prefer read_document because it does not move the canvas.',
+  inputSchema: OpenDocumentInputSchema,
+}
+
 const replaceNodeHtmlTool: AiTool = {
   name: 'replaceNodeHtml',
   scope: 'site',
   execution: 'browser',
   requiredCapabilities: SITE_STRUCTURE_CAPS,
   description:
-    "Replace a node subtree's children with new HTML. The target node is preserved as the parent; its existing children are rebuilt from the HTML. Style with CSS exactly as in insertHtml: a <style> block and/or class= attributes; bare `.foo` selectors become reusable classes, other selectors become ambient rules. To author or edit CSS on its own (without rebuilding children), use the dedicated applyCss tool instead.",
+    "Replace a node subtree's children with new HTML. The target node is preserved as the parent; its existing children are rebuilt from the HTML. Style with CSS exactly as in insertHtml: a <style> block and/or class= attributes; bare `.foo` selectors become reusable classes, other selectors become ambient rules. Custom importer markers work here too: <instatic-loop data-source-id=\"…\" ...> creates a real Loop node and <instatic-outlet> creates a template content outlet. To author or edit CSS on its own (without rebuilding children), use the dedicated applyCss tool instead.",
   inputSchema: ReplaceNodeHtmlInputSchema,
 }
 
@@ -187,6 +216,60 @@ const removeClassTool: AiTool = {
 }
 
 // ---------------------------------------------------------------------------
+// Code asset tools — scripts and user stylesheets in site.files + site.runtime
+// ---------------------------------------------------------------------------
+
+const listCodeAssetsTool: AiTool = {
+  name: 'list_code_assets',
+  scope: 'site',
+  execution: 'browser',
+  requiredCapabilities: ['site.read'],
+  description:
+    'List user-authored runtime code assets stored in the site file layer. Optional `type` filters to scripts or styles. Returns file ids, paths, content hashes, size metadata, and current runtime config. Use before read_code_asset / patch_code_asset when modifying existing scripts or stylesheets.',
+  inputSchema: ListCodeAssetsInputSchema,
+}
+
+const readCodeAssetTool: AiTool = {
+  name: 'read_code_asset',
+  scope: 'site',
+  execution: 'browser',
+  requiredCapabilities: ['site.read'],
+  description:
+    'Read one script or stylesheet by fileId or path. Returns the exact content slice, full-file SHA-256 hash, runtime config, and pageInfo for pagination. If pageInfo.nextPart is not null, call read_code_asset again with the same asset and part.',
+  inputSchema: ReadCodeAssetInputSchema,
+}
+
+const writeCodeAssetTool: AiTool = {
+  name: 'write_code_asset',
+  scope: 'site',
+  execution: 'browser',
+  requiredCapabilities: SITE_STRUCTURE_CAPS,
+  description:
+    'Create or replace a runtime script/style file in site.files and attach normalized site.runtime config. Use `type:"script"` for behavior such as theme toggles, menus, tabs, analytics hooks, and DOM-ready interactions; use `type:"style"` for global user stylesheets that should load as files. `path` is a safe site-relative path such as src/scripts/theme-toggle.js or src/styles/theme.css. `runtime` is optional and merges with existing/default config.',
+  inputSchema: WriteCodeAssetInputSchema,
+}
+
+const patchCodeAssetTool: AiTool = {
+  name: 'patch_code_asset',
+  scope: 'site',
+  execution: 'browser',
+  requiredCapabilities: SITE_STRUCTURE_CAPS,
+  description:
+    'Patch an existing script or stylesheet by exact text replacement. Requires the latest `expectedHash` from read_code_asset/list_code_assets to prevent stale edits. Each replacement must match exactly; if oldText occurs multiple times, either make oldText more specific or set replaceAll:true.',
+  inputSchema: PatchCodeAssetInputSchema,
+}
+
+const inspectCodeRuntimeTool: AiTool = {
+  name: 'inspect_code_runtime',
+  scope: 'site',
+  execution: 'browser',
+  requiredCapabilities: ['site.read'],
+  description:
+    'Inspect which runtime scripts and user stylesheets apply to the current page/template, or to a supplied page/template document ref. Returns each asset path, enabled state, scope applicability, priority, and script placement/timing. Use after write_code_asset to confirm a script/style is targeted correctly.',
+  inputSchema: InspectCodeRuntimeInputSchema,
+}
+
+// ---------------------------------------------------------------------------
 // Page-level write tools
 // ---------------------------------------------------------------------------
 
@@ -196,7 +279,7 @@ const addPageTool: AiTool = {
   execution: 'browser',
   requiredCapabilities: SITE_STRUCTURE_CAPS,
   description:
-    'Add an EMPTY page and make it the active page. `slug` defaults to a slugified title and is auto-uniqued (a repeat add becomes `-2`, `-3`) — so never call addPage twice for the same page. Success data: `pageId` and `rootNodeId`. To build into the new page, pass `rootNodeId` as insertHtml\'s `parentId` — a pageId is NOT a node id. The page is already active, so just start inserting; no need to read_page/list_pages first. For copying an existing page use duplicatePage.',
+    'Add an EMPTY page and make it the active page. `slug` defaults to a slugified title and is auto-uniqued (a repeat add becomes `-2`, `-3`) — so never call addPage twice for the same page. Success data: `pageId` and `rootNodeId`. To build into the new page, pass `rootNodeId` as insertHtml\'s `parentId` — a pageId is NOT a node id. The page is already active, so just start inserting; no need to read_document/list_documents first. For copying an existing page use duplicatePage.',
   inputSchema: AddPageInputSchema,
 }
 
@@ -246,7 +329,7 @@ const setPageTemplateTool: AiTool = {
   execution: 'browser',
   requiredCapabilities: SITE_STRUCTURE_CAPS,
   description:
-    'Turn a page INTO a template (or update an existing template\'s target/priority). `target` is `{kind:"everywhere"}` for a site-wide layout that wraps every page+entry, `{kind:"postTypes", tableSlugs:[…]}` to wrap entries of those post types (slugs from list_post_types), or `{kind:"notFound"}` for the page served on public 404s (status 404, wrapped by the everywhere layout; needs no outlet). `priority` (default 100) breaks ties when several templates match at the same breadth level — higher wins. An everywhere/postTypes template needs exactly one `<instatic-outlet>` (insert it via insertHtml) marking where matched content flows; a wrapper template with no outlet simply doesn\'t apply. Pass a real page id from the suffix / list_pages.',
+    'Turn a page INTO a template (or update an existing template\'s target/priority). `target` is `{kind:"everywhere"}` for a site-wide layout that wraps every page+entry, `{kind:"postTypes", tableSlugs:[…]}` to wrap entries of those post types (slugs from list_post_types), or `{kind:"notFound"}` for the page served on public 404s (status 404, wrapped by the everywhere layout; needs no outlet). `priority` (default 100) breaks ties when several templates match at the same breadth level — higher wins. An everywhere/postTypes template needs exactly one `<instatic-outlet>` (insert it via insertHtml) marking where matched content flows; a wrapper template with no outlet simply doesn\'t apply. Pass a real page id from the suffix / list_documents.',
   inputSchema: SetPageTemplateInputSchema,
 }
 
@@ -328,6 +411,8 @@ const renderSnapshotTool: AiTool = {
 export const siteWriteTools: AiTool[] = [
   insertHtmlTool,
   getNodeHtmlTool,
+  readDocumentTool,
+  openDocumentTool,
   replaceNodeHtmlTool,
   deleteNodeTool,
   updateNodePropsTool,
@@ -337,6 +422,11 @@ export const siteWriteTools: AiTool[] = [
   applyCssTool,
   assignClassTool,
   removeClassTool,
+  listCodeAssetsTool,
+  readCodeAssetTool,
+  writeCodeAssetTool,
+  patchCodeAssetTool,
+  inspectCodeRuntimeTool,
   addPageTool,
   deletePageTool,
   renamePageTool,

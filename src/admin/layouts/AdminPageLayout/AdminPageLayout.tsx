@@ -28,8 +28,7 @@
  * chunk — NOT `store-*` (editor) or any panel/canvas/modules code.
  */
 import { lazy, Suspense, type ReactNode } from 'react'
-import { Toolbar, ToolbarDivider } from '@site/toolbar/Toolbar'
-import { SettingsButton } from '@site/toolbar/SettingsButton'
+import { Toolbar } from '@site/toolbar/Toolbar'
 import { AdminSectionNavigation } from '@admin/shared/AdminSectionNavigation'
 import { SkeletonCards } from '@ui/components/Skeleton'
 import { useEditorSelectPreference } from '@site/preferences/editorPreferences'
@@ -38,6 +37,7 @@ import { usePluginEventBridge } from '@admin/pages/plugins/hooks/usePluginEventB
 import { useCurrentAdminUser } from '@admin/sessionContext'
 import { useAdminUi } from '@admin/state/adminUi'
 import { useSiteSummary } from '@admin/state/useSiteSummary'
+import { canRunPluginBackgroundWork } from '@admin/access'
 import type { AdminWorkspace } from '@admin/workspace'
 import styles from './AdminPageLayout.module.css'
 
@@ -70,8 +70,9 @@ interface AdminPageLayoutProps {
   actions?: ReactNode
   /**
    * Optional extra toolbar items rendered in the toolbar's right slot. The
-   * Settings cog is always appended automatically — pages should not pass
-   * their own SettingsButton here.
+   * Settings cog, "Open live page", and account menu are appended globally
+   * by the Toolbar shell itself — pages must not pass their own SettingsButton
+   * here.
    */
   toolbarRightSlot?: ReactNode
   /** Optional id for the H1 — useful for `aria-labelledby` on the body. */
@@ -100,6 +101,9 @@ export function AdminPageLayout({
   loading = false,
   children,
 }: AdminPageLayoutProps) {
+  const currentUser = useCurrentAdminUser()
+  const pluginBackgroundWorkEnabled = canRunPluginBackgroundWork(currentUser)
+
   // Lightweight admin-shell hydration:
   //   - useSiteSummary: fetches { name, faviconUrl } via cmsAdapter and
   //     publishes to adminUi. No editor store touched.
@@ -109,22 +113,13 @@ export function AdminPageLayout({
   // `useEditorLayoutPersistence` here — those hydrate / persist editor-only
   // state and would pull the full editor store into this layout's graph.
   useSiteSummary()
-  useInstalledEditorPlugins()
-  usePluginEventBridge()
+  useInstalledEditorPlugins(pluginBackgroundWorkEnabled)
+  usePluginEventBridge(pluginBackgroundWorkEnabled)
 
-  const currentUser = useCurrentAdminUser()
   const density = useEditorSelectPreference('density')
   const siteName = useAdminUi((s) => s.siteName)
   const faviconUrl = useAdminUi((s) => s.siteFaviconUrl)
   const settingsOpen = useAdminUi((s) => s.settingsOpen)
-
-  const rightSlot = (
-    <>
-      {toolbarRightSlot}
-      <ToolbarDivider />
-      <SettingsButton />
-    </>
-  )
 
   return (
     <div className={styles.shell} data-editor-density={density}>
@@ -138,7 +133,7 @@ export function AdminPageLayout({
             currentUser={currentUser}
           />
         )}
-        rightSlot={rightSlot}
+        rightSlot={toolbarRightSlot}
       />
 
       <main className={styles.body} aria-busy={loading || undefined}>

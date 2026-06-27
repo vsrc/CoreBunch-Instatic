@@ -249,7 +249,8 @@ export async function renderPublishedNotFound(
     ? { entryStack: [], route: buildRouteFrame(ctx.url.toString()) }
     : undefined
 
-  const rendered = await renderMergedTemplate(merged, snapshot, templateContext, ctx)
+  const seo = buildPageRenderSeo(page, snapshot.site)
+  const rendered = await renderMergedTemplate(merged, snapshot, templateContext, ctx, seo)
   return { ...rendered, pageId: page.id, slug: page.slug, siteId: snapshot.site.id }
 }
 

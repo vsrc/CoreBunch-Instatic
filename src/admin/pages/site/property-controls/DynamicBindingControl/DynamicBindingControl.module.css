@@ -22,7 +22,7 @@
     min-height: 18px;
     width: 18px;
     height: 18px;
-    border-radius: var(--editor-radius-sm);
+    border-radius: var(--radius-sm);
 }
 
 .affordanceWrapper:hover .affordanceBtn,
@@ -48,20 +48,20 @@
 .boundWrapper {
     display: grid;
     grid-template-columns: 100px 1fr;
-    gap: 4px;
+    gap: var(--space-3xs);
     width: 100%;
     min-height: 28px;
 }
 
 .boundWrapperStacked {
     grid-template-columns: 1fr;
-    gap: 6px;
+    gap: var(--space-xs);
 }
 
 .boundValueRow {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 26px;
-    gap: 4px;
+    gap: var(--space-3xs);
     min-width: 0;
 }
 
@@ -70,25 +70,25 @@
     min-height: 30px;
     overflow: hidden;
     border: 1px solid
-        color-mix(in srgb, var(--editor-accent) 48%, var(--editor-border));
-    border-radius: var(--editor-radius);
+        color-mix(in srgb, var(--overlay) 48%, var(--border));
+    border-radius: var(--radius);
     background:
         repeating-linear-gradient(
             135deg,
-            color-mix(in srgb, var(--editor-accent) 8%, transparent) 0,
-            color-mix(in srgb, var(--editor-accent) 8%, transparent) 9px,
+            color-mix(in srgb, var(--overlay) 8%, transparent) 0,
+            color-mix(in srgb, var(--overlay) 8%, transparent) 9px,
             transparent 9px,
             transparent 18px
         ),
-        color-mix(in srgb, var(--editor-accent) 22%, var(--editor-surface));
-    color: var(--editor-text);
+        color-mix(in srgb, var(--overlay) 22%, var(--bg-surface));
+    color: var(--text);
     cursor: default;
     font: inherit;
-    font-size: 12px;
+    font-size: var(--text-s);
     font-weight: 700;
     letter-spacing: 0;
     line-height: 1.2;
-    padding: 0 9px;
+    padding: 0 var(--space-m);
     text-align: left;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -135,13 +135,13 @@
 .scopeChip {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 10px 16px;
-    border-bottom: 1px solid var(--editor-border);
-    font-size: 12px;
+    gap: var(--space-s);
+    padding: var(--space-m) var(--space-2xl);
+    border-bottom: 1px solid var(--border);
+    font-size: var(--text-s);
     font-weight: 600;
-    color: var(--editor-text);
-    background: var(--editor-surface-2);
+    color: var(--text);
+    background: var(--bg-surface-2);
     flex-shrink: 0;
     letter-spacing: 0.01em;
 }
@@ -151,8 +151,8 @@
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: var(--editor-accent);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--editor-accent) 22%, transparent);
+    background: var(--overlay);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--overlay) 22%, transparent);
     flex-shrink: 0;
 }
 
@@ -163,12 +163,12 @@
  * so it reads as guidance rather than UI noise.
  */
 .subtleHint {
-    padding: 10px 16px;
+    padding: var(--space-m) var(--space-2xl);
     margin: 0;
-    border-top: 1px solid var(--editor-border);
-    font-size: 11px;
+    border-top: 1px solid var(--border);
+    font-size: var(--text-xs);
     line-height: 1.45;
-    color: var(--editor-text-muted);
+    color: var(--text-subtle);
     flex-shrink: 0;
     user-select: none;
 }
@@ -178,28 +178,28 @@
 .fieldList {
     flex: 1;
     overflow-y: auto;
-    padding: 10px 10px 14px;
+    padding: var(--space-m) var(--space-m) var(--space-xl);
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: var(--space-3xs);
     min-height: 0;
 }
 
 .fieldGroup {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: var(--space-4xs);
 }
 
 .fieldGroup + .fieldGroup {
-    margin-top: 16px;
+    margin-top: var(--space-2xl);
 }
 
 .fieldGroupHeader {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 6px 4px 8px;
+    gap: var(--space-m);
+    padding: var(--space-xs) var(--space-3xs) var(--space-s);
     user-select: none;
 }
 
@@ -207,32 +207,32 @@
     content: '';
     flex: 1;
     height: 1px;
-    background: var(--editor-border);
+    background: var(--border);
 }
 
 .fieldGroupHeaderText {
-    font-size: 11px;
+    font-size: var(--text-xs);
     font-weight: 700;
     letter-spacing: 0.06em;
     text-transform: uppercase;
-    color: var(--editor-text-secondary);
+    color: var(--text-muted);
 }
 
 .fieldGroupHeaderCount {
-    font-size: 10px;
+    font-size: var(--text-2xs);
     font-weight: 600;
-    color: var(--editor-text-muted);
-    padding: 2px 6px;
+    color: var(--text-subtle);
+    padding: var(--space-4xs) var(--space-xs);
     border-radius: 999px;
-    background: var(--editor-surface-2);
+    background: var(--bg-surface-2);
 }
 
 .incompatibleHint {
-    padding: 6px 10px;
-    font-size: 11px;
-    color: var(--editor-text-muted);
-    background: var(--editor-surface-2);
-    border-radius: var(--editor-radius-sm);
+    padding: var(--space-xs) var(--space-m);
+    font-size: var(--text-xs);
+    color: var(--text-subtle);
+    background: var(--bg-surface-2);
+    border-radius: var(--radius-sm);
 }
 
 /* ── Field row internals ─────────────────────────────────────────────────── */
@@ -241,10 +241,10 @@
     display: grid;
     grid-template-columns: 22px minmax(0, 1fr) auto;
     align-items: center;
-    column-gap: 10px;
+    column-gap: var(--space-m);
     width: 100%;
     min-width: 0;
-    padding: 2px 2px;
+    padding: var(--space-4xs) var(--space-4xs);
 }
 
 .fieldTypeIcon {
@@ -253,9 +253,9 @@
     justify-content: center;
     width: 22px;
     height: 22px;
-    border-radius: var(--editor-radius-sm);
-    color: var(--editor-text-secondary);
-    background: var(--editor-surface-2);
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    background: var(--bg-surface-2);
     flex-shrink: 0;
     transition: background 80ms ease, color 80ms ease;
 }
@@ -267,8 +267,8 @@
  */
 :where([aria-pressed='true']) .fieldTypeIcon,
 .fieldRowInner:hover .fieldTypeIcon {
-    color: var(--editor-accent);
-    background: color-mix(in srgb, var(--editor-accent) 16%, var(--editor-surface-2));
+    color: var(--overlay);
+    background: color-mix(in srgb, var(--overlay) 16%, var(--bg-surface-2));
 }
 
 .fieldRowText {
@@ -279,9 +279,9 @@
 }
 
 .fieldLabel {
-    font-size: 12px;
+    font-size: var(--text-s);
     font-weight: 600;
-    color: var(--editor-text);
+    color: var(--text);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -298,17 +298,17 @@
  * (`title` attribute) reveals the full value on hover.
  */
 .fieldValue {
-    font-size: 11px;
+    font-size: var(--text-xs);
     font-weight: 500;
-    color: var(--editor-text-muted);
+    color: var(--text-subtle);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     line-height: 1.2;
-    padding: 2px 8px;
+    padding: var(--space-4xs) var(--space-s);
     border-radius: 999px;
-    background: color-mix(in srgb, var(--editor-surface-2) 70%, transparent);
-    border: 1px solid var(--editor-border);
+    background: color-mix(in srgb, var(--bg-surface-2) 70%, transparent);
+    border: 1px solid var(--border);
     flex-shrink: 0;
     max-width: 180px;
     text-align: right;
@@ -316,16 +316,16 @@
 
 /* When the row is selected, sharpen the value pill to match the row tint. */
 :where([aria-pressed='true']) .fieldValue {
-    color: var(--editor-text);
-    border-color: color-mix(in srgb, var(--editor-accent) 35%, var(--editor-border));
-    background: color-mix(in srgb, var(--editor-accent) 10%, var(--editor-surface-2));
+    color: var(--text);
+    border-color: color-mix(in srgb, var(--overlay) 35%, var(--border));
+    background: color-mix(in srgb, var(--overlay) 10%, var(--bg-surface-2));
 }
 
 /* ── Empty / error wrapper ───────────────────────────────────────────────── */
 
 .pickerEmptyWrapper {
     flex: 1;
-    padding: 16px;
+    padding: var(--space-2xl);
     display: flex;
     align-items: center;
     justify-content: center;

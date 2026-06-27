@@ -14,20 +14,11 @@
 import { registry } from '@core/module-engine'
 import type { ModuleDefinition } from '@core/module-engine'
 import { ImageSolidIcon } from 'pixel-art-icons/icons/image-solid'
-import { escapeHtml } from '@core/publisher'
-import { Type, Value, type Static } from '@core/utils/typeboxHelpers'
+import { Value } from '@core/utils/typeboxHelpers'
 import { SvgEditor } from './SvgEditor'
+import { SvgPropsSchema, type SvgStoredProps } from './props'
 
-const SvgPropsSchema = Type.Object({
-  /** Raw inline SVG markup (e.g. `<svg viewBox="0 0 24 24">…</svg>`). */
-  svg: Type.String({ default: '' }),
-  /** Accessible label; when set, emitted as `role="img" aria-label`. */
-  title: Type.String({ default: '' }),
-})
-
-export type SvgStoredProps = Static<typeof SvgPropsSchema>
-
-const SvgModule: ModuleDefinition<SvgStoredProps> = {
+export const SvgModule: ModuleDefinition<SvgStoredProps> = {
   id: 'base.svg',
   name: 'SVG',
   description: 'Inline vector graphic (logo or icon).',
@@ -71,7 +62,7 @@ const SvgModule: ModuleDefinition<SvgStoredProps> = {
       // Inject role/aria-label onto the opening <svg> tag.
       const withLabel = markup.replace(
         /^(\s*<svg\b)/i,
-        `$1 role="img" aria-label="${escapeHtml(label)}"`,
+        `$1 role="img" aria-label="${label}"`,
       )
       return { html: withLabel }
     }

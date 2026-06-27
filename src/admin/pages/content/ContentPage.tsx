@@ -2,7 +2,7 @@ import { Suspense, lazy, useEffect, useId, useRef, useState } from 'react'
 import {
   readWorkspaceLayout,
   writeWorkspaceLayout,
-} from '@site/layout/panelLayoutStorage'
+} from '@admin/state/workspaceLayoutStorage'
 import { useAdminUi } from '@admin/state/adminUi'
 import { readTitleCell } from '@core/data/cells'
 import { draftSeoCell } from './hooks/useContentEntryDraft'
@@ -46,13 +46,17 @@ import { useContentMediaPicker } from './hooks/useContentMediaPicker'
 import { useContentWorkspace } from './hooks/useContentWorkspace'
 import { publicContentPath } from './utils/contentEntryUtils'
 import { useAuthenticatedAdminUser } from '@admin/sessionContext'
+import { StepUpCancelledMessage, useStepUp } from '@admin/shared/StepUp'
+import { getErrorMessage } from '@core/utils/errorMessage'
 import { ContentAgentMount } from './agent/ContentAgentMount'
 import {
   canCreateContent,
   canEditAnyContent,
   canEditContentEntry,
   canManageContentCollections,
+  canMoveDataRow,
   canPublishContentEntry,
+  canUseAiChat,
 } from '@admin/access'
 
 const CONTENT_PANEL_IDS: ReadonlySet<ContentPanelId> = new Set(['content', 'media', 'agent'])
@@ -114,7 +118,17 @@ export function ContentPage() {
   const canReassignAuthor = canEditAnyContent(permissionUser)
   const canCreateEntries = canCreateContent(permissionUser)
   const canManageCollections = canManageContentCollections(permissionUser)
+  const canUseAgent = canUseAiChat(permissionUser)
+  const visibleContentPanel = activeContentPanel === 'agent' && !canUseAgent
+    ? null
+    : activeContentPanel
   const workspace = useContentWorkspace({ loadAuthors: canReassignAuthor })
+  // Collection schema mutations (create/update/delete) are step-up gated on
+  // the server — they change the public route surface — so they must run
+  // through `runStepUp`, which transparently opens the password re-entry
+  // dialog on a `step_up_required` response and retries. Without this the
+  // raw `step_up_required` error leaks into the dialog as visible text.
+  const { runStepUp } = useStepUp()
   const draft = useContentEntryDraft({
     selectedEntry: workspace.selectedEntry,
     updateSelectedEntry: workspace.updateSelectedEntry,
@@ -131,6 +145,8 @@ export function ContentPage() {
     ? publicContentPath(workspace.selectedCollection.routeBase, draft.slug)
     : ''
   const canEditSelectedEntry = canEditContentEntry(permissionUser, workspace.selectedEntry)
+  const canMoveRows = canMoveDataRow(permissionUser)
+  const canMoveSelectedEntry = canEditSelectedEntry && canMoveRows
   const canPublishSelectedEntry = canPublishContentEntry(permissionUser, workspace.selectedEntry)
 
   // Mirror the selected entry's public URL into adminUi so the global
@@ -187,7 +203,7 @@ export function ContentPage() {
 
   function handleMoveEntryCollection(tableId: string) {
     return withEntryOp(() => workspace.moveSelectedEntryToCollection(tableId), {
-      permitted: canEditSelectedEntry,
+      permitted: canMoveSelectedEntry,
       permMsg: 'Your role cannot move this entry',
       fallback: 'Could not move entry',
       phase: SAVE_PHASE,
@@ -207,30 +223,39 @@ export function ContentPage() {
     })
   }
 
-  function handleUpdateCollection(
+  // Collection update/delete are step-up gated, so they bypass `withEntryOp`
+  // (whose generic catch would surface a step-up *cancellation* as a visible
+  // error). Instead they run through `runStepUp` directly and let the calling
+  // settings dialog render real errors; a cancellation is a silent no-op.
+  async function handleUpdateCollection(
     collection: DataTable,
     input: UpdateDataTableInput,
   ) {
-    return withEntryOp(() => workspace.updateCollection(collection.id, input), {
-      permitted: canManageCollections,
-      permMsg: 'Your role cannot manage content collections',
-      fallback: 'Could not update collection',
-      rethrow: true,
-    })
+    if (!canManageCollections) {
+      workspace.setError('Your role cannot manage content collections')
+      return
+    }
+    workspace.setError(null)
+    // Rejections propagate to the settings dialog, which keeps itself open and
+    // renders the message (and swallows `step_up_cancelled`).
+    await runStepUp(() => workspace.updateCollection(collection.id, input))
   }
 
-  function handleDeleteCollection(collection: DataTable) {
-    return withEntryOp(() => workspace.deleteCollection(collection.id), {
-      permitted: canManageCollections,
-      permMsg: 'Your role cannot manage content collections',
-      fallback: 'Could not delete collection',
-      rethrow: true,
-      apply: () => {
-        if (workspace.selectedCollectionId === collection.id) {
-          draft.applySelectedEntry(null)
-        }
-      },
-    })
+  async function handleDeleteCollection(collection: DataTable) {
+    if (!canManageCollections) {
+      workspace.setError('Your role cannot manage content collections')
+      return
+    }
+    workspace.setError(null)
+    try {
+      await runStepUp(() => workspace.deleteCollection(collection.id))
+      if (workspace.selectedCollectionId === collection.id) {
+        draft.applySelectedEntry(null)
+      }
+    } catch (err) {
+      if (err instanceof Error && err.message === StepUpCancelledMessage) return
+      workspace.setError(getErrorMessage(err, 'Could not delete collection'))
+    }
   }
 
   function handleRenameEntry(
@@ -309,7 +334,7 @@ export function ContentPage() {
   function handleMoveEntryToCollection(entry: DataRow, tableId: string) {
     if (entry.tableId === tableId) return Promise.resolve()
     return withEntryOp(() => workspace.moveEntryToCollection(entry, tableId), {
-      permitted: canEditContentEntry(permissionUser, entry),
+      permitted: canMoveRows && canEditContentEntry(permissionUser, entry),
       permMsg: 'Your role cannot move this entry',
       fallback: 'Could not move entry',
       rethrow: true,
@@ -361,6 +386,11 @@ export function ContentPage() {
     }
 
     await draft.handleStatusChange(status)
+  }
+
+  function handleScheduleEntry(entry: DataRow) {
+    workspace.updateSelectedEntry(entry)
+    draft.applySelectedEntry(entry)
   }
 
   async function handleConvertEntryToDraft(entry: DataRow) {
@@ -429,12 +459,16 @@ export function ContentPage() {
             onPublish={() => {
               if (workspace.selectedEntry) void handlePublishEntry(workspace.selectedEntry)
             }}
+            onSchedule={handleScheduleEntry}
           />
         )}
         contentSidebar={(
           <ContentSidebar
-            activePanel={activeContentPanel}
-            onActivePanelChange={setActiveContentPanel}
+            activePanel={visibleContentPanel}
+            onActivePanelChange={(panel) => {
+              if (panel === 'agent' && !canUseAgent) return
+              setActiveContentPanel(panel)
+            }}
             contentPanel={(
               <ContentExplorerPanel
                 loading={workspace.contentLoading}
@@ -448,6 +482,7 @@ export function ContentPage() {
                 canCreateEntry={canCreateEntries}
                 canManageCollections={canManageCollections}
                 canEditEntry={(entry) => canEditContentEntry(permissionUser, entry)}
+                canMoveEntry={(entry) => canMoveRows && canEditContentEntry(permissionUser, entry)}
                 canPublishEntry={(entry) => canPublishContentEntry(permissionUser, entry)}
                 getFeaturedMediaAssetForEntry={mediaPicker.getFeaturedMediaAssetForEntry}
                 onSelectCollection={workspace.selectCollection}
@@ -483,9 +518,10 @@ export function ContentPage() {
                   displayName: permissionUser.displayName ?? permissionUser.email,
                   email: permissionUser.email,
                 }}
-                isVisible={activeContentPanel === 'agent'}
+                isVisible={visibleContentPanel === 'agent'}
               />
             )}
+            canUseAiChat={canUseAgent}
           />
         )}
         contentCanvas={(
@@ -543,6 +579,7 @@ export function ContentPage() {
               }
             }}
             canEditEntry={canEditSelectedEntry}
+            canMoveEntry={canMoveSelectedEntry}
             canPublishEntry={canPublishSelectedEntry}
             canChangeAuthor={canReassignAuthor}
           />
@@ -579,7 +616,9 @@ export function ContentPage() {
               setCollectionDialogOpen(false)
               return
             }
-            await workspace.createCollection(input)
+            // On a step-up cancellation `runStepUp` rejects before this line,
+            // so the dialog stays open (it swallows `step_up_cancelled`).
+            await runStepUp(() => workspace.createCollection(input))
             setCollectionDialogOpen(false)
           }}
         />

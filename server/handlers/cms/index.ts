@@ -53,6 +53,7 @@ import { handleFontsRoutes } from './fonts'
 import { handlePublishRoutes } from './publish'
 import { handleExportRoute } from './export'
 import { handleImportPreviewRoute } from './importPreview'
+import { handleImportArchiveRoute } from './importArchive'
 import { handleImportRoute } from './import'
 
 export type { CmsHandlerOptions } from './shared'
@@ -114,6 +115,7 @@ export async function handleCmsRequest(
     // would otherwise be consumed by the `/import` handler first.
     ?? (await handleExportRoute(req, db, options))
     ?? (await handleImportPreviewRoute(req, db))
+    ?? (await handleImportArchiveRoute(req, db, options))
     ?? (await handleImportRoute(req, db, options))
 
   return response ?? jsonResponse({ error: 'Not found' }, { status: 404 })

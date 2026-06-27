@@ -14,10 +14,12 @@
  */
 
 import { describe, it, expect } from 'bun:test'
+import { siteTools } from '../../../server/ai/tools/site'
 import { siteWriteTools } from '../../../server/ai/tools/site/writeTools'
 
 describe('agent-tool-surface gate', () => {
   const toolNames = siteWriteTools.map((t) => t.name)
+  const stampedToolByName = new Map(siteTools.map((tool) => [tool.name, tool]))
 
   it('siteWriteTools array is non-empty', () => {
     expect(toolNames.length).toBeGreaterThan(0)
@@ -39,12 +41,36 @@ describe('agent-tool-surface gate', () => {
     expect(toolNames).toContain('getNodeHtml')
   })
 
+  it('document-aware browser read tools are present', () => {
+    expect(toolNames).toContain('read_document')
+    expect(toolNames).toContain('open_document')
+  })
+
   it('HTML-native replaceNodeHtml tool is present', () => {
     expect(toolNames).toContain('replaceNodeHtml')
   })
 
   it('single CSS-authoring applyCss tool is present', () => {
     expect(toolNames).toContain('applyCss')
+  })
+
+  it('code asset tools are present', () => {
+    expect(toolNames).toContain('list_code_assets')
+    expect(toolNames).toContain('read_code_asset')
+    expect(toolNames).toContain('write_code_asset')
+    expect(toolNames).toContain('patch_code_asset')
+    expect(toolNames).toContain('inspect_code_runtime')
+  })
+
+  it('code asset read tools are not stamped as mutating', () => {
+    expect(stampedToolByName.get('list_code_assets')?.mutates).toBe(false)
+    expect(stampedToolByName.get('read_code_asset')?.mutates).toBe(false)
+    expect(stampedToolByName.get('inspect_code_runtime')?.mutates).toBe(false)
+  })
+
+  it('code asset write tools are stamped as mutating', () => {
+    expect(stampedToolByName.get('write_code_asset')?.mutates).toBe(true)
+    expect(stampedToolByName.get('patch_code_asset')?.mutates).toBe(true)
   })
 
   it('retired class-patch tools are absent', () => {
@@ -64,7 +90,7 @@ describe('agent-tool-surface gate', () => {
     expect(toolNames).toContain('clearPageTemplate')
   })
 
-  it('total tool count is 22 (14 mutation + 2 template + 4 token + render_snapshot + getNodeHtml)', () => {
-    expect(toolNames).toHaveLength(22)
+  it('total tool count is 29 (document, HTML, node, CSS, code asset, page, template, token, and snapshot tools)', () => {
+    expect(toolNames).toHaveLength(29)
   })
 })

@@ -16,14 +16,15 @@
  * Constraint #299 — richtext props are sanitized via DOMPurify before storage.
  */
 
-import { Type, type Static, parseValue } from '@core/utils/typeboxHelpers'
+import { Type, parseValue } from '@core/utils/typeboxHelpers'
 import {
   aiToolError,
   aiToolOk,
-  type AiToolImage,
   type AiToolOutput,
   InsertHtmlInputSchema,
   GetNodeHtmlInputSchema,
+  ReadDocumentInputSchema,
+  OpenDocumentInputSchema,
   ReplaceNodeHtmlInputSchema,
   DeleteNodeInputSchema,
   UpdateNodePropsInputSchema,
@@ -33,6 +34,11 @@ import {
   ApplyCssInputSchema,
   AssignClassInputSchema,
   RemoveClassInputSchema,
+  ListCodeAssetsInputSchema,
+  ReadCodeAssetInputSchema,
+  WriteCodeAssetInputSchema,
+  PatchCodeAssetInputSchema,
+  InspectCodeRuntimeInputSchema,
   AddPageInputSchema,
   DeletePageInputSchema,
   RenamePageInputSchema,
@@ -42,6 +48,8 @@ import {
   RenderSnapshotInputSchema,
   type InsertHtmlInput,
   type GetNodeHtmlInput,
+  type ReadDocumentInput,
+  type OpenDocumentInput,
   type ReplaceNodeHtmlInput,
   type DeleteNodeInput,
   type UpdateNodePropsInput,
@@ -64,17 +72,32 @@ import { sanitizeRichtext, isRichtextPropKey } from '@core/sanitize'
 import { importHtml } from '@core/htmlImport'
 import { cssToStyleRules } from '@core/siteImport'
 import type { NewStyleRule } from '@core/siteImport'
-import type { BaseNode, ConditionDef, Page, PageTemplateConfig } from '@core/page-tree'
+import type { BaseNode, ConditionDef, PageTemplateConfig } from '@core/page-tree'
 import { renderNode, type RenderConfig, type RenderAccumulators } from '@core/publisher'
 import { getAgentStoreApi } from './storeRef'
-import { captureAgentRenderSnapshot, SnapshotNodeNotFoundError } from './renderEvidence'
-import type { AgentRenderSnapshotPayload } from './types'
 import {
   runSetColorTokens,
   runSetFontTokens,
   runSetTypeScale,
   runSetSpacingScale,
 } from './tokenRunners'
+import {
+  runInspectCodeRuntime,
+  runListCodeAssets,
+  runPatchCodeAsset,
+  runReadCodeAsset,
+  runWriteCodeAsset,
+} from './codeAssetTools'
+import { runRenderSnapshot } from './renderSnapshotTool'
+import {
+  activeDocumentNodes,
+  activeRenderPage,
+  describeDocumentId,
+  describeForeignNode,
+  focusNodeDocument,
+  runOpenDocument,
+  runReadDocument,
+} from './documentTools'
 import { getErrorMessage } from '@core/utils/errorMessage'
 
 // Live access to the editor store. Routed through `./storeRef` so this module
@@ -160,35 +183,6 @@ function validateBreakpointId(
 }
 
 /**
- * The node map of the ACTIVE document — the single tree every write tool
- * actually mutates (`mutateActiveTree`). Page mode → the active page's nodes;
- * VC mode → the active component's tree. Mirrors the active-document routing in
- * `mutateActiveTree`/`insertComponentRef` without importing the store module.
- */
-function activeDocNodes(store: EditorStore): Record<string, BaseNode> | null {
-  const site = store.site
-  if (!site) return null
-  const ad = store.activeDocument
-  if (ad?.kind === 'visualComponent') {
-    const vc = site.visualComponents?.find((v) => v.id === ad.vcId)
-    return vc ? (vc.tree.nodes as Record<string, BaseNode>) : null
-  }
-  const pageId = ad?.kind === 'page' ? ad.pageId : store.activePageId
-  const page = site.pages.find((p) => p.id === pageId)
-  return page ? page.nodes : null
-}
-
-/** The active PAGE object (page mode only — null while editing a VC). */
-function getActivePage(store: EditorStore): Page | null {
-  const site = store.site
-  if (!site) return null
-  const ad = store.activeDocument
-  if (ad?.kind === 'visualComponent') return null
-  const pageId = ad?.kind === 'page' ? ad.pageId : store.activePageId
-  return site.pages.find((p) => p.id === pageId) ?? null
-}
-
-/**
  * Resolve a node by ID **within the active document only** — never across other
  * pages, templates, or VCs. Write tools mutate the active tree, so resolving an
  * id that lives in a different document would silently target the wrong tree
@@ -196,28 +190,7 @@ function getActivePage(store: EditorStore): Page | null {
  * it belongs to the active doc, else undefined.
  */
 function findNodeInActiveDoc(store: EditorStore, nodeId: string): BaseNode | undefined {
-  return activeDocNodes(store)?.[nodeId]
-}
-
-/**
- * When a node id is NOT in the active document, locate which OTHER document
- * owns it so the agent gets a precise, actionable error ("that node is in the
- * 'Global Layout' template — open it to edit") instead of "not found" or a
- * misleading mutation failure. Returns null when the id exists nowhere.
- */
-function describeForeignNode(store: EditorStore, nodeId: string): string | null {
-  const site = store.site
-  if (!site) return null
-  for (const page of site.pages) {
-    if (page.nodes[nodeId]) {
-      const what = page.template ? 'template' : 'page'
-      return `the "${page.title}" ${what} (a different document)`
-    }
-  }
-  for (const vc of site.visualComponents ?? []) {
-    if (vc.tree.nodes[nodeId]) return `the "${vc.name}" component (a different document)`
-  }
-  return null
+  return activeDocumentNodes(store)?.[nodeId]
 }
 
 /**
@@ -226,35 +199,14 @@ function describeForeignNode(store: EditorStore, nodeId: string): string | null 
  * nowhere (a bad id).
  */
 function nodeNotInActiveDocError(store: EditorStore, nodeId: string): AiToolOutput {
+  const documentIdError = describeDocumentId(store, nodeId)
+  if (documentIdError) return aiToolError(documentIdError)
   const foreign = describeForeignNode(store, nodeId)
   return aiToolError(
     foreign
       ? `Node ${nodeId} lives in ${foreign} and could not be activated automatically.`
       : `Node not found: ${nodeId}`,
   )
-}
-
-/**
- * Ensure the document that owns `nodeId` is the ACTIVE one, navigating the
- * canvas to it when needed. Write tools mutate the active tree, so when the
- * agent targets a node in another page/template/VC we switch to that document
- * first — the edit then lands in the correct tree AND the user watches it
- * happen, instead of the tool silently no-op'ing on the wrong tree. No-op when
- * the node is already active or exists nowhere.
- */
-function focusNodeDocument(store: EditorStore, nodeId: string): void {
-  if (activeDocNodes(store)?.[nodeId]) return
-  const site = store.site
-  if (!site) return
-  const ownerPage = site.pages.find((p) => p.nodes[nodeId])
-  if (ownerPage) {
-    store.openPageInCanvas(ownerPage.id)
-    return
-  }
-  const ownerVc = site.visualComponents?.find((vc) => vc.tree.nodes[nodeId])
-  if (ownerVc) {
-    store.setActiveDocument({ kind: 'visualComponent', vcId: ownerVc.id })
-  }
 }
 
 /**
@@ -302,7 +254,7 @@ function targetNodeIdFromInput(raw: unknown): string | undefined {
  */
 function runInsertHtml(input: InsertHtmlInput): AiToolOutput {
   // (1) Parse and walk the HTML to produce a flat node fragment + any <style> CSS
-  const { nodes, rootIds, styleCss } = importHtml(input.html)
+  const { nodes, rootIds, styleCss, stripped } = importHtml(input.html)
   const { rules, conditions } = parseImportedStyleCss(styleCss)
 
   if (rootIds.length === 0) {
@@ -315,7 +267,10 @@ function runInsertHtml(input: InsertHtmlInput): AiToolOutput {
       const { created, updated } = getStoreState().upsertCssRules(rules, conditions)
       return aiToolOk({ cssRulesCreated: created, cssRulesUpdated: updated })
     }
-    return aiToolError('HTML contained no importable elements or style rules.')
+    const scriptHint = stripped.scripts > 0 || stripped.inlineHandlers > 0
+      ? ' Scripts and inline event handlers are stripped from HTML imports; create runtime behavior with write_code_asset({ type:"script", ... }) instead.'
+      : ''
+    return aiToolError(`HTML contained no importable elements or style rules.${scriptHint}`)
   }
 
   // (2) Insert via the store action — same path as the paste import modal
@@ -340,11 +295,9 @@ function runGetNodeHtml(input: GetNodeHtmlInput): AiToolOutput {
   const site = store.site
   if (!site) return aiToolError('No active site.')
 
-  // Scope to the ACTIVE page only — never resolve a node from a different page
-  // or template. read_page already exposes only the active page's nodes, so an
-  // id from elsewhere is either stale or a wrapper/outlet-preview node the agent
-  // can't edit from here.
-  const activePage = getActivePage(store)
+  // Scope to the active document only. Visual components are materialized as
+  // virtual pages so getNodeHtml and read_document share publisher semantics.
+  const activePage = activeRenderPage(store)
   if (!activePage?.nodes[input.nodeId]) {
     return nodeNotInActiveDocError(store, input.nodeId)
   }
@@ -367,6 +320,14 @@ function runGetNodeHtml(input: GetNodeHtmlInput): AiToolOutput {
   return aiToolOk({ html })
 }
 
+function runReadDocumentTool(input: ReadDocumentInput): AiToolOutput {
+  return runReadDocument(input, getStoreState())
+}
+
+function runOpenDocumentTool(input: OpenDocumentInput): AiToolOutput {
+  return runOpenDocument(input, getStoreState())
+}
+
 /**
  * Replace the children of `nodeId` with an HTML snippet.
  *
@@ -387,7 +348,7 @@ function runReplaceNodeHtml(input: ReplaceNodeHtmlInput): AiToolOutput {
 
   // Parse + validate the payload BEFORE mutating, so an empty / invalid payload
   // never wipes the node's existing children first and then errors out.
-  const { nodes, rootIds, styleCss } = importHtml(input.html)
+  const { nodes, rootIds, styleCss, stripped } = importHtml(input.html)
   const { rules, conditions } = parseImportedStyleCss(styleCss)
 
   if (rootIds.length === 0) {
@@ -398,7 +359,10 @@ function runReplaceNodeHtml(input: ReplaceNodeHtmlInput): AiToolOutput {
       const { created, updated } = getStoreState().upsertCssRules(rules, conditions)
       return aiToolOk({ cssRulesCreated: created, cssRulesUpdated: updated })
     }
-    return aiToolError('HTML contained no importable elements or style rules.')
+    const scriptHint = stripped.scripts > 0 || stripped.inlineHandlers > 0
+      ? ' Scripts and inline event handlers are stripped from HTML imports; create runtime behavior with write_code_asset({ type:"script", ... }) instead.'
+      : ''
+    return aiToolError(`HTML contained no importable elements or style rules.${scriptHint}`)
   }
 
   // Delete existing children so the target node is empty before insertion.
@@ -611,46 +575,6 @@ function runDuplicateNode(input: DuplicateNodeInput): AiToolOutput {
   return aiToolOk({ nodeId: newIds[0], nodeIds: newIds })
 }
 
-async function runRenderSnapshot(
-  input: Static<typeof renderSnapshotSchema>,
-): Promise<AiToolOutput> {
-  // Default true so a direct (non-server) invocation still works; the AI loop
-  // always sets this explicitly from the model's vision capability.
-  const captureScreenshot = input.captureScreenshot ?? true
-  let snapshot: AgentRenderSnapshotPayload | null
-  try {
-    snapshot = await captureAgentRenderSnapshot({
-      breakpointId: input.breakpointId,
-      nodeId: input.nodeId,
-      captureScreenshot,
-    })
-  } catch (err) {
-    if (err instanceof SnapshotNodeNotFoundError) return aiToolError(err.message)
-    throw err
-  }
-  if (!snapshot) {
-    return aiToolError('No canvas frame found for the requested breakpoint.')
-  }
-
-  // The PNG travels through the dedicated image channel (a native image block on
-  // vision providers) — NEVER inlined into `data` as base64 JSON text, which is
-  // what blew a single snapshot past a million tokens. `data` keeps the layout
-  // report plus a compact screenshot descriptor (status + dimensions only).
-  const { screenshot, ...rest } = snapshot
-  const images: AiToolImage[] = []
-  if (screenshot.status === 'ok' && screenshot.data && screenshot.mimeType) {
-    images.push({ mimeType: screenshot.mimeType, data: screenshot.data })
-  }
-  const screenshotMeta = {
-    status: screenshot.status,
-    ...(screenshot.width != null ? { width: screenshot.width } : {}),
-    ...(screenshot.height != null ? { height: screenshot.height } : {}),
-    ...(screenshot.error ? { error: screenshot.error } : {}),
-  }
-
-  return aiToolOk({ ...rest, screenshot: screenshotMeta }, images)
-}
-
 // ---------------------------------------------------------------------------
 // Public dispatch — called by the agent slice when a toolRequest event arrives
 // ---------------------------------------------------------------------------
@@ -680,6 +604,10 @@ export async function executeAgentTool(
         return runInsertHtml(parseValue(InsertHtmlInputSchema, rawInput))
       case 'getNodeHtml':
         return runGetNodeHtml(parseValue(GetNodeHtmlInputSchema, rawInput))
+      case 'read_document':
+        return runReadDocumentTool(parseValue(ReadDocumentInputSchema, rawInput))
+      case 'open_document':
+        return runOpenDocumentTool(parseValue(OpenDocumentInputSchema, rawInput))
       case 'replaceNodeHtml':
         return runReplaceNodeHtml(parseValue(ReplaceNodeHtmlInputSchema, rawInput))
       case 'deleteNode':
@@ -692,6 +620,16 @@ export async function executeAgentTool(
         return runRenameNode(parseValue(RenameNodeInputSchema, rawInput))
       case 'applyCss':
         return runApplyCss(parseValue(ApplyCssInputSchema, rawInput))
+      case 'list_code_assets':
+        return await runListCodeAssets(parseValue(ListCodeAssetsInputSchema, rawInput))
+      case 'read_code_asset':
+        return await runReadCodeAsset(parseValue(ReadCodeAssetInputSchema, rawInput))
+      case 'write_code_asset':
+        return await runWriteCodeAsset(parseValue(WriteCodeAssetInputSchema, rawInput))
+      case 'patch_code_asset':
+        return await runPatchCodeAsset(parseValue(PatchCodeAssetInputSchema, rawInput))
+      case 'inspect_code_runtime':
+        return runInspectCodeRuntime(parseValue(InspectCodeRuntimeInputSchema, rawInput))
       case 'assignClass':
         return runAssignClass(parseValue(AssignClassInputSchema, rawInput))
       case 'removeClass':

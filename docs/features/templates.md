@@ -32,7 +32,6 @@ src/core/templates/
 └── tokenInterpolation.ts             — parseTokenString, interpolateTokens, walkFieldPath
 
 src/modules/base/outlet/               — base.outlet module (Content Outlet)
-server/publish/templateSeeding.ts  — seed + backfill for default entry templates
 server/publish/publicRouter.ts         — isTemplatePage guard on direct slug routing
 server/publish/publicRenderer.ts       — chain-aware render paths
 ```
@@ -200,7 +199,7 @@ Context frames are unchanged from before templates were added — the merged tre
 interface TemplateRenderDataContext {
   page?:        PageFrame       // page id, slug, title, templateTableSlug
   site?:        SiteFrame       // site name, settings, breakpoints
-  route?:       RouteFrame      // URL parts
+  route?:       RouteFrame      // URL path, slug, segments, and query params
   entryStack:   LoopItem[]      // pushed by loops + entry route render
 }
 ```
@@ -216,7 +215,7 @@ See the "Dynamic bindings" section below for the full source table.
 | `currentEntry` | Top of `entryStack`       | Inside loops, inside entry templates                    |
 | `parentEntry`  | Second-from-top           | Nested loops                                            |
 | `site`         | `ctx.site`                | Anywhere — site name, primary color                     |
-| `route`        | `ctx.route`               | URL-driven (route.segments, route.slug)                 |
+| `route`        | `ctx.route`               | URL-driven (`route.segments`, `route.slug`, `route.query.*`) |
 | `page`         | `ctx.page`                | Current page metadata                                   |
 
 ---
@@ -266,7 +265,7 @@ The design canvas renders the active document the way it publishes: **inside its
 - `resolveEditorWrapperTemplates(site, activeDoc)` (`canvasComposition.ts`) returns the templates that WRAP the active document, outermost-first — the editor-side mirror of `resolveTemplateChain`. Editing a page, a `postTypes` template, or a `notFound` template ⇒ wrapped by the `everywhere` layout; editing the `everywhere` layout ⇒ nothing wraps it.
 - Wrappers render **read-only** via `ReadOnlyNodeTree` with the editable document spliced into the innermost wrapper's `base.outlet` (the `outletSlot` prop replaces the outlet node, mirroring `spliceIntoOutlet`). Only the active document's nodes keep `data-node-id` + handlers, so selection / hover / DnD stay scoped to it; the chrome is pixel-identical but non-interactive.
 - Body ownership mirrors the publisher: the iframe `<body>` carries the OUTERMOST wrapper body's classes, and the active document renders as its body *children* (its own `base.body` is dropped, just as the composer drops the inner body).
-- `ReadOnlyNodeTree` (`src/modules/base/utils/ReadOnlyNodeTree.tsx`) is the shared non-interactive tree renderer — also used by `VCInlineTree` for inlined Visual Component bodies. It mirrors the publisher's per-node output: `classIds` resolve to class names AND `inlineStyles` are applied as the element's `style` (via `bagToReactStyle` from `@core/publisher`, the same sanitisation gate as the published `style="…"` attribute) — so composed content (template chrome, outlet previews, VC bodies) renders with the same inline styles as the editable canvas and the published page.
+- `ReadOnlyNodeTree` (`src/modules/base/utils/ReadOnlyNodeTree.tsx`) is the shared non-interactive tree renderer — also used by `VCInlineTree` for inlined Visual Component bodies. It mirrors the publisher's per-node output: `classIds` resolve to class names, `inlineStyles` are applied as the element's `style` (via `bagToReactStyle` from `@core/publisher`, the same sanitisation gate as the published `style="…"` attribute), template bindings/tokens resolve against the canvas render context when one is provided, and `base.loop` nodes use the same live preview items as the editable canvas. Composed content (template chrome, outlet previews, VC bodies) therefore renders with the same styles and dynamic data as the editable canvas and the published page.
 - **Navigation guard:** the canvas iframe is an editing surface, never a browsing surface. `IframeFrameSurface` installs a capture-phase `click`/`auxclick`/`submit` listener on the iframe document that `preventDefault`s link navigation and form submission (without `stopPropagation`, so node selection still works) — so clicking a logo/link in the read-only template chrome, an inlined component, or any authored content never reloads the frame. Applies to both the design canvas and the live/preview frame.
 - **Read-only affordance:** `ReadOnlyNodeTree` stamps `data-instatic-readonly-{label,kind,id}` on every read-only element (the source is named by `CanvasComposedTree`, `OutletEditor`, and `VCInlineTree`). `BreakpointFrame` shows a cursor-following `CursorTooltip` ("Part of X — double-click to edit") on hover, and `IframeFrameSurface` opens the source on double-click (`onReadonlyOpen` → `openPageInCanvas` / `setActiveDocument`). The read-only markers ride the optional fields on `NodeWrapperProps`.
 
@@ -318,14 +317,14 @@ Store action: `convertTemplateToPage(pageId)` in `siteSlice`.
 
 ---
 
-## Seeding — default entry templates
+## Entry templates are explicit
 
-When a postType `data_table` is created, `ensureDefaultEntryTemplate(db, table)` in `server/publish/templateSeeding.ts` inserts a default template page (idempotent — it no-ops if one already targets the table):
+Creating a postType `data_table` does not create a page. Entry templates are ordinary pages that users create, convert, and delete through the Site workspace. A published row detail URL (`/<route-base>/<row-slug>`) renders only when a matching template exists:
 
 - `templateEnabled: true`, `templateTarget: { kind: 'postTypes', tableSlugs: [table.slug] }`, `templatePriority: 0`
-- Page tree: `base.body` > `base.text` (`<h1>` bound to `currentEntry.title` via token interpolation) + `base.outlet` (bound to `currentEntry.body` via `html` format)
+- Page tree: any authored layout with a `base.outlet` where the row body should flow
 
-`backfillDefaultEntryTemplates(db)` at boot covers postType tables created before the template system was added.
+Without a matching entry template, the row remains publishable CMS content but its public detail URL returns 404.
 
 ---
 
@@ -340,12 +339,11 @@ When a postType `data_table` is created, `ensureDefaultEntryTemplate(db, table)`
 
 ### Add an entry template for a postType
 
-When a postType is created, the system seeds a default entry template automatically. To customize:
-
-1. Open the template page in the visual editor.
-2. Edit it like any page — bind nodes to `currentEntry.<field>` via the Properties panel.
-3. Add `base.outlet` anywhere you want the post body to flow.
-4. Publish.
+1. Create a new page or choose an existing page in the visual editor.
+2. Open Template settings and choose **Post types**.
+3. Select the target collection slug(s).
+4. Build the layout — bind nodes to `currentEntry.<field>` via the Properties panel, and add `base.outlet` where the post body should flow.
+5. Publish.
 
 ### Share a layout across post types
 
@@ -363,7 +361,7 @@ The site-scope AI agent can author templates end-to-end:
 
 1. Build the chrome on a page with `insertHtml`, including one `<instatic-outlet>` element where the wrapped content should appear (the importer maps it to a `base.outlet` node).
 2. Call `setPageTemplate(pageId, target, priority?)` — `target` is `{ kind: 'everywhere' }` or `{ kind: 'postTypes', tableSlugs: [...] }`. For a postTypes target, the agent reads valid slugs from `list_post_types` first.
-3. `clearPageTemplate(pageId)` reverts a template to an ordinary page. `list_pages` reports each page's current `template` config.
+3. `clearPageTemplate(pageId)` reverts a template to an ordinary page. `list_documents` reports each page/template's current `template` config.
 
 No outlet save-guard applies here either — an agent-built template with no outlet simply doesn't apply. See [agent.md → Templates](agent.md) for the tool surface.
 
@@ -384,7 +382,7 @@ node.props.text = 'Posted by {currentEntry.author.displayName} on {currentEntry.
 |---------|------------|
 | Reading `currentEntry` from a module's `render` without bindings | Set `dynamicBindings` on the node — keeps the schema honest |
 | Hardcoding a template's slug in server handlers | Use `resolveTemplateChain(site, ctx)` |
-| Creating a template page via raw `INSERT INTO pages` | Use `ensureDefaultEntryTemplate(...)` or the admin dialog |
+| Creating a template page via raw `INSERT INTO pages` | Use the Site workspace template dialog |
 | Walking a deep binding path with `JSON.parse(JSON.stringify(...))` | Use `walkFieldPath(frame, 'a.b.c')` |
 | Expecting to visit a template page at its own slug | Template pages are never directly routable — the live router and bake loop both skip them |
 | Inlining `page.template?.target.kind === 'everywhere' ? … : …` in UI code | Use `templateTargetLabel(page)` from `@core/templates` |
@@ -411,7 +409,6 @@ node.props.text = 'Posted by {currentEntry.author.displayName} on {currentEntry.
   - `src/admin/pages/site/hooks/useTemplatePreviewContext.ts` — synthetic preview context for the canvas
   - `src/admin/pages/site/hooks/useActiveLivePath.ts` — resolves the toolbar "Open live page" path for templates
   - `src/core/templates/templatePreviewData.ts` — `buildPreviewCells`, `dataTablePreviewToLoopItem`
-  - `server/publish/templateSeeding.ts` — default-template seeding
   - `server/publish/publicRenderer.ts` — chain-aware render paths
   - `src/admin/pages/site/hooks/useInsertModule.ts` — hook-level outlet guard (toast + null return)
   - `src/admin/pages/site/store/slices/site/nodeActions.ts` — store-level outlet backstop in `insertNode`

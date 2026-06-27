@@ -13,11 +13,11 @@
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    background: var(--panel-bg);
+    background: var(--bg-surface);
     backdrop-filter: blur(var(--panel-blur));
-    border: 1px solid var(--panel-border);
+    border: 1px solid var(--overlay-10);
     border-radius: 12px;
-    box-shadow: var(--panel-shadow);
+    box-shadow: var(--shadow-panel);
     transition: width 150ms ease-in-out;
     outline: none;
     will-change: transform;
@@ -50,7 +50,7 @@
  *    scroll surface (the tree), but the spacing between header → search bar
  *    must stay aligned with Site / Selectors / Colors / Media etc. */
 .searchBar {
-    margin: 8px 8px 0;
+    margin: var(--space-s) var(--space-s) 0;
 }
 
 /* ── Tree / scrollable content area ─────────────────────────────────────── */
@@ -61,23 +61,23 @@
     overflow-x: hidden;
     /* 10px gap below the search bar mirrors the `gap: 10px` on the shared
      * Panel content area so the visual rhythm matches sibling panels. */
-    padding-top: 10px;
-    padding-bottom: 6px;
-    padding-right: 8px;
+    padding-top: var(--space-m);
+    padding-bottom: var(--space-xs);
+    padding-right: var(--space-s);
 }
 
 .dragOverlayRow {
     width: min(240px, var(--panel-w));
-    background: var(--panel-bg);
+    background: var(--bg-surface);
     border-radius: 12px;
-    box-shadow: 0 8px 24px var(--editor-overlay-black-32);
+    box-shadow: 0 8px 24px var(--scrim-30);
     pointer-events: none;
 }
 
 .noMatchMsg {
-    padding: 16px;
-    color: var(--editor-text-subtle);
-    font-size: 12px;
+    padding: var(--space-2xl);
+    color: var(--text-disabled);
+    font-size: var(--text-s);
 }
 
 /* Search-result pill layout only; shared visuals live in TagPill. */

@@ -218,11 +218,8 @@ export async function createDataTable(
               primary_field_id, fields_json, system,
               created_by_user_id, updated_by_user_id, created_at, updated_at
   `
-  // NOTE: table creation does NOT seed the default entry template — seeding
-  // publishes a page row, which is publish-layer orchestration. Every
-  // table-creation entry point calls `ensureDefaultEntryTemplate`
-  // (`server/publish/templateSeeding.ts`) right after this returns, and the
-  // boot/import backfill covers every other path.
+  // NOTE: table creation is pure data access. Entry templates are ordinary
+  // page rows and are created explicitly through the site editor.
   return mapTable(rows[0])
 }
 

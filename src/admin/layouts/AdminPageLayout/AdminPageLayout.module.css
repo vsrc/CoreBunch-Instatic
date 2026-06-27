@@ -11,24 +11,24 @@
     flex-direction: column;
     height: 100vh;
     overflow: hidden;
-    background: var(--editor-bg);
-    color: var(--editor-text);
+    background: var(--bg-body);
+    color: var(--text);
 }
 
 .body {
     flex: 1;
     min-height: 0;
     overflow: auto;
-    padding: 56px 28px 48px;
+    padding: var(--space-10xl) var(--space-6xl) var(--space-9xl);
     user-select: text;
-    background: var(--editor-surface);
+    background: var(--bg-surface);
     border-top-left-radius: 16px;
     border-top-right-radius: 16px;
 }
 
 .container {
     display: grid;
-    gap: 28px;
+    gap: var(--space-6xl);
     width: min(1220px, 100%);
     margin: 0 auto;
 }
@@ -37,29 +37,29 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: end;
-    gap: 18px;
-    padding-bottom: 24px;
-    border-bottom: 1px solid var(--panel-border);
+    gap: var(--space-3xl);
+    padding-bottom: var(--space-5xl);
+    border-bottom: 1px solid var(--overlay-10);
 }
 
 .titleGroup {
     display: grid;
-    gap: 6px;
+    gap: var(--space-xs);
     min-width: 0;
 }
 
 .titleGroup h1 {
     margin: 0;
-    color: var(--editor-text-bright);
-    font-size: 50px;
+    color: var(--text-bright);
+    font-size: var(--text-7xl);
     line-height: 1.05;
     letter-spacing: 0;
 }
 
 .titleGroup p {
     margin: 0;
-    color: var(--editor-text-muted);
-    font-size: 16px;
+    color: var(--text-subtle);
+    font-size: var(--text-xl);
     line-height: 1.45;
 }
 
@@ -68,24 +68,24 @@
     flex-wrap: wrap;
     align-items: center;
     justify-content: flex-end;
-    gap: 12px;
+    gap: var(--space-l);
 }
 
 .tabs {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: var(--space-s);
 }
 
 .actions {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: var(--space-s);
 }
 
 @media (max-width: 760px) {
     .body {
-        padding: 56px 18px 32px;
+        padding: var(--space-10xl) var(--space-3xl) var(--space-7xl);
     }
 
     .header {

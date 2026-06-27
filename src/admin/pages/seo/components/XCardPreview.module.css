@@ -3,7 +3,7 @@
 .wrap {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: var(--space-2xs);
     margin: 0;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, arial, sans-serif;
 }
@@ -31,7 +31,7 @@
     align-items: center;
     justify-content: center;
     color: var(--seo-x-text);
-    font-size: 13px;
+    font-size: var(--text-l);
 }
 
 .overlayTitle {
@@ -39,11 +39,11 @@
     left: 12px;
     bottom: 12px;
     max-width: calc(100% - 24px);
-    padding: 2px 8px;
+    padding: var(--space-4xs) var(--space-m);
     border-radius: 4px;
     background: var(--seo-x-overlay);
     color: var(--seo-x-title);
-    font-size: 13px;
+    font-size: var(--text-l);
     line-height: 20px;
     white-space: nowrap;
     overflow: hidden;
@@ -52,9 +52,9 @@
 
 .fromLine {
     color: var(--seo-x-text);
-    font-size: 13px;
+    font-size: var(--text-l);
     line-height: 16px;
-    padding-left: 4px;
+    padding-left: var(--space-2xs);
 }
 
 /* ── summary ─────────────────────────────────────────────────────────────── */
@@ -86,20 +86,20 @@
 .summaryMeta {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: var(--space-4xs);
     justify-content: center;
-    padding: 12px;
+    padding: var(--space-xl);
 }
 
 .summaryDomain {
     color: var(--seo-x-text);
-    font-size: 13px;
+    font-size: var(--text-l);
     line-height: 16px;
 }
 
 .summaryTitle {
     color: var(--seo-x-title);
-    font-size: 15px;
+    font-size: var(--text-xl);
     line-height: 20px;
     font-weight: 400;
     overflow: hidden;
@@ -110,7 +110,7 @@
 
 .summaryDescription {
     color: var(--seo-x-text);
-    font-size: 15px;
+    font-size: var(--text-xl);
     line-height: 20px;
     overflow: hidden;
     display: -webkit-box;

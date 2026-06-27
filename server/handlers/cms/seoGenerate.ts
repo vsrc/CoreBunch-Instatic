@@ -18,7 +18,7 @@ import { badRequest, jsonResponse, readValidatedBody } from '../../http'
 import { requireCapability, userHasCapability } from '../../auth/authz'
 import { getDataRow } from '../../repositories/data'
 import { getDraftSite } from '../../repositories/site'
-import { readDefaultForScope } from '../../ai/defaults/store'
+import { listDefaults } from '../../ai/defaults/store'
 import {
   readCredentialForUser,
   resolveCredentialForDriver,
@@ -138,8 +138,10 @@ export async function handleSeoGenerate(req: Request, db: DbClient): Promise<Res
 
   // Provider + model from the scope defaults — content first (SEO copy is
   // content work), site as fallback. No default → actionable 409.
+  const defaults = await listDefaults(db)
   const aiDefault =
-    (await readDefaultForScope(db, 'content')) ?? (await readDefaultForScope(db, 'site'))
+    defaults.find((record) => record.scope === 'content') ??
+    defaults.find((record) => record.scope === 'site')
   if (!aiDefault) {
     return jsonResponse(
       { error: 'No AI provider configured. Set a content or site default in the AI workspace.' },
@@ -187,6 +189,7 @@ export async function handleSeoGenerate(req: Request, db: DbClient): Promise<Res
       toolContextBase: {
         db,
         userId: user.id,
+        capabilities: user.capabilities,
         scope: 'content',
         conversationId: `seo-generate:${row.id}`,
         snapshot: null,

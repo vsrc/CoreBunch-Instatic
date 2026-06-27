@@ -25,20 +25,20 @@
     justify-content: center;
     background: var(--seo-og-placeholder);
     color: var(--seo-og-domain);
-    font-size: 13px;
+    font-size: var(--text-l);
 }
 
 .strip {
     display: flex;
     flex-direction: column;
-    gap: 2px;
-    padding: 10px 12px;
+    gap: var(--space-4xs);
+    padding: var(--space-l) var(--space-xl);
     background: var(--seo-og-strip);
 }
 
 .domain {
     color: var(--seo-og-domain);
-    font-size: 12px;
+    font-size: var(--text-m);
     line-height: 16px;
     text-transform: uppercase;
     white-space: nowrap;
@@ -48,7 +48,7 @@
 
 .title {
     color: var(--seo-og-title);
-    font-size: 16px;
+    font-size: var(--text-2xl);
     line-height: 20px;
     font-weight: 600;
     overflow: hidden;
@@ -59,7 +59,7 @@
 
 .description {
     color: var(--seo-og-text);
-    font-size: 14px;
+    font-size: var(--text-xl);
     line-height: 18px;
     overflow: hidden;
     display: -webkit-box;

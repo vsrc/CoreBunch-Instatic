@@ -5,37 +5,37 @@
     --vc-control-radius: 16px;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-s);
     max-width: min(560px, calc(100vw - 48px));
-    padding: 6px 14px;
+    padding: var(--space-xs) var(--space-xl);
     pointer-events: auto;
     border: 0;
     border-radius: var(--vc-control-radius);
-    background: var(--editor-bg);
-    color: var(--editor-text);
+    background: var(--bg-body);
+    color: var(--text);
     box-shadow: var(--canvas-chrome-shadow);
-    font-size: 12px;
+    font-size: var(--text-s);
 }
 
 .control .backButton {
     min-height: 0;
-    padding: 2px 6px 2px 2px;
+    padding: var(--space-4xs) var(--space-xs) var(--space-4xs) var(--space-4xs);
     border-radius: calc(var(--vc-control-radius) - 6px);
-    color: var(--editor-text-secondary);
-    font-size: 12px;
+    color: var(--text-muted);
+    font-size: var(--text-s);
 }
 
 .divider {
     width: 1px;
     align-self: stretch;
-    margin: 3px 0;
-    background: var(--editor-border);
+    margin: var(--space-4xs) 0;
+    background: var(--border);
 }
 
 .modeLabel {
     flex-shrink: 0;
-    color: var(--editor-text-muted);
-    font-size: 12px;
+    color: var(--text-subtle);
+    font-size: var(--text-s);
     font-weight: 500;
     user-select: none;
 }

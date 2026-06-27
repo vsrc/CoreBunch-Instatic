@@ -177,18 +177,20 @@ Every admin page picks one of three root layouts from `src/admin/layouts/`. Impo
 | Layout | Used by | Bundle contract |
 |---|---|---|
 | `AdminCanvasLayout` | Site editor (`SitePage`) | Site shell — toolbar/chrome, persistence, editor store, and a post-paint lazy boundary for the heavy body. |
-| `AdminWorkspaceCanvasLayout` | Content, Data, Media | Canvas chrome (toolbar, sidebar, full-height canvas) WITHOUT site-only modules (no PropertiesPanel, no DnD, no CodeMirror). |
+| `AdminWorkspaceCanvasLayout` | Content, Data, Media | Canvas chrome (toolbar, sidebar, full-height canvas) WITHOUT site-only modules (no editor store, PropertiesPanel, DnD, or CodeMirror). |
 | `AdminPageLayout` | Plugins, Users, Account, plugin admin pages | Lightweight — toolbar + centered scrollable page body. **Must not import the editor store.** Site name and favicon come from `useSiteSummary` + the `adminUi` Zustand store. |
 
 `AdminCanvasLayout` keeps the real editor shell mounted while `usePersistence()` loads the draft site document. In production it renders the toolbar/chrome first and lazy-loads `AdminCanvasEditorBody` after paint. The body owns the permanent rail, sidebars, canvas, DnD context, `ConfirmDeleteProvider`, `CodeEditorPanel`, first-party module registration, and loop-source registration. Rare modal surfaces such as `ImportHtmlModal` stay behind their own open-state lazy boundary inside the body. Loading states use the same local skeleton vocabulary: the editor-body lazy fallback and the canvas no-site fallback both render `CanvasFrameSkeletonFrame`, and sidebars use compact skeleton rows or blocks. Once the document is in the store, every breakpoint frame mounts immediately — the tree is already in memory, so there is nothing to stagger.
 
 The `adminUi` store (`src/admin/state/adminUi.ts`) is the small cross-shell state store: settings-modal open flag, site-import modal open flag, site name/favicon for the toolbar brand position, and `activeLivePath` — the public path the "Open live page" toolbar button opens. The toolbar renders a compact skeleton while the site identity is loading, then renders the configured site favicon when present; otherwise it shows the site name with the same compact bold typography as the admin navigation. The site name is exposed through the shared tooltip after identity loads. It lives outside `@site/` so `AdminPageLayout` can subscribe without pulling in the 165 KB editor graph. The editor's `settingsSlice` mirrors its state into `adminUi` via a registered bridge so both are always in sync.
 
+Canvas chrome state for Content, Data, and Media lives in `src/admin/state/workspaceLayout.ts`, with persistence in `src/admin/state/workspaceLayoutStorage.ts` and `src/admin/state/useWorkspaceLayoutPersistence.ts`. That store owns non-site sidebar widths, right-panel collapsed state, and the Data sidebar toggle. Site editor layout remains site-only: `src/admin/pages/site/hooks/useEditorLayoutPersistence.ts` subscribes to the editor store and delegates the storage mapping to `src/admin/pages/site/layout/siteEditorLayoutPersistence.ts`.
+
 `activeLivePath` is written by the active workspace and cleared on unmount. The Site editor delegates to `useActiveLivePath` (`src/admin/pages/site/hooks/useActiveLivePath.ts`) inside `AdminCanvasEditorBody` — it resolves templates to a routable path rather than their own (non-routable) slug: an everywhere template maps to the previewed page's path; a postTypes template maps to the previewed published row's permalink. Both resolutions follow the same selection as the `TemplateModeControl` preview dropdown so the button always opens what the canvas is showing. The Content workspace writes `activeLivePath` inline inside its own layout; non-editor layouts never write it, so it stays `null` there naturally.
 
 `AdminWorkspaceCanvasLayout` and `AdminPageLayout` both call `useSiteSummary()` — a lightweight hook that fires a single `cmsAdapter.loadSite()` per session and writes the name + favicon into `adminUi`. The Site editor's `usePersistence` writes the same fields when it hydrates the full site, so after navigating to `/admin/site` the toolbar updates without a second fetch.
 
-When a Content or Data workspace has a right-side panel available but the user closes it, `AdminWorkspaceCanvasLayout` renders a compact top-right canvas notch to reopen that panel without changing the selected row or entry.
+When a Content or Data workspace has a right-side panel available but the user closes it, `AdminWorkspaceCanvasLayout` renders a compact top-right canvas notch to reopen that panel without changing the selected row or entry. The notch reads and writes `useWorkspaceLayout`; it does not touch the Site editor store.
 
 ```text
 src/admin/
@@ -332,7 +334,7 @@ The store is composed of **12 slices**, each created by a factory in `store/slic
 | `siteSlice`            | `SiteDocument` (pages, nodes, breakpoints, settings, classes, files). The page tree itself. |
 | `selectionSlice`       | `selectedNodeId`, `hoveredNodeId`                                          |
 | `canvasSlice`          | Zoom, pan, `activeBreakpointId`, `activeConditionId`, `canvasMode` ('select'|'pan'|'insert'), `canvasView` ('design'|'live'), `runScripts` |
-| `uiSlice`              | Panel visibility, unsaved-changes flag, insert picker, `componentizeEditorRequest` |
+| `uiSlice`              | Site editor panel visibility, unsaved-changes flag, insert picker, `componentizeEditorRequest` |
 | `classSlice`           | Style-rule CRUD, node ↔ class assignment, ambient selector creation         |
 | `filesSlice`           | `SiteFile` CRUD                                                            |
 | `visualComponentsSlice`| Visual Component CRUD                                                      |
@@ -429,7 +431,7 @@ Each iframe `<head>` receives five `<style>` elements (three from `ClassStyleInj
 
 The **unlayered-vs-layered** split is the cascade isolation mechanism: CSS rules outside any `@layer` always beat rules inside `@layer`-d blocks, regardless of specificity. Author CSS (both the class registry and user stylesheets) goes into `@layer user-authored`, so it can never override the editor chrome even with a high-specificity selector.
 
-`EditorChromeInjector` targets chrome elements via **stable data-attribute selectors** (`data-canvas-module-placeholder`, `data-instatic-slot-instance`, `data-instatic-unknown-module`, etc.) rather than hashed CSS-Module class names, which only exist in the parent document. At mount, it copies the required design tokens (`--editor-text-muted`, `--canvas-placeholder-bg`, `--editor-radius`, etc.) from the parent document's `:root` onto the iframe's `:root` so `var(--editor-*)` resolves correctly inside the iframe.
+`EditorChromeInjector` targets chrome elements via **stable data-attribute selectors** (`data-canvas-module-placeholder`, `data-instatic-slot-instance`, `data-instatic-unknown-module`, etc.) rather than hashed CSS-Module class names, which only exist in the parent document. At mount, it copies the required safe design tokens (`--text-subtle`, `--canvas-placeholder-bg`, `--radius`, etc.) from the parent document's `:root` onto the iframe's `:root` so `var(...)` references resolve correctly inside the iframe. Admin font, text-size, and spacing tokens are remapped to `--chrome-font-sans`, `--chrome-text-*`, and `--chrome-space-*` before use; they are never copied as `--font-sans`, `--text-*`, or `--space-*`, because those short names belong to the rendered site's Framework tokens inside the canvas.
 
 Full details: [`docs/features/canvas-iframe-per-frame.md`](../features/canvas-iframe-per-frame.md).
 
@@ -574,9 +576,11 @@ The sidebar shell expands/collapses by animating `--*-panel-width`. The panel sl
 - `ModulePickerDropdown` — opens the module inserter modal
 - `OpenLivePageButton` (`src/admin/shared/OpenLivePageButton/`) — toolbar icon (always visible, not Site-editor-only) that opens the live site in a new tab. Target URL is read from `adminUi.activeLivePath`: active document's public path when an editor is open, site root (`/`) otherwise. Tooltip changes between "Open live page" (active path) and "Open live site" (null). Component stays outside `src/admin/pages/site/` so it mounts on every admin route without touching the editor graph.
 
+**Global trailer.** `Toolbar.tsx` renders a fixed trailer at the right end of every admin route, regardless of which layout mounted it or what the caller passes in `rightSlot`: `SettingsButton` → `OpenLivePageButton` → `AccountMenuButton`. These are not layout- or page-owned — the settings cog, live-page link, and account menu are identical everywhere, the same way the left nav is. `SettingsButton` reads only the tiny `adminUi` store, so hosting it in the shell keeps the editor toolchain out of the lightweight admin bundles. Layouts use `rightSlot` only for surface-specific controls *before* the trailer (e.g. `ZoomControls` + `PublishButton` on the Site editor, the Uploads toggle on Media); pages must never inject their own `SettingsButton`.
+
 ### Settings modal
 
-`src/admin/modals/Settings/SettingsModal.tsx`. Shares the visual language of the Spotlight palette and Module Inserter: a `--panel-*`-token shell, `--editor-surface-2` rail with categorical rail-tint icon chips, accent-bar section header, card-group rows (`--editor-surface-2` fills, `--panel-radius` corners, 1px gaps showing the darker panel surface through) for section content, and an Esc keycap affordance. Backdrop click and Esc both close — there is no dedicated close button.
+`src/admin/modals/Settings/SettingsModal.tsx`. Shares the visual language of the Spotlight palette and Module Inserter: a direct-token panel shell, `--bg-surface-2` rail with categorical accent icon chips, accent-bar section header, card-group rows (`--bg-surface-2` fills, `--panel-radius` corners, 1px gaps showing the darker panel surface through) for section content, and an Esc keycap affordance. Backdrop click and Esc both close — there is no dedicated close button.
 
 **Sections** (rail nav, four entries):
 
@@ -591,6 +595,13 @@ Site-specific controls that were previously sections of this modal (Pages roster
 
 **State bridge**: settings modal open/close state is mirrored between two stores. `adminUi` (`src/admin/state/adminUi.ts`) is the source the modal reads — this lets `SettingsButton` work on non-editor admin pages without pulling in the editor store. `settingsSlice` in the editor store mirrors that state via `bindSettingsBridgeStoreApi` so editor-side consumers (spotlight commands, tests) can open/navigate settings without knowing about `adminUi`. A re-entrance guard (`bridgeReentrancyGuard`) prevents the two-way sync from looping.
 
+**Data source — `useSiteSettingsController`** (`src/admin/modals/Settings/useSiteSettingsController.ts`): the General and Publishing sections edit fields of the persisted `SiteDocument` (`name`, `settings.*`, framework preferences), but where that document lives depends on the route. The modal is global, so a section cannot just read the editor store — that store is only hydrated on the Site editor (`AdminCanvasLayout`). The controller hides the split behind one uniform shape:
+
+- **Site editor** (editor store holds a live draft): delegate to the editor-store mutations. Settings edits join the unsaved draft and persist through the editor's autosave / Save pipeline alongside page-tree edits — never clobbered.
+- **Every other admin page** (no in-memory draft): a standalone Zustand store loads the document once via `cmsAdapter`, edits a local copy, and persists immediately with a shell-only `saveSite` (empty dirty sets, so pages / components / layouts are left untouched). After each save it refreshes the `adminUi` site summary and fires `CMS_SITE_RELOAD_EVENT` so the toolbar brand and `useSiteSummary` re-sync. There is no Save button on those pages, so writes commit on blur / toggle.
+
+Because the controller is imported only by the lazy section components, the editor-store import it carries stays inside the `SettingsModal` chunk and never enters the eager graph of the lightweight layouts. This is what makes the modal *actually* global — before it, General and Publishing rendered a permanent skeleton anywhere outside the Site editor.
+
 `CanvasNotch` (`src/admin/pages/site/canvas/CanvasNotch.tsx`) owns the canvas-local insertion chrome. Its quick insert buttons are resolved from each admin's server-side `module-inserter` user preference; the default favorites are Container, Text, and Image. The full module inserter is the management surface for those favorites, so any insertable module, layout preset, or Visual Component can be pinned into the notch without adding a separate settings panel. In Visual Component mode, `CanvasRoot` mounts `VisualComponentModeControl` below the notch so the current component name, rename action, and page-return action stay attached to the canvas rather than the global toolbar. In live mode the notch accepts a `peek` prop — it parks above the top edge (clipped by `overflow:hidden`) and rolls down on hover/`:focus-within` so it does not overlay the page header; a slim `peekHandle` strip remains as the hover target.
 
 ### Module Inserter
@@ -603,18 +614,18 @@ Site-specific controls that were previously sections of this modal (Pages roster
 Data sources:
 
 - **Modules:** `registry.list()` filtered by the same editor insertion rules as the compact picker (`base.body`, `base.visual-component-ref`, and `base.slot-instance` hidden; `base.slot-outlet` only in Visual Component mode).
-- **Layouts:** two groups, saved above built-in. User-saved layouts come from `site.layouts` (see "Saved layouts" below); built-in presets are the seeded `LAYOUT_PRESETS`, built from the same serialized subtree shape as `FORM_PRESETS`.
+- **Layouts:** a single source — user-saved layouts from `site.layouts` (see "Saved layouts" below), which persist as `data_rows` (table_id `layouts`). There are no code-defined presets; any built-ins we ship later are seeded rows in that same table, indistinguishable from a user save.
 - **Components:** `site.visualComponents`.
 - **Recent:** per-browser local state in `instatic-module-inserter-v1`, validated with TypeBox before use.
 - **Favorites:** per-user server state in `user_preferences` key `module-inserter`, validated with TypeBox by `src/core/persistence/userPreferences.ts` and used by `CanvasNotch`.
 
-The modal uses the tile-card pattern from `docs/design.md`: `--editor-surface` parent, 1px grid gap, `--editor-surface-2` tiles, `--card-radius`, rail-tint accents via `data-accent`, and an achromatic `--editor-focus-ring` selection state. Wireframe image regions reuse `--canvas-placeholder-bg`.
+The modal uses the tile-card pattern from `docs/design.md`: `--bg-surface` parent, 1px grid gap, `--bg-surface-2` tiles, `--card-radius`, categorical accents via `data-accent`, and an achromatic `--focus-ring` selection state. Wireframe image regions reuse `--canvas-placeholder-bg`.
 
 ### Saved layouts
 
 Right-clicking a layer (DOM panel or canvas) offers **Save as layout…** — page mode only, disabled with an inline reason on the page root. The action opens `LayoutNameDialog` (`src/admin/pages/site/dialogs/`), then `saveNodeAsLayout` captures the node + its whole subtree **and every referenced style rule** into a `SavedLayout` (`@core/layouts`) on `site.layouts`. The snapshot shape deliberately mirrors the clipboard payload, and both flows share one engine (`@site/store/subtreeSnapshot`): collecting a subtree + its classes, and restoring a snapshot with fresh node ids, scoped classes cloned with remapped `scope.nodeId`, framework classes re-matched by name, and regular classes reused-or-reimported. Inserting a saved layout therefore reproduces the original selection exactly, the same way paste would.
 
-Saved layouts persist as rows in the `layouts` system table (`savedLayoutFromRow` / `savedLayoutToCells` in `@core/data/layoutFromRow`) through the same incremental roster save as pages and components (`PUT /admin/api/cms/layouts`, dirty-tracked per layout id). Plugins can ship layouts too — `definePack({ layouts: [{ id, name, html, css? }] })` entries are authored as clean HTML (+ CSS) and compiled to snapshot form at plugin build time (`compilePackLayout`, using the same HTML-import pipeline as "Paste HTML here…"); they install into the same table with ids namespaced `<pluginId>/<id>` and are replaced on pack re-sync (see [`docs/features/plugin-system.md`](features/plugin-system.md)). The inserter's Layouts section groups them accordingly: the user's **Saved** layouts first, then one group per plugin labelled with the plugin's display name (`composeLayoutsSection` + `pluginRuntime.getPluginName`), then **Built-in** presets. In the inserter, snapshot-borne hazards disable items inline instead of failing on click: a snapshot carrying a `base.outlet` follows the outlet module's own placement rules, and in VC mode a snapshot whose component refs would create a dependency cycle is disabled. Refs to since-deleted Visual Components are stripped at insertion time. Right-clicking a saved layout in the inserter offers Rename… (closes the inserter and reopens `LayoutNameDialog`) and Delete (immediate — it's an undoable site mutation — confirmed via toast).
+Saved layouts persist as rows in the `layouts` system table (`savedLayoutFromRow` / `savedLayoutToCells` in `@core/data/layoutFromRow`) through the same incremental roster save as pages and components (`PUT /admin/api/cms/layouts`, dirty-tracked per layout id). Plugins can ship layouts too — `definePack({ layouts: [{ id, name, html, css? }] })` entries are authored as clean HTML (+ CSS) and compiled to snapshot form at plugin build time (`compilePackLayout`, using the same HTML-import pipeline as "Paste HTML here…"); they install into the same table with ids namespaced `<pluginId>/<id>` and are replaced on pack re-sync (see [`docs/features/plugin-system.md`](features/plugin-system.md)). The inserter's Layouts section groups them accordingly: the user's **Saved** layouts first, then one group per plugin labelled with the plugin's display name (`composeLayoutsSection` + `pluginRuntime.getPluginName`). In the inserter, snapshot-borne hazards disable items inline instead of failing on click: a snapshot carrying a `base.outlet` follows the outlet module's own placement rules, and in VC mode a snapshot whose component refs would create a dependency cycle is disabled. Refs to since-deleted Visual Components are stripped at insertion time. Right-clicking a saved layout in the inserter offers Rename… (closes the inserter and reopens `LayoutNameDialog`) and Delete (immediate — it's an undoable site mutation — confirmed via toast).
 
 ---
 
@@ -652,7 +663,7 @@ See [docs/features/plugin-system.md](features/plugin-system.md) for the plugin S
 ## Styling
 
 - **CSS Modules only.** `Component.module.css` next to `Component.tsx`. Gated by `noTailwindUtilities.test.ts`.
-- **Tokens from `src/styles/globals.css`** — no hardcoded hex / rgb / hsl in admin or ui CSS modules. Gated by `css-token-policy.test.ts`.
+- **Tokens from `src/styles/globals.css`** — no hardcoded hex / rgb / hsl in admin or ui CSS modules, and no hardcoded pixel font sizes or spacing for admin chrome. Gated by `css-token-policy.test.ts`, `admin-typography-token-policy.test.ts`, and `admin-spacing-token-policy.test.ts`.
 - **UI primitives from `src/ui/components/`** — see [docs/design.md](design.md) for the full catalog.
 - **In-house `cn`** from `@ui/cn` — no `clsx`, `tailwind-merge`, `cva`, `@radix-ui/*`. Gated by `no-tailwind-deps.test.ts`.
 
@@ -701,9 +712,13 @@ See [docs/features/plugin-system.md](features/plugin-system.md) for the plugin S
   - `src/admin/AuthenticatedAdmin.tsx` — post-login shell + prewarmedLazy scheduler
   - `src/admin/lib/prewarmedLazy.ts` — React.lazy alternative with explicit preload + sync fast-path
   - `src/admin/state/adminUi.ts` — cross-shell Zustand store (settings modal, site-import modal, site name/favicon, activeLivePath)
+  - `src/admin/state/workspaceLayout.ts` — Content/Data/Media canvas chrome layout store
+  - `src/admin/state/workspaceLayoutStorage.ts` — per-workspace layout persistence and floating panel positions
+  - `src/admin/state/useWorkspaceLayoutPersistence.ts` — non-site workspace layout persistence hook
   - `src/admin/shared/OpenLivePageButton/OpenLivePageButton.tsx` — toolbar "Open live page" icon button
   - `src/admin/pages/site/hooks/useActiveLivePath.ts` — resolves `activeLivePath` for the Site editor (including template → previewed page/post mapping)
   - `src/admin/modals/Settings/SettingsModal.tsx` — settings modal (4 sections: General, Shortcuts, Publishing, Preferences)
+  - `src/admin/modals/Settings/useSiteSettingsController.ts` — uniform site-settings source for General/Publishing (editor draft on the Site editor, `cmsAdapter` everywhere else)
   - `src/admin/pages/site/store/slices/settingsSlice.ts` — settings modal state + adminUi bridge
   - `src/admin/state/useSiteSummary.ts` — lightweight site name/favicon fetch for non-editor layouts
   - `src/admin/layouts/AdminPageLayout/AdminPageLayout.tsx` — lightweight non-editor shell
@@ -713,6 +728,7 @@ See [docs/features/plugin-system.md](features/plugin-system.md) for the plugin S
   - `src/admin/pages/site/SitePage.tsx` — Site route mount
   - `src/admin/layouts/AdminCanvasLayout/AdminCanvasEditorBody.tsx` — post-paint editor body
   - `src/admin/pages/site/store/store.ts` — editor store assembly
+  - `src/admin/pages/site/layout/siteEditorLayoutPersistence.ts` — Site editor layout persistence mapping
   - `src/admin/pages/site/store/slices/site/nodeActions.ts` — `mutateActiveTree`
   - `src/admin/pages/site/canvas/CanvasRoot.tsx` — canvas mount
   - `src/admin/spotlight/SpotlightRoot.tsx` — Cmd+K palette

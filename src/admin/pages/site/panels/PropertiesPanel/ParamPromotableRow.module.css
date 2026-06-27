@@ -20,7 +20,7 @@
 
 .exposeButton {
   flex-shrink: 0;
-  margin-top: 3px;
+  margin-top: var(--space-4xs);
 }
 
 /* ── Expose popover menu ─────────────────────────────────────────────────── */
@@ -30,41 +30,41 @@
   top: 100%;
   right: 0;
   z-index: 10;
-  background: var(--panel-bg);
-  border: 1px solid var(--panel-border);
+  background: var(--bg-surface);
+  border: 1px solid var(--overlay-10);
   border-radius: var(--panel-radius);
-  padding: 6px;
+  padding: var(--space-xs);
   min-width: 200px;
   max-width: 280px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-3xs);
 }
 
 .exposeMenuSection {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-4xs);
 }
 
 .exposeMenuLabel {
-  font-size: 10px;
-  color: var(--editor-text-subtle);
-  padding: 2px 4px;
+  font-size: var(--text-2xs);
+  color: var(--text-disabled);
+  padding: var(--space-4xs) var(--space-3xs);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 
 .exposeMenuDivider {
   height: 1px;
-  background: var(--editor-border);
-  margin: 2px 0;
+  background: var(--border);
+  margin: var(--space-4xs) 0;
 }
 
 .existingParamType {
   margin-left: auto;
-  color: var(--editor-text-subtle);
-  font-size: 10px;
+  color: var(--text-disabled);
+  font-size: var(--text-2xs);
 }
 
 /* ── Create param form ───────────────────────────────────────────────────── */
@@ -72,14 +72,14 @@
 .createParamForm {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 2px 0;
+  gap: var(--space-3xs);
+  padding: var(--space-4xs) 0;
 }
 
 .createParamError {
-  font-size: 10px;
-  color: var(--editor-danger-text);
-  padding: 0 4px;
+  font-size: var(--text-2xs);
+  color: var(--danger-text);
+  padding: 0 var(--space-3xs);
 }
 
 .createParamActions {

@@ -6,7 +6,7 @@ Catalog of every test in `src/__tests__/architecture/`. These are structural gat
 
 ## TL;DR
 
-- 86 gate files across structural domains: SQL, JSON columns, migrations, CSS, icons, primitives, page tree, sandbox, agent, router, content storage, boundary validation, module size, AI, auth, error handling, etc.
+- 90 gate files across structural domains: SQL, JSON columns, migrations, CSS, icons, primitives, page tree, sandbox, agent, router, content storage, boundary validation, module size, AI, auth, error handling, etc.
 - Naming convention: `<topic>.test.ts` (kebab-case) or `<group>-<topic>.test.ts`. A few legacy `task<N>-*` ids remain for live invariants; new gates should use topic names.
 - Run them all: `bun test src/__tests__/architecture/`.
 - Most are **import / source scans** — they parse the files in scope and assert / reject patterns. Some are unit-style (a small in-test database, a synthesized page tree).
@@ -114,6 +114,7 @@ See [docs/reference/ui-primitives.md](ui-primitives.md).
 | Test                                          | What it enforces                                                                 |
 |-----------------------------------------------|----------------------------------------------------------------------------------|
 | `canvasFastRefreshBoundaries.test.ts`         | `.tsx` files don't mix component + non-component exports (breaks HMR).           |
+| `no-circular-dependencies.test.ts`            | `madge` finds zero tsconfig-aware circular dependencies across `src` and `server`. |
 | `canvas-aware-selectors.test.ts`              | Canvas-related store selectors are subscribed correctly to canvas-state slices.  |
 | `admin-router-usage.test.ts`                  | Internal admin navigation uses `@admin/lib/routing`; raw `/admin` anchors and `react-router-dom` are banned. |
 | `framework-typography-spacing.test.ts`        | The site framework's typography / spacing tokens compile correctly.              |
@@ -121,6 +122,7 @@ See [docs/reference/ui-primitives.md](ui-primitives.md).
 | `task414-wrap-to-container.test.ts`           | Wrap-to-container action creates defaulted wrappers and preserves tree structure. |
 | `task427-preview-class-css.test.ts`           | Preview-class CSS injection matches publisher output.                            |
 | `error-boundary-coverage.test.ts`             | Every workspace page / major surface is wrapped in an `ErrorBoundary` with a unique `location` tag. |
+| `non-site-workspaces-no-editor-store.test.ts` | Content, Data, Media, and their shared canvas layout do not import the Site editor store. |
 
 See [docs/editor.md](../editor.md).
 
@@ -156,7 +158,7 @@ See [docs/features/plugin-system.md](../features/plugin-system.md).
 | Test                                          | What it enforces                                                                 |
 |-----------------------------------------------|----------------------------------------------------------------------------------|
 | `agent-no-raw-html-in-reply-rule.test.ts`     | The agent system prompt contains the narrate-only rule (1–2 sentence replies, no raw HTML/CSS/JSON in the reply body). Prevents accidental removal during prompt refactors. |
-| `agent-system-prompt-no-module-enumeration.test.ts` | The system prompt does not enumerate module ids — they're discovered via `list_modules`/`read_page` at runtime. Also asserts the HTML-native style markers (`insertHtml`, "Structure as HTML, styling as CSS"). |
+| `agent-system-prompt-no-module-enumeration.test.ts` | The system prompt does not enumerate module ids — they're discovered via `list_modules`/`read_document` at runtime. Also asserts the HTML-native style markers (`insertHtml`, "Structure as HTML, styling as CSS"). |
 | `agent-tool-surface.test.ts`                  | Legacy node-construction tools (`insertNode`, `insertTree`) and retired class-patch tools (`createClass`, `updateClassStyles`) are absent from the site write-tool list; HTML-native replacements (`insertHtml`, `getNodeHtml`, `replaceNodeHtml`) and the unified CSS-authoring tool (`applyCss`) are present; design-system token tools and template tools are present; total count is exactly 22. |
 
 ### AI infrastructure

@@ -5,7 +5,7 @@ import { ImagesSolidIcon } from 'pixel-art-icons/icons/images-solid'
 import { AiSettingsSolidIcon } from 'pixel-art-icons/icons/ai-settings-solid'
 import type { IconComponent } from 'pixel-art-icons/types'
 import { railAccent, railTintVar } from '@ui/railAccent'
-import { useEditorStore } from '@site/store/store'
+import { useWorkspaceLayout } from '@admin/state/workspaceLayout'
 import leftSidebarStyles from '../../../site/sidebars/LeftSidebar/LeftSidebar.module.css'
 import panelRailStyles from '../../../site/sidebars/PanelRail/PanelRail.module.css'
 import { SidebarResizeHandle } from '@admin/shared/SidebarResizeHandle'
@@ -23,6 +23,7 @@ interface ContentSidebarProps {
    * the workspace chrome instead of floating over it.
    */
   agentPanel: ReactNode
+  canUseAiChat: boolean
 }
 
 export function ContentSidebar({
@@ -31,10 +32,11 @@ export function ContentSidebar({
   contentPanel,
   mediaPanel,
   agentPanel,
+  canUseAiChat,
 }: ContentSidebarProps) {
   const sidebarRef = useRef<HTMLElement | null>(null)
-  const leftSidebarWidth = useEditorStore((s) => s.leftSidebarWidth)
-  const setLeftSidebarWidth = useEditorStore((s) => s.setLeftSidebarWidth)
+  const leftSidebarWidth = useWorkspaceLayout((s) => s.leftSidebarWidth)
+  const setLeftSidebarWidth = useWorkspaceLayout((s) => s.setLeftSidebarWidth)
   const panelWidth = activePanel ? leftSidebarWidth : 0
   const style = {
     '--left-sidebar-panel-width': `${panelWidth}px`,
@@ -75,16 +77,18 @@ export function ContentSidebar({
             />
           </div>
         </div>
-        <div className={panelRailStyles.globalGroup} data-testid="panel-rail-global">
-          <ContentRailButton
-            id="agent"
-            label="AI assistant"
-            icon={AiSettingsSolidIcon}
-            iconName="ai-settings-solid"
-            active={activePanel === 'agent'}
-            onToggle={() => onActivePanelChange(activePanel === 'agent' ? null : 'agent')}
-          />
-        </div>
+        {canUseAiChat && (
+          <div className={panelRailStyles.globalGroup} data-testid="panel-rail-global">
+            <ContentRailButton
+              id="agent"
+              label="AI assistant"
+              icon={AiSettingsSolidIcon}
+              iconName="ai-settings-solid"
+              active={activePanel === 'agent'}
+              onToggle={() => onActivePanelChange(activePanel === 'agent' ? null : 'agent')}
+            />
+          </div>
+        )}
       </nav>
 
       <div
@@ -97,7 +101,7 @@ export function ContentSidebar({
             ? contentPanel
             : activePanel === 'media'
               ? mediaPanel
-              : activePanel === 'agent'
+              : activePanel === 'agent' && canUseAiChat
                 ? agentPanel
                 : null}
         </div>

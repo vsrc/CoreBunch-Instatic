@@ -3,8 +3,8 @@
 .root {
     display: flex;
     flex-direction: column;
-    color: var(--editor-text-muted);
-    font-size: 12px;
+    color: var(--text-subtle);
+    font-size: var(--text-s);
     line-height: 1.5;
 }
 
@@ -14,10 +14,10 @@
  * Default for in-panel "no items yet" + Create CTA empty states.
  */
 .variant-card {
-    gap: 10px;
-    padding: 14px;
+    gap: var(--space-m);
+    padding: var(--space-xl);
     border-radius: 12px;
-    background: var(--editor-surface);
+    background: var(--bg-surface);
 }
 
 /* ── variant=centered ─────────────────────────────────────────────────────────
@@ -29,10 +29,10 @@
     flex: 1;
     align-items: center;
     justify-content: center;
-    gap: 8px;
-    padding: 24px 16px;
+    gap: var(--space-s);
+    padding: var(--space-5xl) var(--space-2xl);
     text-align: center;
-    color: var(--editor-text-secondary);
+    color: var(--text-muted);
 }
 
 /* ── compact modifier ─────────────────────────────────────────────────────────
@@ -40,8 +40,8 @@
  * section row, inline manual-list empties). Pairs with variant=card.
  */
 .compact {
-    padding: 8px;
-    gap: 6px;
+    padding: var(--space-s);
+    gap: var(--space-xs);
     line-height: 1.4;
 }
 
@@ -51,7 +51,7 @@
  */
 .plain {
     background: transparent;
-    padding: 4px 0;
+    padding: var(--space-3xs) 0;
     border-radius: 0;
 }
 
@@ -70,7 +70,7 @@
 /* ── content slots ──────────────────────────────────────────────────────────── */
 
 .icon {
-    color: var(--editor-text-subtle);
+    color: var(--text-disabled);
 }
 
 .title {
@@ -84,47 +84,47 @@
 /* In centered mode the title reads as the primary label and the description
  * is the supporting hint underneath. */
 .variant-centered .title {
-    color: var(--editor-text-secondary);
+    color: var(--text-muted);
     font-weight: 600;
 }
 
 .size-large.variant-centered {
-    gap: 12px;
-    padding: 32px 18px;
+    gap: var(--space-l);
+    padding: var(--space-7xl) var(--space-3xl);
 }
 
 .size-large .icon {
-    color: var(--editor-text-secondary);
+    color: var(--text-muted);
 }
 
 .size-large .title {
     max-width: 280px;
-    color: var(--editor-text);
-    font-size: 15px;
+    color: var(--text);
+    font-size: var(--text-xl);
     font-weight: 700;
     line-height: 1.45;
 }
 
 .size-large .description {
     max-width: 280px;
-    color: var(--editor-text-secondary);
-    font-size: 12px;
+    color: var(--text-muted);
+    font-size: var(--text-s);
 }
 
 .size-large .action {
-    margin-top: 6px;
+    margin-top: var(--space-xs);
 }
 
 .description {
     margin: 0;
-    font-size: 10px;
+    font-size: var(--text-2xs);
     line-height: 1.5;
-    color: var(--editor-text-muted);
+    color: var(--text-subtle);
 }
 
 .action {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    margin-top: 2px;
+    gap: var(--space-xs);
+    margin-top: var(--space-4xs);
 }

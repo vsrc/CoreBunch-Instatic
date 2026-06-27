@@ -2,8 +2,8 @@
  * backgrounds are flattened to the card so it reads as one quiet surface. */
 .editor {
     border-radius: 16px;
-    background: var(--editor-surface-2);
-    padding: 8px 4px;
+    background: var(--bg-surface-2);
+    padding: var(--space-m) var(--space-2xs);
     min-height: 360px;
     max-height: 70vh;
     overflow-y: auto;
@@ -15,7 +15,7 @@
 
 .editor :global(.cm-gutters) {
     background: transparent;
-    border-right: 1px solid var(--panel-border);
+    border-right: 1px solid var(--border-muted);
 }
 
 .editor :global(.cm-activeLineGutter) {
@@ -27,7 +27,7 @@
     width: 100%;
     min-height: 340px;
     font-family: var(--font-mono);
-    font-size: 12px;
+    font-size: var(--text-m);
     line-height: 1.6;
     resize: vertical;
 }

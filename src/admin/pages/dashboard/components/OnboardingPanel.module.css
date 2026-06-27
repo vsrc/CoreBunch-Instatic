@@ -16,7 +16,7 @@
  *   │   [Dismiss]          │                                   │
  *   └──────────────────────┴───────────────────────────────────┘
  *
- * Both columns paint their own `--editor-surface-2` tone; the 1px grid
+ * Both columns paint their own `--bg-surface-2` tone; the 1px grid
  * gap reveals the darker page surface as a hairline divider — same
  * pattern as the dashboard widget grid.
  *
@@ -32,7 +32,7 @@
 .onboarding {
     display: grid;
     grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
-    gap: 1px;
+    gap: var(--space-px);
     background: transparent;
 }
 
@@ -41,16 +41,16 @@
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    gap: 28px;
-    padding: 32px 28px 24px;
-    background: var(--editor-surface-2);
+    gap: var(--space-6xl);
+    padding: var(--space-7xl) var(--space-6xl) var(--space-5xl);
+    background: var(--bg-surface-2);
     border: 0;
     border-radius: 16px;
     /* Subtle mint wash — gives the progress card a faint "achievement"
        tone without making it feel like a banner. */
     background-image: linear-gradient(
         180deg,
-        var(--editor-mint-tint-06),
+        color-mix(in srgb, var(--accent-1) 6%, transparent),
         transparent 65%
     );
 }
@@ -59,22 +59,22 @@
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 22px;
+    gap: var(--space-5xl);
 }
 
 .headTitle {
-    font-size: 26px;
+    font-size: var(--text-5xl);
     line-height: 1.15;
     font-weight: 600;
-    color: var(--editor-text-bright);
+    color: var(--text-bright);
     letter-spacing: -0.015em;
     margin: 0;
     max-width: 12ch;
 }
 
 .headDesc {
-    font-size: 12.5px;
-    color: var(--editor-text-muted);
+    font-size: var(--text-s);
+    color: var(--text-subtle);
     margin: 0;
     line-height: 1.55;
     max-width: 32ch;
@@ -82,7 +82,7 @@
 
 .headActions {
     display: flex;
-    gap: 6px;
+    gap: var(--space-xs);
 }
 
 /* ── Steps stack ─────────────────────────────────────────────────── */
@@ -92,16 +92,16 @@
     padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 1px;
+    gap: var(--space-px);
 }
 
 .step {
     display: grid;
     grid-template-columns: 28px 32px minmax(0, 1fr) auto;
     align-items: center;
-    gap: 16px;
-    padding: 16px 22px;
-    background: var(--editor-surface-2);
+    gap: var(--space-2xl);
+    padding: var(--space-2xl) var(--space-5xl);
+    background: var(--bg-surface-2);
     border-radius: 16px;
     transition:
         background 120ms ease,
@@ -109,7 +109,7 @@
 }
 
 .step:hover {
-    background: var(--editor-surface-3);
+    background: var(--bg-surface-3);
 }
 
 /* Completed steps dim so the next-up work reads as the focus area.
@@ -127,44 +127,44 @@
     width: 28px;
     height: 28px;
     border-radius: 50%;
-    border: 1px dashed var(--editor-border-med);
+    border: 1px dashed var(--border-muted);
     display: grid;
     place-items: center;
-    color: var(--editor-text-muted);
-    font-size: 11px;
+    color: var(--text-subtle);
+    font-size: var(--text-xs);
     font-family: var(--font-mono);
     flex-shrink: 0;
 }
 
 .step[data-state="done"] .stepCheck {
-    background: var(--editor-success-green);
+    background: var(--success);
     border: 0;
-    color: var(--editor-bg);
+    color: var(--bg-body);
 }
 
 .step[data-state="active"] .stepCheck {
-    border: 1px solid var(--editor-text);
+    border: 1px solid var(--text);
     border-style: solid;
-    color: var(--editor-text-bright);
+    color: var(--text-bright);
 }
 
 .stepIcon {
     width: 32px;
     height: 32px;
     border-radius: 8px;
-    background: var(--editor-surface);
+    background: var(--bg-surface);
     display: grid;
     place-items: center;
-    color: var(--editor-text-secondary);
+    color: var(--text-muted);
     flex-shrink: 0;
 }
 
 .step[data-state="done"] .stepIcon {
-    color: var(--editor-success-green);
+    color: var(--success);
 }
 
 .step[data-state="active"] .stepIcon {
-    color: var(--editor-text-bright);
+    color: var(--text-bright);
 }
 
 .stepBody {
@@ -172,47 +172,47 @@
 }
 
 .stepTitle {
-    font-size: 14px;
+    font-size: var(--text-l);
     font-weight: 600;
-    color: var(--editor-text-bright);
+    color: var(--text-bright);
     letter-spacing: -0.01em;
     display: flex;
     align-items: baseline;
-    gap: 10px;
+    gap: var(--space-m);
     flex-wrap: wrap;
 }
 
 .stepIndex {
     font-family: var(--font-mono);
-    font-size: 10px;
-    color: var(--editor-text-subtle);
+    font-size: var(--text-2xs);
+    color: var(--text-disabled);
     letter-spacing: 0.04em;
     font-weight: 500;
 }
 
 .stepDesc {
-    font-size: 12px;
-    color: var(--editor-text-muted);
+    font-size: var(--text-s);
+    color: var(--text-subtle);
     line-height: 1.5;
-    margin-top: 4px;
+    margin-top: var(--space-3xs);
 }
 
 .stepCta {
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: var(--space-xl);
 }
 
 .stepHint {
     font-family: var(--font-mono);
-    font-size: 10px;
-    color: var(--editor-text-subtle);
+    font-size: var(--text-2xs);
+    color: var(--text-disabled);
     text-transform: uppercase;
     letter-spacing: 0.04em;
 }
 
 .stepHint[data-state="done"] {
-    color: var(--editor-success-green);
+    color: var(--success);
 }
 
 /* ── Narrow screens: stack header above steps ───────────────────── */
@@ -225,18 +225,18 @@
         flex-direction: row;
         align-items: center;
         justify-content: space-between;
-        gap: 24px;
-        padding: 24px 22px;
+        gap: var(--space-5xl);
+        padding: var(--space-5xl) var(--space-5xl);
     }
 
     .headBlock {
         flex-direction: row;
         align-items: center;
-        gap: 20px;
+        gap: var(--space-4xl);
     }
 
     .headTitle {
-        font-size: 18px;
+        font-size: var(--text-2xl);
         max-width: none;
     }
 
@@ -248,7 +248,7 @@
 @media (max-width: 600px) {
     .step {
         grid-template-columns: 28px minmax(0, 1fr);
-        row-gap: 12px;
+        row-gap: var(--space-l);
     }
 
     .stepIcon {

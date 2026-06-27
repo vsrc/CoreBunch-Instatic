@@ -6,8 +6,8 @@
 
 .summary {
     margin: 0;
-    color: var(--editor-text);
-    font-size: 12px;
+    color: var(--text);
+    font-size: var(--text-s);
     line-height: 1.4;
 }
 
@@ -16,20 +16,20 @@
 }
 
 .subline {
-    margin: 0 0 8px 0;
-    color: var(--editor-text-muted);
-    font-size: 11px;
+    margin: 0 0 var(--space-s) 0;
+    color: var(--text-subtle);
+    font-size: var(--text-xs);
     line-height: 1.4;
 }
 
 .usageGroup {
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    border: 1px solid var(--editor-border);
-    border-radius: var(--editor-radius);
-    padding: 8px 10px;
-    margin-bottom: 8px;
+    gap: var(--space-3xs);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: var(--space-s) var(--space-m);
+    margin-bottom: var(--space-s);
 }
 
 .usageGroup:last-child {
@@ -37,12 +37,12 @@
 }
 
 .groupHeader {
-    color: var(--editor-text);
-    font-size: 11px;
+    color: var(--text);
+    font-size: var(--text-xs);
     font-weight: 600;
     letter-spacing: 0.03em;
     text-transform: uppercase;
-    margin-bottom: 2px;
+    margin-bottom: var(--space-4xs);
 }
 
 .usageList {
@@ -51,20 +51,20 @@
     padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: var(--space-4xs);
 }
 
 .usageItem {
     display: flex;
     align-items: baseline;
-    gap: 8px;
-    color: var(--editor-text-muted);
-    font-size: 11px;
+    gap: var(--space-s);
+    color: var(--text-subtle);
+    font-size: var(--text-xs);
     line-height: 1.4;
 }
 
 .usageScope {
-    color: var(--editor-text);
+    color: var(--text);
     font-weight: 600;
     flex: 0 0 auto;
 }
