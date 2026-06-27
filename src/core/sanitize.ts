@@ -78,11 +78,32 @@ function getDOMPurify(): DOMPurifyRuntime | null {
   return null
 }
 
+// Close-tag matcher mirrors the SVG sanitizer: the HTML parser ends a tag at
+// the first `>`, so `</script bar>` and `</script\t\n>` both close a script.
+// `(?:[\s/][^>]*)?` accepts that trailing junk; a bare `<\/x\s*>` missed it
+// (CodeQL js/bad-tag-filter).
+const FALLBACK_SCRIPT_RE = /<script\b[^>]*>[\s\S]*?<\/script(?:[\s/][^>]*)?>/gi
+const FALLBACK_STYLE_RE = /<style\b[^>]*>[\s\S]*?<\/style(?:[\s/][^>]*)?>/gi
+const FALLBACK_TAG_RE = /<[^>]*>/g
+
+/**
+ * Regex HTML strip used ONLY when no DOMPurify runtime is available (one-off
+ * scripts; browser + Bun server both configure DOMPurify). Iterates to a
+ * fixpoint so split-tag obfuscation (`<scr<script>ipt>`) can't survive a single
+ * pass — CodeQL js/incomplete-multi-character-sanitization. Each pass only
+ * shrinks the string, so termination is guaranteed; the bound is defensive.
+ */
 function stripHtmlFallback(value: string): string {
-  return value
-    .replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, '')
-    .replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/gi, '')
-    .replace(/<[^>]*>/g, '')
+  let current = value
+  for (let i = 0; i < 100; i++) {
+    const next = current
+      .replace(FALLBACK_SCRIPT_RE, '')
+      .replace(FALLBACK_STYLE_RE, '')
+      .replace(FALLBACK_TAG_RE, '')
+    if (next === current) return current
+    current = next
+  }
+  return current
 }
 
 // ---------------------------------------------------------------------------
@@ -163,12 +184,12 @@ export function sanitizeRichtext(
 
   const sanitized = String(purifier.sanitize(str, config))
 
-  // When plain-text mode is requested, apply a post-strip regex pass.
+  // When plain-text mode is requested, apply a post-strip pass.
   // DOMPurify's ALLOWED_TAGS:[] covers most cases but certain browsers / DOM
-  // implementations may preserve some inline elements. The regex pass is the
-  // guaranteed fallback.
+  // implementations may preserve some inline elements. The fixpoint stripper is
+  // the guaranteed fallback (and resists split-tag obfuscation).
   if (config._plainText) {
-    return sanitized.replace(/<[^>]*>/g, '').trim()
+    return stripHtmlFallback(sanitized).trim()
   }
 
   return sanitized
