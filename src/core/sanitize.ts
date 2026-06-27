@@ -98,15 +98,19 @@ const FALLBACK_TAG_RE = /<[^>]*>/g
  * pass — CodeQL js/incomplete-multi-character-sanitization. Each pass only
  * shrinks the string, so termination is guaranteed; the bound is defensive.
  */
+function stripHtmlOnce(value: string): string {
+  return value
+    .replace(FALLBACK_SCRIPT_BLOCK_RE, '')
+    .replace(FALLBACK_SCRIPT_OPEN_RE, '')
+    .replace(FALLBACK_STYLE_BLOCK_RE, '')
+    .replace(FALLBACK_STYLE_OPEN_RE, '')
+    .replace(FALLBACK_TAG_RE, '')
+}
+
 function stripHtmlFallback(value: string): string {
   let current = value
   for (let i = 0; i < 100; i++) {
-    const next = current
-      .replace(FALLBACK_SCRIPT_BLOCK_RE, '')
-      .replace(FALLBACK_SCRIPT_OPEN_RE, '')
-      .replace(FALLBACK_STYLE_BLOCK_RE, '')
-      .replace(FALLBACK_STYLE_OPEN_RE, '')
-      .replace(FALLBACK_TAG_RE, '')
+    const next = stripHtmlOnce(current)
     if (next === current) return current
     current = next
   }
